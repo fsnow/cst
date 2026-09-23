@@ -433,8 +433,13 @@ public sealed class AiTurnViewModel : ReactiveObject
 
     private string _compactionSummary = "";
 
-    /// <summary>The summary in force, beside <see cref="CompactionMarker"/> and only where it is, for the marker
-    /// row to open. Markers and all, as the model wrote it and is shown it.</summary>
+    /// <summary>
+    /// The summary in force, beside <see cref="CompactionMarker"/> and only where it is, for the marker row to open.
+    ///
+    /// <para><b>Raw, with the <c>[[…]]</c> Pāli markers still in it</b> — it is what the model wrote and what it is
+    /// shown again, not display text. A view must strip the markers before showing it (the way
+    /// <c>PaliQuoteFilter</c> strips an answer's), or the reader sees literal double brackets.</para>
+    /// </summary>
     public string CompactionSummary
     {
         get => _compactionSummary;

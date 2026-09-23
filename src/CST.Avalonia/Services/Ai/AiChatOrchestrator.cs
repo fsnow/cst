@@ -339,10 +339,22 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         // would repeat that mistake on the one part of the request that grows by itself. (#991)
         var estimatedTokens = EstimateRequest(prompt, replayed);
 
-        // Notices are the prompt's, plus what compaction has to say. A copy per Started event, because a retry
-        // (below) adds to them after the first one has been handed over.
-        var notices = new List<string>(prompt.Notices);
-        AiCompacted? compacted = null;
+        // Notices are the prompt's, plus what compaction has to say ABOUT THE REQUEST BEING SENT. Kept apart and
+        // replaced, not appended to, because a turn can be sent twice: a line true of the first attempt ("the whole
+        // conversation was sent") is false of a retry that sent a summary, and the second Started — the one the
+        // stored turn keeps — must describe the request that was actually answered. (#998, review M-1)
+        var compactionNotices = new List<string>();
+        string? thresholdFailure = null;
+
+        // What the summary calls cost. Folded into the turn's usage at the end [suggestion]: the reader paid for them
+        // as part of this turn, and a figure that left them out would under-report what the turn cost. Kept apart from
+        // the attempt's own counts so a rejected attempt can be reset without losing them.
+        int? summaryInput = null, summaryOutput = null;
+        void AddSummaryUsage(AiUsageReport? usage)
+        {
+            if (usage?.InputTokens is int i) summaryInput = (summaryInput ?? 0) + i;
+            if (usage?.OutputTokens is int o) summaryOutput = (summaryOutput ?? 0) + o;
+        }
 
         // ---- Automatic compaction. (#998) [fsnow]: "Manual and auto at a fraction of context length"; the fraction
         // "95%, but make this a setting". Measured against the SAME estimate the Sent block reports, so the figure
@@ -350,17 +362,17 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         var compactFrom = CompactableCount(history);
         if (autoPercent > 0 && contextLength is null && compactFrom > 0)
         {
-            // [suggestion] Only once there is something compaction could do. Before the fifth answered turn the
-            // notice would be about nothing, and it would sit under every early answer on a model with no
-            // published window — which is most local runners.
-            notices.Add(UnknownContextNotice);
+            // Only once there is something compaction could do, and then on every turn — [fsnow] chose "Every turn
+            // past 5" (2026-09-22), keeping the gate proposed here: before the fifth answered turn the notice would
+            // be about nothing.
+            compactionNotices.Add(UnknownContextNotice);
         }
         else if (autoPercent > 0 && contextLength is int window
                  && AiCompaction.Reaches(estimatedTokens, window, autoPercent))
         {
             if (compactFrom == 0)
             {
-                notices.Add(
+                compactionNotices.Add(
                     $"This request is about {estimatedTokens * 100L / window}% of the model's context length, and "
                     + $"there is nothing older than the last {AiCompaction.KeepVerbatim} turns to summarise.");
             }
@@ -369,6 +381,10 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
                 _logger.LogInformation(
                     "AI turn: ~{Tokens} of {Window} context tokens reaches the {Percent}% threshold; compacting",
                     estimatedTokens, window, autoPercent);
+
+                // Before the call, so the reader is told what the wait is for — otherwise the panel's clock reads it
+                // as a slow model and, after thirty seconds, blames a queue. (review M-2)
+                yield return AiTurnEvent.ForCompacting();
 
                 AiCompactionResult? result = null;
                 try
@@ -384,24 +400,26 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
 
                 if (superseded) yield break;
 
-                if (result!.Succeeded)
+                AddSummaryUsage(result!.Usage);
+                if (result.Succeeded)
                 {
-                    compacted = Compacted(result, compactFrom);
+                    var compacted = Compacted(result, compactFrom);
                     var summarisedTurns = Answered(history.Take(compactFrom));
                     summary = new AiExchange(result.AskedLine, result.Summary!);
                     history = history.Skip(compactFrom).ToList();
                     replayed = Replay(summary, history);
                     estimatedTokens = EstimateRequest(prompt, replayed);
-                    notices.AddRange(result.Notices ?? Array.Empty<string>());
-                    notices.Add(
+                    compactionNotices.AddRange(result.Notices ?? Array.Empty<string>());
+                    compactionNotices.Add(
                         $"The conversation reached {autoPercent}% of this model's context length, so "
                         + $"{TurnsWere(summarisedTurns)} summarised before this was sent.");
                     yield return AiTurnEvent.ForCompacted(compacted);
                 }
                 else
                 {
-                    notices.Add(
-                        $"Earlier turns could not be summarised ({result.Error!.Message}), so the whole "
+                    thresholdFailure = result.Error!.Message;
+                    compactionNotices.Add(
+                        $"Earlier turns could not be summarised ({thresholdFailure}), so the whole "
                         + "conversation was sent.");
                 }
             }
@@ -423,6 +441,8 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         // after compacting (see the retry below the stream).
         for (var attempt = 0; ; attempt++)
         {
+            var notices = prompt.Notices.Concat(compactionNotices).ToList();
+
             _logger.LogInformation(
                 "AI turn: {Task} on {BookId} via {Provider}/{Model}, ~{Tokens} context tokens, "
                 + "{History} replayed turn(s), {Notices} notice(s)",
@@ -430,7 +450,7 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
                 estimatedTokens, replayed.Count / 2, notices.Count);
 
             yield return AiTurnEvent.ForStarted(new AiTurnContext(
-                bundle.Task, bundle.OutputLanguage, bundle.Citation, bundle.Book, notices.ToList(), passageTrimmed,
+                bundle.Task, bundle.OutputLanguage, bundle.Citation, bundle.Book, notices, passageTrimmed,
                 Describe(bundle, prompt, provider, replayed, HasSummary(summary)),
                 // Structured as well as printed in the Sent block. A stored turn has to say which model answered
                 // it (#849), and the alternative — the panel matching a SentField by its English label — is the
@@ -515,20 +535,22 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
                 }
             }
 
-            // ---- Compact and retry, once. (#998) [suggestion, from the plan, accepted] A provider that rejects the
-            // request as too long has measured what the estimate only guesses at: AiTokens is a chars-per-token ratio
-            // taken below one tokenizer's measurement and ABOVE another's (1.73 characters per token on cl100k_base
-            // against the 2.0 assumed), so on some models the real count runs ahead of the estimate by more than the 5%
-            // the default threshold leaves — and on a model with no published context length there is no estimate to
-            // compare at all. Either way the reader would get a dead turn in a conversation that compaction exists to
-            // keep alive. Narrowly: only before anything streamed (so nothing on screen is discarded), only once, and
-            // only while automatic compaction is on — "off" means off. A turn already compacted by the threshold has
-            // at most four answered turns left, so there is nothing more to take (retryFrom is 0).
+            // ---- Compact and retry, once. (#998) [fsnow] chose "Keep it" (2026-09-22) for this, proposed in the plan
+            // as a [suggestion]. A provider that rejects the request as too long has measured what the estimate only
+            // guesses at: AiTokens assumes 2.0 characters per token, and cl100k_base measures 1.73 — so on such a
+            // tokenizer the estimate comes out about 15% low in tokens, more than the 5% the default threshold
+            // leaves. On a model with no published context length there is no estimate to compare at all. Either way
+            // the reader would get a dead turn in a conversation compaction exists to keep alive. Narrowly: only
+            // before anything streamed (so nothing on screen is discarded), only once, and only while automatic
+            // compaction is on — "off" means off. A turn already compacted by the threshold has at most four answered
+            // turns left, so there is nothing more to take (retryFrom is 0).
             var retryFrom = CompactableCount(history);
             if (attempt == 0 && failure is { Kind: AiErrorKind.ContextTooLong } && !sawText && !sawReasoning
                 && autoPercent > 0 && retryFrom > 0)
             {
                 _logger.LogInformation("AI turn rejected as too long; compacting and sending again");
+
+                yield return AiTurnEvent.ForCompacting();
 
                 AiCompactionResult? result = null;
                 try
@@ -544,21 +566,33 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
 
                 if (superseded) yield break;
 
-                if (result!.Succeeded)
+                AddSummaryUsage(result!.Usage);
+                if (result.Succeeded)
                 {
-                    compacted = Compacted(result, retryFrom);
+                    var compacted = Compacted(result, retryFrom);
                     var summarisedTurns = Answered(history.Take(retryFrom));
                     summary = new AiExchange(result.AskedLine, result.Summary!);
                     history = history.Skip(retryFrom).ToList();
                     replayed = Replay(summary, history);
                     estimatedTokens = EstimateRequest(prompt, replayed);
-                    notices.AddRange(result.Notices ?? Array.Empty<string>());
-                    notices.Add(
-                        "The provider said the request was too long for this model, so "
-                        + $"{TurnsWere(summarisedTurns)} summarised and it was sent again.");
+
+                    // What is said now is about the request about to be sent. A threshold failure is still worth
+                    // telling, as history, but "the whole conversation was sent" is no longer true of what was
+                    // answered, so it is reworded rather than kept. (review M-1)
+                    compactionNotices.RemoveAll(n => !string.Equals(n, UnknownContextNotice, StringComparison.Ordinal));
+                    compactionNotices.AddRange(result.Notices ?? Array.Empty<string>());
+                    compactionNotices.Add(thresholdFailure is null
+                        ? "The provider said the request was too long for this model, so "
+                          + $"{TurnsWere(summarisedTurns)} summarised and it was sent again."
+                        : $"Earlier turns could not be summarised at first ({thresholdFailure}); the provider then "
+                          + $"said the request was too long, so {TurnsWere(summarisedTurns)} summarised and it was "
+                          + "sent again.");
                     yield return AiTurnEvent.ForCompacted(compacted);
 
+                    // A fresh attempt: nothing of the rejected one carries over, its token counts included. (L-4)
                     failure = null;
+                    inputTokens = null;
+                    outputTokens = null;
                     markers = new PaliQuoteFilter();
                     continue;
                 }
@@ -568,6 +602,10 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
 
             break;
         }
+
+        // The summary calls' tokens, added to the turn's (see AddSummaryUsage).
+        if (summaryInput is not null) inputTokens = (inputTokens ?? 0) + summaryInput;
+        if (summaryOutput is not null) outputTokens = (outputTokens ?? 0) + summaryOutput;
 
         // A bracket held back that never completed a marker: ordinary text after all. No marked half — it was
         // already carried, markers and all, by the delta it arrived in.
@@ -706,19 +744,20 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
     }
 
     private static AiCompacted Compacted(AiCompactionResult result, int summarisedExchanges) =>
-        new(result.AskedLine, result.Summary!, summarisedExchanges, result.ProviderId, result.ModelId);
+        new(result.AskedLine, result.Summary!, summarisedExchanges, result.ProviderId, result.ModelId, result.Usage);
 
     private static string TurnsWere(int count) =>
         count == 1 ? "1 earlier turn was" : $"{count} earlier turns were";
 
     /// <summary>
     /// What a turn says when automatic compaction cannot fire for this model. The notice the plan asks for
-    /// ("a notice on the turn that says why"), worded around what the reader can do. It says the retry still
-    /// applies, because it does: a too-long rejection needs no published window.
+    /// ("a notice on the turn that says why"), on every turn past the fifth — [fsnow] chose "Every turn past 5"
+    /// (2026-09-22). It says the retry still applies, because it does: a too-long rejection needs no published
+    /// window. It names no control, so it stays true whether or not the panel shows a Compact button. (review M-4)
     /// </summary>
     internal const string UnknownContextNotice =
-        "This model's context length is not known, so earlier turns are summarised automatically only if the "
-        + "provider says a request is too long. Compact summarises them now.";
+        "This model's context length is not known, so earlier turns cannot be summarised automatically as the "
+        + "conversation grows \u2014 only if the provider says a request is too long.";
 
     public async Task<AiCompactionResult> CompactAsync(AiCompactionRequest request, CancellationToken ct = default)
     {
@@ -784,6 +823,7 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         var text = new System.Text.StringBuilder();
         var heard = false;
         AiError? failure = null;
+        int? inputTokens = null, outputTokens = null;
         try
         {
             await foreach (var delta in provider.Provider.StreamAsync(chat, ct).WithCancellation(ct)
@@ -793,6 +833,12 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
                 if (delta.Kind == ChatDeltaKind.Text && delta.Text is { Length: > 0 } piece)
                 {
                     text.Append(piece);
+                }
+                else if (delta.Kind == ChatDeltaKind.Usage && delta.Usage is { } usage)
+                {
+                    // Merged per field, as a turn's are.
+                    inputTokens = usage.InputTokens ?? inputTokens;
+                    outputTokens = usage.OutputTokens ?? outputTokens;
                 }
                 else if (delta.Kind == ChatDeltaKind.Error && delta.Error is { } error)
                 {
@@ -830,19 +876,25 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             }
 
             _logger.LogInformation("Summarising failed: {Kind} ({Code})", failure.Kind, failure.ProviderCode ?? "-");
-            return AiCompactionResult.Failed(failure) with { Notices = prompt.Notices };
+            return AiCompactionResult.Failed(failure) with { Notices = prompt.Notices, Usage = UsageOf(inputTokens, outputTokens) };
         }
 
         var summary = text.ToString().Trim();
         if (summary.Length == 0)
         {
             return AiCompactionResult.Failed(new AiError(
-                AiErrorKind.EmptyAnswer, "The model returned an empty summary.")) with { Notices = prompt.Notices };
+                AiErrorKind.EmptyAnswer, "The model returned an empty summary."))
+                with { Notices = prompt.Notices, Usage = UsageOf(inputTokens, outputTokens) };
         }
 
         return new AiCompactionResult(
-            summary, AiCompaction.SummaryAskedLine, null, provider.Provider.Id, provider.Model, prompt.Notices);
+            summary, AiCompaction.SummaryAskedLine, null, provider.Provider.Id, provider.Model, prompt.Notices,
+            UsageOf(inputTokens, outputTokens));
     }
+
+    /// <summary>A usage report, or null where the provider reported neither half — never a pair of zeros.</summary>
+    private static AiUsageReport? UsageOf(int? input, int? output) =>
+        input is null && output is null ? null : new AiUsageReport(input, output);
 
     /// <summary>Every string this request puts on the wire, taken together — the system prompt, the replayed
     /// conversation, and this turn's own message. (#672, #991)</summary>

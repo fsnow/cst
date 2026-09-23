@@ -8,9 +8,10 @@ namespace CST.Avalonia.Services.Ai;
 /// ASSISTANT_SESSIONS.md §3.4)
 ///
 /// <para><b>[fsnow]</b>: <i>"Manual and auto at a fraction of context length"</i>; the fraction is <i>"95%, but
-/// make this a setting"</i>; <i>"Last 4 turns"</i> stay verbatim. The reference is Claude Code's
-/// <c>/compact [instructions]</c> and its auto-compact — <b>[fsnow]</b>: <i>"Claude Code itself is my model and we
-/// should aim for feature parity with CC in context management…"</i></para>
+/// make this a setting"</i>; <i>"Last 4 turns"</i> stay verbatim; and <i>"Claude Code itself is my model and we
+/// should aim for feature parity with CC in context management…"</i>. [suggestion] Taking Claude Code's
+/// <c>/compact [instructions]</c> and its auto-compact as the specific reference follows from that; it is not his
+/// wording.</para>
 ///
 /// <para><b>What changes and what does not.</b> The transcript on screen keeps every turn; a summarised turn is
 /// still there to read, copy and retry. What changes is the conversation the next request replays: the summary
@@ -134,13 +135,16 @@ public sealed record AiCompactionRequest(
 /// <param name="AskedLine">The user side it is replayed after — <see cref="AiCompaction.SummaryAskedLine"/>.</param>
 /// <param name="Notices">Degradations worth telling the reader, e.g. an edited compaction template that was
 /// rejected and replaced by the built-in.</param>
+/// <param name="Usage">What the summary call cost, as the provider reported it — on a failure too, since tokens
+/// spent on a summary that was refused were still spent. Null where nothing was reported.</param>
 public sealed record AiCompactionResult(
     string? Summary,
     string AskedLine,
     AiError? Error,
     string? ProviderId = null,
     string? ModelId = null,
-    IReadOnlyList<string>? Notices = null)
+    IReadOnlyList<string>? Notices = null,
+    AiUsageReport? Usage = null)
 {
     public bool Succeeded => Error is null && !string.IsNullOrWhiteSpace(Summary);
 
@@ -157,6 +161,8 @@ public sealed record AiCompactionResult(
 /// now stands in for. The previous <see cref="AiTurnRequest.Summary"/>, where there was one, is always folded in
 /// as well — so the caller's new record covers the previous record's turns plus these.
 /// </param>
+/// <param name="Usage">What the summary call cost. Already folded into the turn's own <see cref="AiTurnEventKind.Usage"/>
+/// figure; carried here so the compaction record can keep it separately.</param>
 /// <remarks>Always automatic — the threshold, or the provider rejecting the request as too long. Manual
 /// compaction goes through <see cref="IAiChatOrchestrator.CompactAsync"/> and never arrives as an event.</remarks>
 public sealed record AiCompacted(
@@ -164,4 +170,5 @@ public sealed record AiCompacted(
     string Summary,
     int SummarisedExchanges,
     string? ProviderId,
-    string? ModelId);
+    string? ModelId,
+    AiUsageReport? Usage = null);

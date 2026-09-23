@@ -336,8 +336,9 @@ public class AiAssistantViewModel : ReactiveTool
 
     // ---- Compaction (#998) -------------------------------------------------------------------------
     //
-    // [fsnow]: "Manual and auto at a fraction of context length"; "Last 4 turns" stay verbatim. The reference is
-    // Claude Code's /compact [instructions]. The automatic half happens inside a turn, in the orchestrator, because
+    // [fsnow]: "Manual and auto at a fraction of context length"; "Last 4 turns" stay verbatim. [suggestion] Claude
+    // Code's /compact [instructions] as the reference follows from his "feature parity with CC in context
+    // management"; it is not his wording. The automatic half happens inside a turn, in the orchestrator, because
     // only it knows the size of the whole request; what is here is the manual action and the record of both.
 
     /// <summary>
@@ -370,8 +371,12 @@ public class AiAssistantViewModel : ReactiveTool
 
     private bool _isCompacting;
 
-    /// <summary>A manual compaction is running. <see cref="IsBusy"/> is true as well, so every other command waits;
-    /// this is what the view can say "Summarising…" from, and Stop cancels it.</summary>
+    /// <summary>
+    /// Earlier turns are being summarised — by the Compact action, or automatically inside a turn before it is sent
+    /// (the orchestrator's <c>Compacting</c> event, cleared when the summary ends either way). <see cref="IsBusy"/> is
+    /// true as well, so every other command waits; Stop cancels it. On the automatic path the running turn's
+    /// <c>Status</c> also says "Summarising earlier turns…" while it lasts. (#998)
+    /// </summary>
     public bool IsCompacting
     {
         get => _isCompacting;
@@ -748,6 +753,9 @@ public class AiAssistantViewModel : ReactiveTool
                 Automatic = false,
                 ProviderId = result.ProviderId,
                 ModelId = result.ModelId,
+                // A manual summary belongs to no turn, so the record is the only place its cost is kept.
+                InputTokens = result.Usage?.InputTokens,
+                OutputTokens = result.Usage?.OutputTokens,
             });
             RaiseCompactionChanged();
             CompactInstructions = "";
@@ -808,6 +816,8 @@ public class AiAssistantViewModel : ReactiveTool
             Automatic = true,
             ProviderId = compaction.ProviderId,
             ModelId = compaction.ModelId,
+            InputTokens = compaction.Usage?.InputTokens,
+            OutputTokens = compaction.Usage?.OutputTokens,
         };
         _compactions.Add(record);
 
@@ -860,6 +870,10 @@ public class AiAssistantViewModel : ReactiveTool
 
     private void Handle(AiTurnViewModel turn, AiTurnEvent e)
     {
+        // Every event but Compacting means the summary, if one was being written, has ended — succeeded (Compacted),
+        // failed and the turn went on (Started), or failed with the turn (Error). (#998)
+        if (e.Kind != AiTurnEventKind.Compacting && IsCompacting) IsCompacting = false;
+
         switch (e.Kind)
         {
             case AiTurnEventKind.Started when e.Context is { } context:
@@ -883,9 +897,17 @@ public class AiAssistantViewModel : ReactiveTool
                 turn.Status = WaitingMessage(_elapsed.Elapsed, sawReasoning: false);
                 break;
 
+            case AiTurnEventKind.Compacting:
+                // The wait that follows is a summary being written, not a slow model — say so, and keep the tick from
+                // saying otherwise. (#998, review M-2)
+                IsCompacting = true;
+                turn.Status = SummarisingMessage(_elapsed.Elapsed);
+                break;
+
             case AiTurnEventKind.Compacted when e.Compaction is { } compaction:
                 // Before Started, and possibly before a second Started (a too-long rejection sent again): recorded
                 // at once, so the turn's record says it was sent with the summary rather than the turns. (#998)
+                IsCompacting = false;
                 RecordAutomaticCompaction(turn, compaction);
                 break;
 
@@ -1028,8 +1050,14 @@ public class AiAssistantViewModel : ReactiveTool
         // The tick owns the status line only while nothing real has arrived, and surrenders it the instant
         // anything does — a progress counter must never overwrite an error message.
         if (!_sawText && !turn.Failed)
-            turn.Status = WaitingMessage(_elapsed.Elapsed, _sawReasoning);
+            turn.Status = IsCompacting
+                ? SummarisingMessage(_elapsed.Elapsed)
+                : WaitingMessage(_elapsed.Elapsed, _sawReasoning);
     }
+
+    /// <summary>What the status line says while an automatic summary is being written. (#998)</summary>
+    internal static string SummarisingMessage(TimeSpan elapsed) =>
+        elapsed.TotalSeconds < 5 ? "Summarising earlier turns…" : $"Summarising earlier turns… {FormatElapsed(elapsed)}";
 
     /// <summary>
     /// What to say while nothing has come back yet — a ladder, because "slow" and "broken" look identical from
@@ -1079,6 +1107,7 @@ public class AiAssistantViewModel : ReactiveTool
         turn.ElapsedTime = _elapsed.Elapsed;
         turn.Elapsed = FormatElapsed(_elapsed.Elapsed);
         turn.IsRunning = false;
+        IsCompacting = false;
         _current = null;
     }
 
@@ -1900,7 +1929,18 @@ public class AiAssistantViewModel : ReactiveTool
             .ToList();
     }
 
-    private AiCompactionRecord? LatestCompaction() => _compactions.Count > 0 ? _compactions[^1] : null;
+    /// <summary>
+    /// The compaction in force: the latest one with a summary in it. A record with a blank summary — which nothing
+    /// here writes, and a hand-edited file can hold — counts as no compaction: the orchestrator would not send an
+    /// empty summary, so honouring its turn list would send the model neither the turns nor anything in their
+    /// place. (review L-3)
+    /// </summary>
+    private AiCompactionRecord? LatestCompaction()
+    {
+        for (var i = _compactions.Count - 1; i >= 0; i--)
+            if (!string.IsNullOrWhiteSpace(_compactions[i].Summary)) return _compactions[i];
+        return null;
+    }
 
     /// <summary>
     /// The answered turns on screen that the summary in force does not stand in for, oldest first — what is

@@ -52,10 +52,38 @@ public class AiAssistantCompactionTests
         /// compaction.</summary>
         internal AiCompacted? CompactNextTurn { get; set; }
 
+        /// <summary>
+        /// When set, the next turn emits these instead of the usual opening (an optional Compacted, then Started) —
+        /// for the orders the real orchestrator produces that the default cannot, such as a retry's
+        /// <c>Started, Compacting, Compacted, Started</c>. A null entry is a pause: the turn waits on
+        /// <see cref="HoldPrelude"/> there.
+        /// </summary>
+        internal List<AiTurnEvent?>? Prelude { get; set; }
+        internal TaskCompletionSource? HoldPrelude { get; set; }
+
         public async IAsyncEnumerable<AiTurnEvent> RunAsync(
             AiTurnRequest request, [EnumeratorCancellation] CancellationToken ct = default)
         {
             Requests.Add(request);
+
+            if (Prelude is { } prelude)
+            {
+                Prelude = null;
+                foreach (var e in prelude)
+                {
+                    if (e is null)
+                    {
+                        if (HoldPrelude is { } pause) await pause.Task;
+                        continue;
+                    }
+                    yield return e;
+                }
+
+                var m = ++_answered;
+                yield return AiTurnEvent.ForText($"Answer {m} on appamāda.", $"Answer {m} on [[appamāda]].");
+                yield return AiTurnEvent.ForCompleted(new PaliMarkerReport(1, 0));
+                yield break;
+            }
 
             if (CompactNextTurn is { } compaction)
             {
@@ -356,6 +384,198 @@ public class AiAssistantCompactionTests
         await vm.AskAsync(AiTask.Explain);
         Assert.Equal("Automatic summary.", orchestrator.Requests[^1].Summary!.Answer);
         Assert.Equal(5, orchestrator.Requests[^1].History!.Count);
+    }
+
+    /// <summary>
+    /// A retried turn — <c>Started, Compacting, Compacted, Started</c>, the order the orchestrator produces when the
+    /// provider rejects a request as too long — keeps the SECOND Started's notices and Sent, and its record names the
+    /// summary it was finally sent with. (review M-1; the default fake never emitted this order)
+    /// </summary>
+    [Fact]
+    public async Task A_retried_turn_keeps_the_notices_and_record_of_the_request_that_was_answered()
+    {
+        var orchestrator = new CompactingOrchestrator();
+        var (vm, store, _, _) = Panel(orchestrator);
+        await AskTimes(vm, 6);
+
+        var firstSent = new SentContext(Array.Empty<SentField>(), "sys", "first attempt");
+        var finalSent = new SentContext(Array.Empty<SentField>(), "sys", "second attempt");
+        orchestrator.Prelude = new List<AiTurnEvent?>
+        {
+            AiTurnEvent.ForStarted(ContextFrom() with
+            {
+                Notices = new[] { "Earlier turns could not be summarised (x), so the whole conversation was sent." },
+                Sent = firstSent,
+            }),
+            AiTurnEvent.ForCompacting(),
+            AiTurnEvent.ForCompacted(new AiCompacted(
+                AiCompaction.SummaryAskedLine, "Retry summary.", 2, "openrouter", "some/model",
+                new AiUsageReport(10, 5))),
+            AiTurnEvent.ForStarted(ContextFrom() with
+            {
+                Notices = new[] { "…2 earlier turns were summarised and it was sent again." },
+                Sent = finalSent,
+            }),
+        };
+
+        await vm.AskAsync(AiTask.Explain);
+
+        var turn = vm.Turns[^1];
+        Assert.Equal(new[] { "…2 earlier turns were summarised and it was sent again." }, turn.Notices);
+        Assert.Same(finalSent, turn.Sent);
+        Assert.False(vm.IsCompacting);
+
+        var record = store.LastSaved!.Turns[^1];
+        Assert.Equal(new[] { "…2 earlier turns were summarised and it was sent again." }, record.Notices);
+        Assert.Equal("second attempt", record.Sent!.UserContent);
+
+        var compaction = Assert.Single(store.LastSaved.Compactions);
+        Assert.Equal(compaction.Id, record.Sent.SummaryId);
+        Assert.Equal(vm.Turns.Skip(2).Take(4).Select(t => t.ToRecord().Id), record.Sent.ReplayedTurnIds);
+        Assert.Equal(10, compaction.InputTokens);
+        Assert.Equal(5, compaction.OutputTokens);
+    }
+
+    /// <summary>
+    /// While an automatic summary is written the panel says so — IsCompacting, and the turn's status reads
+    /// "Summarising earlier turns…" rather than blaming a slow or queued model — and both clear when the summary ends.
+    /// (review M-2)
+    /// </summary>
+    [Fact]
+    public async Task An_automatic_summary_in_progress_is_announced_and_cleared_when_it_ends()
+    {
+        var orchestrator = new CompactingOrchestrator();
+        var (vm, _, _, _) = Panel(orchestrator);
+        await AskTimes(vm, 5);
+
+        var hold = new TaskCompletionSource();
+        orchestrator.HoldPrelude = hold;
+        orchestrator.Prelude = new List<AiTurnEvent?>
+        {
+            AiTurnEvent.ForCompacting(),
+            null,
+            AiTurnEvent.ForCompacted(new AiCompacted(
+                AiCompaction.SummaryAskedLine, "Automatic summary.", 1, "openrouter", "some/model")),
+            AiTurnEvent.ForStarted(ContextFrom()),
+        };
+
+        var running = vm.AskAsync(AiTask.Explain);
+
+        Assert.True(vm.IsCompacting);
+        Assert.True(vm.IsBusy);
+        Assert.StartsWith("Summarising earlier turns", vm.Turns[^1].Status);
+
+        hold.SetResult();
+        await running;
+
+        Assert.False(vm.IsCompacting);
+        Assert.Equal("", vm.Turns[^1].Status);
+    }
+
+    /// <summary>A summary that fails — Compacting, then straight to Started — clears the flag too.</summary>
+    [Fact]
+    public async Task A_failed_automatic_summary_clears_the_flag()
+    {
+        var orchestrator = new CompactingOrchestrator();
+        var (vm, _, _, _) = Panel(orchestrator);
+        await AskTimes(vm, 5);
+
+        var hold = new TaskCompletionSource();
+        orchestrator.HoldPrelude = hold;
+        orchestrator.Prelude = new List<AiTurnEvent?>
+        {
+            AiTurnEvent.ForCompacting(),
+            AiTurnEvent.ForStarted(ContextFrom()),
+            null,
+        };
+
+        var running = vm.AskAsync(AiTask.Explain);
+        Assert.False(vm.IsCompacting);
+        Assert.DoesNotContain("Summarising", vm.Turns[^1].Status);
+
+        hold.SetResult();
+        await running;
+        Assert.False(vm.IsCompacting);
+    }
+
+    /// <summary>A manual summary's cost has no turn to go in, so it is kept on its record.</summary>
+    [Fact]
+    public async Task A_manual_compaction_records_its_usage()
+    {
+        var orchestrator = new CompactingOrchestrator
+        {
+            Summarise = _ => new AiCompactionResult(
+                "A summary.", AiCompaction.SummaryAskedLine, null, "openrouter", "some/model", null,
+                new AiUsageReport(40, 8)),
+        };
+        var (vm, store, _, _) = Panel(orchestrator);
+        await AskTimes(vm, 5);
+
+        await vm.CompactAsync();
+
+        var compaction = Assert.Single(store.LastSaved!.Compactions);
+        Assert.Equal(40, compaction.InputTokens);
+        Assert.Equal(8, compaction.OutputTokens);
+    }
+
+    // ---- A blank summary in a file (review L-3) ------------------------------------------------------------
+
+    private static AiSession Seeded(params AiCompactionRecord[] compactions)
+    {
+        var session = new AiSession { Id = "seeded", Name = "Seeded" };
+        for (var i = 1; i <= 6; i++)
+        {
+            session.Turns.Add(new AiTurnRecord
+            {
+                Id = $"t{i}", Task = AiTask.Explain, AskedLine = $"asked {i}",
+                Answer = $"Answer {i}", MarkedAnswer = $"Answer {i} [[x]]",
+            });
+        }
+        session.Compactions.AddRange(compactions);
+        return session;
+    }
+
+    /// <summary>
+    /// A compaction record with a blank summary — which nothing writes, and a hand-edit can — counts as no
+    /// compaction. Honouring its turn list would send the model neither those turns nor anything in their place.
+    /// </summary>
+    [Fact]
+    public async Task A_blank_summary_counts_as_no_compaction()
+    {
+        var store = new FakeStore();
+        store.Seed(Seeded(new AiCompactionRecord { Id = "blank", Summary = "  ", SummarisedTurnIds = { "t1", "t2" } }));
+        var orchestrator = new CompactingOrchestrator();
+        var (vm, _, _, _) = Panel(orchestrator, store: store,
+            state: new ApplicationState { ActiveAssistantSessionId = "seeded" });
+        await vm.RestoreAsync();
+
+        Assert.All(vm.Turns, t => Assert.False(t.IsSummarised));
+        Assert.All(vm.Turns, t => Assert.False(t.HasCompactionMarker));
+
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.Null(orchestrator.Requests[^1].Summary);
+        Assert.Equal(6, orchestrator.Requests[^1].History!.Count);
+    }
+
+    /// <summary>...and the compaction before a blank one stays in force.</summary>
+    [Fact]
+    public async Task Behind_a_blank_summary_the_previous_compaction_stays_in_force()
+    {
+        var store = new FakeStore();
+        store.Seed(Seeded(
+            new AiCompactionRecord { Id = "good", Summary = "Good summary.", SummarisedTurnIds = { "t1" } },
+            new AiCompactionRecord { Id = "blank", Summary = "", SummarisedTurnIds = { "t1", "t2" } }));
+        var orchestrator = new CompactingOrchestrator();
+        var (vm, _, _, _) = Panel(orchestrator, store: store,
+            state: new ApplicationState { ActiveAssistantSessionId = "seeded" });
+        await vm.RestoreAsync();
+
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.Equal("Good summary.", orchestrator.Requests[^1].Summary!.Answer);
+        Assert.Equal(5, orchestrator.Requests[^1].History!.Count);
+        Assert.Equal("1 earlier turn summarised", vm.Turns[1].CompactionMarker);
     }
 
     // ---- Restore, switch, new conversation ----------------------------------------------------------------

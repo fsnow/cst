@@ -243,8 +243,12 @@ its citations name. Click switches the panel to it (the in-flight turn, if any, 
 ### 3.4 Compaction (P4)
 
 **[fsnow]** *"Manual and auto at a fraction of context length"*; the fraction *"95%, but make this a
-setting"*; *"Last 4 turns"* stay verbatim. The reference is Claude Code's `/compact [instructions]` and its
-auto-compact.
+setting"*; *"Last 4 turns"* stay verbatim. [suggestion] The reference taken is Claude Code's
+`/compact [instructions]` and its auto-compact — an agent's reading of his *"Claude Code itself is my model and we
+should aim for feature parity with CC in context management…"* (§0), not his wording.
+
+**[fsnow] decisions, 2026-09-22** (the option labels he chose): compact-and-retry on a too-long rejection —
+*"Keep it"*; the unknown-context notice — *"Every turn past 5"*.
 
 **[observed] What exists as of the #998 backend (2026-09-22)** — the view is Kestrel's:
 
@@ -284,20 +288,31 @@ auto-compact.
   it and nothing changes; a failure is one sentence in `Status` and nothing changes.
 - **Automatic** (in the orchestrator, the only layer that knows the whole request's size): when the estimate the
   Sent block reports reaches `ChatSettings.AutoCompactPercent` of the resolved model's `ContextLength`, the turn
-  compacts first — a `Compacted` event before `Started`, which the panel records — then sends. The setting
+  compacts first — a `Compacting` event while the summary is written (the panel sets `IsCompacting` and the turn's
+  status says *"Summarising earlier turns…"*), then `Compacted`, which the panel records, before `Started` —
+  then sends. The summary call's tokens are folded into the turn's usage [suggestion: the reader paid for them as
+  part of the turn] and also kept on the compaction record (`InputTokens`/`OutputTokens`); a manual compaction's
+  are on its record only. The setting
   defaults to 95; **0 is off**; outside 0–100 `SettingsValidator` puts it back to 95 [suggestion]. With
-  `ContextLength` unknown there is no automatic trigger, and once there is something to compact the turn carries
-  a notice saying so (`AiChatOrchestrator.UnknownContextNotice`). Past the threshold with nothing older than the
+  `ContextLength` unknown there is no automatic trigger, and on every turn once there is something to compact
+  (five or more answered turns) the turn carries a notice saying so (`AiChatOrchestrator.UnknownContextNotice`) —
+  **[fsnow]** *"Every turn past 5"*, keeping the gate an agent had proposed. The notice names no control, so it
+  stays true before the Compact button exists. Past the threshold with nothing older than the
   last four, the turn goes as it is with a notice; a summary that fails leaves a notice and the whole conversation
   is sent.
-- **Compact and retry** [suggestion, accepted]: a `ContextTooLong` rejection before anything streamed compacts and
-  sends again, once, while automatic compaction is on. The estimate's 2.0 characters per token runs *below* the
-  1.73 measured on `cl100k_base` (`AiTokens.PaliCharsPerToken`), so on some tokenizers the real count outruns
-  the 5% the default leaves — and with no published `ContextLength` the rejection is the only signal there is.
-  The turn then carries a second `Started` describing the request that was answered.
+- **Compact and retry** — proposed as a [suggestion], **[fsnow]** *"Keep it"* (2026-09-22): a `ContextTooLong`
+  rejection before anything streamed compacts and sends again, once, while automatic compaction is on. The
+  estimate assumes 2.0 characters per token (`AiTokens.PaliCharsPerToken`); `cl100k_base` measures 1.73, so on
+  such a tokenizer the estimate comes out about 15% low in tokens — more than the 5% the default leaves — and with
+  no published `ContextLength` the rejection is the only signal there is. The turn then carries a second `Started`
+  describing the request that was answered, and its notices describe that request only: a threshold summary that
+  failed before the retry is reported as having failed *at first*, never as "the whole conversation was sent".
 - **For the view:** each `AiTurnViewModel` has `IsSummarised`; the first turn after the summarised span carries
   `CompactionMarker` (*"12 earlier turns summarised"*), `HasCompactionMarker` and `CompactionSummary`, so the
-  marker row can be drawn from `Turns` alone and opened to show the summary.
+  marker row can be drawn from `Turns` alone and opened to show the summary. `CompactionSummary` is raw — the
+  `[[…]]` Pāli markers are still in it, so the view strips them before display.
+- **A compaction record with a blank summary** (a hand-edited file) counts as no compaction: the one before it, if
+  any, stays in force.
 
 The "resend only the last N exchanges" half of the tester's point 3 falls out of the same *N* with the summary
 step turned off — a degenerate compaction, not built as a separate feature.

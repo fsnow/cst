@@ -85,6 +85,14 @@ public enum AiTurnEventKind
     Started,
 
     /// <summary>
+    /// An automatic summary of older turns is being written, before this turn is sent (or sent again). Not
+    /// terminal: a <see cref="Compacted"/> follows if it worked, and in either case a <see cref="Started"/> or an
+    /// <see cref="Error"/> ends the wait. Here so a caller can say what the wait is for — without it the panel's clock
+    /// reported a summary call as a slow model and, after thirty seconds, blamed a queue. (#998, review M-2)
+    /// </summary>
+    Compacting,
+
+    /// <summary>
     /// Older turns were summarised automatically before this turn was sent — the estimated request reached the
     /// configured fraction of the model's context window, or the provider rejected it as too long. Carries the
     /// summary and how many history entries it stands in for (<see cref="AiTurnEvent.Compaction"/>), which the
@@ -243,6 +251,8 @@ public sealed record AiTurnEvent(
     AiCompacted? Compaction = null)
 {
     public static AiTurnEvent ForStarted(AiTurnContext context) => new(AiTurnEventKind.Started, Context: context);
+
+    public static AiTurnEvent ForCompacting() => new(AiTurnEventKind.Compacting);
 
     public static AiTurnEvent ForCompacted(AiCompacted compaction) =>
         new(AiTurnEventKind.Compacted, Compaction: compaction);

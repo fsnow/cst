@@ -213,7 +213,9 @@ public class AiCompactionOrchestratorTests
         var events = await CollectAsync(Orchestrator(provider, window), request);
 
         // Compacted comes before Started, so the caller has recorded it before the turn's context arrives.
+        // Compacting first, so the reader is told what the wait is for (review M-2).
         var kinds = events.Select(e => e.Kind).ToList();
+        Assert.Equal(AiTurnEventKind.Compacting, kinds[0]);
         Assert.True(kinds.IndexOf(AiTurnEventKind.Compacted) < kinds.IndexOf(AiTurnEventKind.Started));
         Assert.Equal(AiTurnEventKind.Completed, kinds[^1]);
 
@@ -459,6 +461,92 @@ public class AiCompactionOrchestratorTests
         var second = events.Where(e => e.Kind == AiTurnEventKind.Started).Last().Context!;
         Assert.Equal("A summary.", second.Sent!.History![1].Content);
         Assert.Contains(second.Notices, n => n.Contains("too long"));
+    }
+
+    /// <summary>
+    /// Review probe P3: the threshold summary fails, the send is rejected as too long, the retry's summary works.
+    /// The final Started — the one the stored turn keeps — must describe the request that was answered: it says the
+    /// summary failed AT FIRST, and never that "the whole conversation was sent". (review M-1)
+    /// </summary>
+    [Fact]
+    public async Task A_retry_after_a_failed_threshold_summary_reports_only_what_was_finally_sent()
+    {
+        var tooLong = new AiException(new AiError(AiErrorKind.ContextTooLong, "Too long.", StatusCode: 400));
+        var provider = new ScriptedProvider(
+            new Response(Throw: new AiException(new AiError(AiErrorKind.RateLimited, "Too many requests."))),
+            new Response(Throw: tooLong),
+            Response.Say("A summary."),
+            Response.Say("The answer."));
+
+        var events = await CollectAsync(Orchestrator(provider, contextLength: 10), Request(Turns(6)));
+
+        Assert.Equal(
+            new[]
+            {
+                AiTurnEventKind.Compacting, AiTurnEventKind.Started,
+                AiTurnEventKind.Compacting, AiTurnEventKind.Compacted, AiTurnEventKind.Started,
+            },
+            events.Select(e => e.Kind).Where(k => k is AiTurnEventKind.Started or AiTurnEventKind.Compacted
+                                                  or AiTurnEventKind.Compacting));
+        Assert.Equal(AiTurnEventKind.Completed, events[^1].Kind);
+
+        // The first Started told the truth about the first attempt...
+        var first = events.First(e => e.Kind == AiTurnEventKind.Started).Context!.Notices;
+        Assert.Contains(first, n => n.Contains("so the whole conversation was sent"));
+
+        // ...and the last tells the truth about the one that was answered.
+        var last = events.Last(e => e.Kind == AiTurnEventKind.Started).Context!.Notices;
+        Assert.DoesNotContain(last, n => n.Contains("the whole conversation was sent"));
+        var line = Assert.Single(last);
+        Assert.Contains("could not be summarised at first (Too many requests.)", line);
+        Assert.Contains("2 earlier turns were summarised and it was sent again", line);
+    }
+
+    /// <summary>
+    /// The summary call's tokens are folded into the turn's usage (the reader paid for them as part of this turn), and
+    /// a rejected attempt's own counts are not carried into the retry. (review M-2, L-4)
+    /// </summary>
+    [Fact]
+    public async Task Summary_tokens_are_added_to_the_turn_and_a_rejected_attempts_are_not()
+    {
+        var provider = new ScriptedProvider(
+            // The rejected attempt reports usage, then the rejection.
+            new Response(new[]
+            {
+                ChatDelta.ForUsage(new ChatUsage(1000, null)),
+                ChatDelta.ForError(new AiError(AiErrorKind.ContextTooLong, "Too long.", StatusCode: 400)),
+            }),
+            new Response(new[] { ChatDelta.ForText("A summary."), ChatDelta.ForUsage(new ChatUsage(10, 5)) }),
+            // The retry reports output only — so a stale input count from the rejected attempt would survive the
+            // per-field merge, which is exactly what the reset between attempts prevents.
+            new Response(new[] { ChatDelta.ForText("The answer."), ChatDelta.ForUsage(new ChatUsage(null, 20)) }));
+
+        var events = await CollectAsync(Orchestrator(provider, contextLength: null), Request(Turns(6)));
+
+        Assert.Equal(new AiUsageReport(10, 25), events.Single(e => e.Kind == AiTurnEventKind.Usage).Usage);
+        Assert.Equal(new AiUsageReport(10, 5), events.Single(e => e.Kind == AiTurnEventKind.Compacted).Compaction!.Usage);
+    }
+
+    /// <summary>The manual summariser reports what it cost, too.</summary>
+    [Fact]
+    public async Task Compact_reports_its_usage()
+    {
+        var provider = new ScriptedProvider(
+            new Response(new[] { ChatDelta.ForText("A summary."), ChatDelta.ForUsage(new ChatUsage(40, 8)) }));
+
+        var result = await Orchestrator(provider, contextLength: null)
+            .CompactAsync(new AiCompactionRequest(null, Turns(2)));
+
+        Assert.Equal(new AiUsageReport(40, 8), result.Usage);
+    }
+
+    /// <summary>The unknown-context notice names no control: it has to stay true before the Compact button exists.
+    /// (review M-4)</summary>
+    [Fact]
+    public void The_unknown_context_notice_names_no_control()
+    {
+        Assert.DoesNotContain("Compact", AiChatOrchestrator.UnknownContextNotice);
+        Assert.Contains("too long", AiChatOrchestrator.UnknownContextNotice);
     }
 
     /// <summary>Once only: a second rejection is the turn's error, not another round.</summary>

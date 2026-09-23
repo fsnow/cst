@@ -486,6 +486,13 @@ public sealed class AiCompactionRecord
     /// <inheritdoc cref="ProviderId"/>
     public string? ModelId { get; set; }
 
+    /// <summary>What the summary call cost, as the provider reported it; null where it reported nothing. For an
+    /// automatic compaction the same tokens are also in the turn's own count, which paid for them.</summary>
+    public int? InputTokens { get; set; }
+
+    /// <inheritdoc cref="InputTokens"/>
+    public int? OutputTokens { get; set; }
+
     /// <inheritdoc cref="AiSession.UnknownProperties"/>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownProperties { get; set; }
