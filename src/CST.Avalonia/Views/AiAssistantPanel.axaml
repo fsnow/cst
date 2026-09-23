@@ -25,6 +25,17 @@
         <Thickness x:Key="ExpanderContentPadding">8,4,8,6</Thickness>
     </UserControl.Resources>
 
+    <UserControl.Styles>
+        <!-- A disabled icon button must LOOK disabled. Fluent's PathIcon ControlTheme sets Foreground, and a
+             theme setter outranks the dimmed foreground a disabled Button hands down by inheritance - so
+             without this the + reads identical enabled and disabled, in both themes (measured, headless).
+             ">" matches the Button's LOGICAL child, which is its content. Not a local Foreground on the
+             icons: a local value would beat this rule. Pinned by AiAssistantPanelIconStyleTests. -->
+        <Style Selector="Button:disabled > PathIcon">
+            <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundDisabled}"/>
+        </Style>
+    </UserControl.Styles>
+
     <!-- #586: generated text renders HERE, in Avalonia controls, and never inside the book's CEF WebView.
          That makes "generated text is visually distinguishable from canonical text" a structural fact
          rather than a styling convention, and keeps live token streaming off the component that SIGSEGVs
@@ -358,6 +369,45 @@
                            FontSize="11"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
+        </Border>
+
+        <!-- ============ The session row, pinned ============ -->
+        <!-- + starts a new conversation (#850). [fsnow]: "I would like to create new conversations like in
+             Claude Code, maybe also with a plus button, while saving the current one." The current one is
+             not discarded: each turn is saved as it ends (#849), so + asks for no confirmation. [observed]
+             The exception is a turn whose save failed - Status says so, and + then clears both that turn
+             and the warning (LetGoOfSession).
+
+             At the TOP, not beside the presets in the composer: this acts on the session, not on a turn, and
+             the session list (#997) belongs beside it. [suggestion] - the backend session's, not a decision.
+
+             Disabled while a turn runs AND while the conversation is empty. [fsnow] chose "Disabled when
+             empty" (relayed by the backend session, 2026-09-22): a + that does nothing visible reads as
+             broken. Both inputs already raise change notifications - CanAsk from IsBusy's setter, HasTurns
+             at every change to Turns - so this needs no view-model property.
+
+             Bound in XAML rather than as a canExecute on the command, which is this panel's pattern:
+             canExecute observables need ReactiveUI's builder initialised, which the unit-test host does not
+             do. NewConversation keeps its own IsBusy early-return as the second net. -->
+        <Border DockPanel.Dock="Top"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="8,4,8,4">
+            <Button x:Name="NewConversationButton"
+                    HorizontalAlignment="Right"
+                    Command="{Binding NewConversationCommand}"
+                    Padding="6,4"
+                    ToolTip.Tip="New conversation"
+                    AutomationProperties.AutomationId="assistant.new-conversation"
+                    AutomationProperties.Name="New conversation">
+                <Button.IsEnabled>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="CanAsk"/>
+                        <Binding Path="HasTurns"/>
+                    </MultiBinding>
+                </Button.IsEnabled>
+                <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="12" Height="12"/>
+            </Button>
         </Border>
 
         <!-- ============ The transcript, scrolling ============ -->
