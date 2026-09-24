@@ -169,19 +169,26 @@ it that time, and a restore, switch, rename or delete the reader asked for says 
 now". Before the split, any read failure moved the file aside, and since the list is re-read after every turn,
 one unlucky moment took a good conversation out of the list. Reads open with `FileShare.ReadWrite |
 FileShare.Delete` so they do not block a concurrent replace or delete on Windows, and a save retries its
-`File.Replace` once, after 100 ms, on an `IOException` [suggestion — both reasoned from the Windows sharing
-rules, not measured on Windows]. A restore that fails leaves `ActiveAssistantSessionId` naming the file, so the
-next launch tries again; that conversation's row can still be deleted, and deleting it clears the id.
+`File.Replace` once, after 100 ms, on an `IOException`; if that fails too with the session file gone, the complete
+temp file is kept rather than cleaned up, since it is then the only copy [suggestion — all three reasoned from
+the Windows file rules, not measured on Windows]. A restore that fails leaves `ActiveAssistantSessionId` naming
+the file, so the next launch tries again. Whether the reader can delete it meanwhile depends on why: a file that
+opened but could not be mapped (`Failed`) is still listed, so its row is there and deletable, and deleting it
+clears the id; a file that could not be opened (`Unavailable`) is skipped by the listing too, so it has no row
+until it opens.
 
 **[observed] Launch sequencing.** The panel's view model is built during `CstDockFactory.CreateLayout`, which
 runs *before* `LoadStateAsync` completes — so a constructor reading `ActiveAssistantSessionId` would read the
-default empty state every launch. The restore is therefore pushed in by `App.InitializeFromLoadedState`, as
-`AiAssistantViewModel.RestoreOnceAsync()`, next to `SearchViewModel.ApplyState` (#87) and
-`DictionaryViewModel.ApplyState` (#479), which exist for exactly this. It is gated on
-`CstDockFactory.AssistantEnabled()`, because resolving the singleton would otherwise *create* a panel for a
-reader who has the feature switched off. A panel that appears later — the reader switches the Assistant on in
-Settings (#667) — is restored by `LayoutViewModel.ShowAssistantPanel`, once `App.ApplicationStateLoaded` is set;
-`RestoreOnceAsync` makes whichever of the two calls comes second do nothing.
+default empty state every launch. The restore therefore waits for the state load, like
+`SearchViewModel.ApplyState` (#87) and `DictionaryViewModel.ApplyState` (#479), which exist for exactly this.
+`AssistantRestoreTrigger` decides it: when the state load finishes (`App.LoadApplicationStateAsync`'s `finally`)
+it restores if `CstDockFactory.AssistantEnabled()` is true at that moment, and `LayoutViewModel.ShowAssistantPanel`
+restores a panel shown after that — the reader switching the Assistant on in Settings (#667). Both are checked
+under one lock, so a toggle landing while the load finishes is caught by one or the other, and
+`AiAssistantViewModel.RestoreOnceAsync` makes whichever comes second do nothing. The restore resolves the panel
+only when the assistant is on, because resolving the singleton would otherwise *create* a panel for a reader who
+has the feature switched off. It waits behind any rename, delete or switch in flight, and does not show a
+conversation deleted while it was being read.
 
 ### 3.3 Sessions (P0, P3)
 
@@ -225,8 +232,11 @@ bound.
   `Status`. Because a switch holds `IsBusy`, everything bound to it behaves as during a turn while the file is
   read: Stop shows (with nothing to stop), and the presets and + disable.
 - `RenameSessionAsync(id, name)` — trimmed; empty or whitespace is refused and the old name kept. Works on the
-  active session (renaming the object the next turn will save) and on any listed one. A rename whose save fails
-  puts the old name back on that object, so neither the switcher nor the next turn's save carries it.
+  active session (renaming the object the next turn will save) and on any listed one. The rename writes a copy
+  carrying the new name, and the held object takes the name only once that write succeeded — so a failed rename
+  leaves nothing behind, and no other save (a turn ending, a compaction) can serialize a name not yet written. A
+  turn's save that queued behind the rename's write, holding the old name, is followed by one more write of the
+  held session.
   [suggestion] A rename does **not** move `LastActive`, so it does not reorder the list: "last active" is shown as
   when the conversation was last used, and a row that jumped to the top on rename would move out from under a
   reader working down the list. A rename of the conversation a switch is loading waits for the switch to land,
@@ -238,11 +248,11 @@ bound.
   rows' `AiSessionRowViewModel.CanDelete` reads too, so a row never offers a Delete that does nothing. Whether the
   delete worked is decided by the store (its answer, then whether the file still loads; a file that cannot be
   opened just now is still there), never by the list.
-- **Rename, delete and switch run one at a time** (`_sessionOps`, one lock for the panel [suggestion: per-id was
-  not needed at these volumes]). Each reads a session file and then writes it, deletes it or adopts it, and two
-  overlapping on one file undid each other: a delete landing between a rename's read and its write was written
-  back by the rename, and a switch reading between them showed — and on the next turn saved — the old name. A
-  turn's own save is not behind the lock.
+- **Rename, delete, switch and the launch restore run one at a time** (`_sessionOps`, one lock for the panel
+  [suggestion: per-id was not needed at these volumes]). Each reads a session file and then writes it, deletes it
+  or adopts it, and two overlapping on one file undid each other: a delete landing between a rename's read and its
+  write was written back by the rename, and a switch reading between them showed — and on the next turn saved — the
+  old name. A turn's own save is not behind the lock.
 - An unreadable file is announced in `Status` only for a load the reader asked for — the launch restore of the
   active conversation, a switch, a rename. One found while listing is handled by the store (§3.2) and logged.
 - Enablement is bindable flags, not `canExecute` observables (the reason is recorded at `RetryCommand`'s
@@ -313,7 +323,8 @@ should aim for feature parity with CC in context management…"* (§0), not his 
   part of the turn] and also kept on the compaction record (`InputTokens`/`OutputTokens`); a manual compaction's
   are on its record only. The setting
   defaults to 95; **0 is off**; outside 0–100 `SettingsValidator` puts it back to 95 [suggestion]. It is getting
-  a control in the Settings dialog (in progress on Kestrel, 2026-09-23) — **[fsnow]** *"yes, I intended that the
+  a control in the Settings dialog (in progress on Kestrel, 2026-09-23) — **[fsnow]**, in the coordinating session,
+  2026-09-22/23: *"yes, I intended that the
   setting would be in the Settings dialog"*. With
   `ContextLength` unknown there is no automatic trigger, and on every turn once there is something to compact
   (five or more answered turns) the turn carries a notice saying so (`AiChatOrchestrator.UnknownContextNotice`) —
@@ -356,7 +367,8 @@ paragraph anchor, then apply the stored `ReadingPositionToken` through the #434 
 
 **Re-selecting needs a primitive that does not exist yet, filed as #1014.** [observed] 2026-09-23: nothing in
 the app sets a selection programmatically. The maintainer, 2026-09-23, on #1014: **[fsnow]** *"good. let's file
-this for later"*. P5 uses it when it lands; where the selected text cannot be found, it falls back to the
+this for later"*. #1014's body carries his encoding for the selection; see the issue rather than a copy here.
+[suggestion] P5 uses the primitive when it lands; where the selected text cannot be found, it falls back to the
 paragraph plus the #434 position, and says so.
 
 ## 4. Phasing

@@ -153,12 +153,41 @@ public class AiAssistantSessionWiringTests
             return read;
         }
 
-        public Task<bool> SaveAsync(AiSession session, CancellationToken cancellationToken = default)
+        /// <summary>Taken by the NEXT save: it snapshots the session at once, then waits, and succeeds or fails with
+        /// the value it is released with. Saves called after it land after it, as the real store's write lock
+        /// orders them — so a test can hold a rename's write while a turn's save queues behind it.</summary>
+        internal TaskCompletionSource<bool>? HoldNextSave { get; set; }
+
+        private Task _writes = Task.CompletedTask;
+
+        public async Task<bool> SaveAsync(AiSession session, CancellationToken cancellationToken = default)
         {
             Saves.Add(session);
             TurnCountAtSave.Add(session.Turns.Count);
-            if (SaveSucceeds) Seed(session);
-            return Task.FromResult(SaveSucceeds);
+
+            // Serialized now, as the real store does before it waits for its lock.
+            var json = System.Text.Json.JsonSerializer.Serialize(session, AiSessionStore.JsonOptions);
+            var id = session.Id;
+
+            var previous = _writes;
+            var mine = new TaskCompletionSource();
+            _writes = mine.Task;
+
+            bool ok;
+            if (HoldNextSave is { } hold)
+            {
+                HoldNextSave = null;
+                ok = await hold.Task;
+            }
+            else
+            {
+                ok = SaveSucceeds;
+            }
+
+            await previous;
+            if (ok) Disk[id] = json;
+            mine.SetResult();
+            return ok;
         }
 
         /// <summary>Newest-active first, id breaking ties — the real store's order, which the panel must keep

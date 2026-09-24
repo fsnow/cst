@@ -657,9 +657,12 @@ public sealed class AiSessionStoreTests : IDisposable
     /// out of the list for good over one unlucky moment. (review probe G) When it can be opened again, it is
     /// listed again.
     /// </summary>
-    [UnixFact]
+    [UnixPermissionFact]
     public async Task A_session_that_cannot_be_opened_for_permission_is_left_in_place()
     {
+        // The attribute has already skipped Windows; this line is what tells the platform analyzer (CA1416) so.
+        if (OperatingSystem.IsWindows()) return;
+
         var store = Store();
         Assert.True(await store.SaveAsync(new AiSession { Id = "good", Name = "Good", LastActive = Created }));
         var path = PathFor("good");
@@ -667,7 +670,8 @@ public sealed class AiSessionStoreTests : IDisposable
 
         try
         {
-            // The precondition, loudly: as root the mode is not enforced, and this test would prove nothing.
+            // The precondition. The attribute skips a privileged run, where the mode is not enforced; this catches
+            // any other way the file might still open, which would leave the test proving nothing.
             Assert.ThrowsAny<UnauthorizedAccessException>(() => File.ReadAllText(path));
 
             var reports = new List<AiSessionUnreadable>();
@@ -688,6 +692,39 @@ public sealed class AiSessionStoreTests : IDisposable
         }
 
         Assert.Equal("good", Assert.Single(await store.ListAsync()).Id);
+    }
+
+    /// <summary>
+    /// A write that fails when there is no session file left keeps the temp file — at that point the only copy of
+    /// the conversation — instead of cleaning it up. Arranged here with a directory where the file should be, so the
+    /// promote (and its one retry) fails with the target absent; the Windows case it stands for, a failed
+    /// <c>File.Replace</c> that has already moved the target away, is reasoned, not measured.
+    /// </summary>
+    [Fact]
+    public async Task A_write_that_fails_with_no_file_left_keeps_the_temp_file()
+    {
+        Directory.CreateDirectory(PathFor("orphan"));
+        var session = new AiSession { Id = "orphan", Name = "Only copy", LastActive = Created };
+
+        Assert.False(await Store().SaveAsync(session));
+
+        var temp = PathFor("orphan") + ".tmp";
+        Assert.True(File.Exists(temp));
+        Assert.Contains("Only copy", File.ReadAllText(temp));
+    }
+
+    /// <summary>The contrast: a write cancelled before its temp file was complete leaves nothing behind, since a
+    /// half-written temp is never the only copy of anything.</summary>
+    [Fact]
+    public async Task A_cancelled_write_of_a_new_session_leaves_no_temp_file()
+    {
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        Assert.False(await Store().SaveAsync(new AiSession { Id = "fresh", LastActive = Created }, cancelled.Token));
+
+        Assert.False(File.Exists(PathFor("fresh") + ".tmp"));
+        Assert.False(File.Exists(PathFor("fresh")));
     }
 
     /// <summary>

@@ -22,8 +22,8 @@ namespace CST.Avalonia.Services.Ai;
 ///
 /// <para><b>Failures are reported, never thrown.</b> A transcript that cannot be read or written must not be
 /// able to stop the Assistant panel from opening. So <see cref="LoadAsync"/> answers null (keeping aside a file
-/// that did not parse, leaving alone one that could not be opened), <see cref="SaveAsync"/> answers false, and <see cref="Unreadable"/> is how the panel learns enough to
-/// say so on screen.</para>
+/// that did not parse, leaving alone one that could not be opened), <see cref="SaveAsync"/> answers false, and
+/// <see cref="Unreadable"/> is how the panel learns enough to say so on screen.</para>
 /// </summary>
 public interface IAiSessionStore
 {
@@ -456,6 +456,7 @@ public sealed class AiSessionStore : IAiSessionStore
         // supposed to keep what had streamed. (Caught by a review probe on the first cut, which threw
         // TaskCanceledException here.)
         var acquired = false;
+        var tempComplete = false;
         try
         {
             await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -464,6 +465,7 @@ public sealed class AiSessionStore : IAiSessionStore
             Directory.CreateDirectory(_directory);
 
             await File.WriteAllTextAsync(temp, json, cancellationToken).ConfigureAwait(false);
+            tempComplete = true;
 
             // Temp then replace. The window in which a session file is half-written is the window in which a
             // crash costs the reader the whole conversation rather than the turn in flight, and it closes for
@@ -496,7 +498,17 @@ public sealed class AiSessionStore : IAiSessionStore
 
             try
             {
-                if (File.Exists(temp)) File.Delete(temp);
+                // Unless the temp file is now the only copy. On Windows a failed File.Replace can leave the target
+                // gone and the data only in the (complete) temp [suggestion — reasoned from ReplaceFile's documented
+                // failure modes, not measured]; deleting it then loses the whole conversation. Left in place it is
+                // not listed (its name is not a session id) and the next save overwrites it, and meanwhile it can be
+                // recovered by hand. A temp the write did not finish is never the only copy of anything.
+                var onlyCopy = tempComplete && !File.Exists(path);
+                if (File.Exists(temp) && !onlyCopy) File.Delete(temp);
+                else if (onlyCopy && File.Exists(temp))
+                    _logger?.LogError(
+                        "Assistant session {Id} could not be written and its file is missing; the data is kept at {Path}",
+                        session.Id, temp);
             }
             catch (Exception cleanupEx)
             {

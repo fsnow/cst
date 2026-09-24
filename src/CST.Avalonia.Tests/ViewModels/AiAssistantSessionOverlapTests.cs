@@ -78,6 +78,67 @@ public class AiAssistantSessionOverlapTests
         Assert.Equal(before, vm.ActiveSessionName);
     }
 
+    /// <summary>
+    /// A turn that ends while a rename's write is pending does not carry the tentative name, and when that write
+    /// then fails nothing is left of the rename. The set-then-revert cut let the turn's save serialize the new name,
+    /// so the file and the switcher took it — and the turn after reverted it. (review probe R1)
+    /// </summary>
+    [Fact]
+    public async Task A_turn_ending_while_a_rename_is_pending_does_not_save_the_tentative_name()
+    {
+        var (vm, store, state, _) = Panel(new Answering());
+        await vm.AskAsync(AiTask.Explain);
+        await vm.RefreshSessionsAsync();
+        var id = state.ActiveAssistantSessionId!;
+        var before = store.OnDisk(id)!.Name;
+
+        var hold = new TaskCompletionSource<bool>();
+        store.HoldNextSave = hold;
+        var rename = vm.RenameSessionAsync(id, "Renamed");
+        var turn = vm.AskAsync(AiTask.Explain);
+
+        hold.SetResult(false);
+        Assert.False(await rename);
+        await turn;
+        await vm.RefreshSessionsAsync();
+
+        Assert.Equal(before, store.OnDisk(id)!.Name);
+        Assert.Equal(before, vm.ActiveSessionName);
+
+        await vm.AskAsync(AiTask.Explain);
+        await vm.RefreshSessionsAsync();
+        Assert.Equal(before, store.OnDisk(id)!.Name);
+        Assert.Equal(before, vm.ActiveSessionName);
+    }
+
+    /// <summary>
+    /// The same overlap when the rename's write succeeds: the turn's save, queued behind it, holds the old name and
+    /// lands last, so the rename writes the held session once more — the file ends with the new name without waiting
+    /// for another turn.
+    /// </summary>
+    [Fact]
+    public async Task A_rename_that_succeeds_while_a_turn_saves_ends_with_the_new_name_on_disk()
+    {
+        var (vm, store, state, _) = Panel(new Answering());
+        await vm.AskAsync(AiTask.Explain);
+        await vm.RefreshSessionsAsync();
+        var id = state.ActiveAssistantSessionId!;
+
+        var hold = new TaskCompletionSource<bool>();
+        store.HoldNextSave = hold;
+        var rename = vm.RenameSessionAsync(id, "Renamed");
+        var turn = vm.AskAsync(AiTask.Explain);
+
+        hold.SetResult(true);
+        Assert.True(await rename);
+        await turn;
+        await vm.RefreshSessionsAsync();
+
+        Assert.Equal("Renamed", store.OnDisk(id)!.Name);
+        Assert.Equal(2, store.OnDisk(id)!.Turns.Count);
+        Assert.Equal("Renamed", vm.ActiveSessionName);
+    }
+
     // ---- finding 3: rename against delete and switch ----------------------------------------------------
 
     /// <summary>
@@ -318,6 +379,38 @@ public class AiAssistantSessionOverlapTests
         Assert.Equal(1, store.ListCalls);
         Assert.Equal("Last", vm.ActiveSessionName);
         Assert.Single(vm.Sessions);
+    }
+
+    /// <summary>
+    /// A delete of the conversation the launch restore is reading stays deleted: the restore does not put the id
+    /// back, so the next turn starts a new conversation instead of writing the deleted file back. Not reachable from
+    /// the UI today (the list is empty until the restore's own listing), closed because it is cheap. (review probe
+    /// D1)
+    /// </summary>
+    [Fact]
+    public async Task A_delete_during_the_launch_restore_is_not_undone()
+    {
+        var store = new FakeStore();
+        store.Seed(new AiSession { Id = "last", Name = "Last" });
+        var (vm, _, state, _) = Panel(new Answering(), store: store,
+            state: new ApplicationState { ActiveAssistantSessionId = "last" });
+
+        var gate = new TaskCompletionSource();
+        store.Gate = gate;
+        var restore = vm.RestoreAsync();
+        var delete = vm.DeleteSessionAsync("last");
+
+        gate.SetResult();
+        await restore;
+        await delete;
+
+        Assert.Null(store.OnDisk("last"));
+        Assert.Empty(vm.Turns);
+        Assert.Null(state.ActiveAssistantSessionId);
+
+        await vm.AskAsync(AiTask.Explain);
+        Assert.Null(store.OnDisk("last"));
+        Assert.NotEqual("last", state.ActiveAssistantSessionId);
     }
 
     /// <summary>The launch path's own <see cref="AiAssistantViewModel.RestoreAsync"/> counts as the once, too.</summary>

@@ -1025,26 +1025,13 @@ public partial class App : Application
             if (openBookViewModel != null)
                 await Dispatcher.UIThread.InvokeAsync(() => openBookViewModel.InitializeFromState());
 
-            // In finally for the same reason: a failed load leaves the default state, and a panel shown after it
-            // should still list its conversations. See ApplicationStateLoaded.
-            ApplicationStateLoaded = true;
+            // The Assistant's conversation, now that ActiveAssistantSessionId is real — or, after a failed load, the
+            // defaults, which still have conversations to list. Restores now if the assistant is on; if it is
+            // switched on later, the panel's show restores it. Posted and failure-isolated there, so a transcript
+            // cannot delay or skip the reader's books. See AssistantRestoreTrigger. (#849; review finding 5)
+            AssistantRestoreTrigger.Shared.OnStateLoaded();
         }
     }
-
-    /// <summary>
-    /// Whether the application-state load has finished (or failed and left the defaults). Read by
-    /// <c>LayoutViewModel.ShowAssistantPanel</c>: an Assistant panel that appears after this — the reader switched
-    /// the feature on in Settings mid-session (#667) — restores its conversation there, because the launch restore
-    /// below ran only if the assistant was on at launch. One that appears before it is restored by the launch path
-    /// instead; restoring then would read the default empty state. (review, finding 5)
-    /// </summary>
-    internal static bool ApplicationStateLoaded
-    {
-        get => Volatile.Read(ref _applicationStateLoaded);
-        private set => Volatile.Write(ref _applicationStateLoaded, value);
-    }
-
-    private static bool _applicationStateLoaded;
     
     private async Task InitializeFromLoadedState(ApplicationState state)
     {
@@ -1080,39 +1067,9 @@ public partial class App : Application
             dictionaryViewModel?.ApplyState();
         });
 
-        // And the Assistant panel: reload the conversation it was in. [fsnow]: "Restore the last session
-        // silently" — no model call, the way books and reading positions are restored. Same sequencing story as
-        // the two panels above (the VM is built during the layout build, before this load finishes), so the
-        // restore is pushed here rather than done in its constructor. (#849)
-        //
-        // Gated on the assistant being switched on, because resolving the VM CREATES it: a reader with the
-        // feature off would otherwise get a panel constructed, an environment-key probe subscribed to, and a
-        // readiness check run, for a tool that is not in the layout. (CstDockFactory.CreateLayout resolves it
-        // only when enabled, for the same reason.)
-        //
-        // POSTED, not awaited, for the same reason the two panels above are: awaiting it puts the assistant's
-        // restore on the path to the reader's books, so anything unexpected in one transcript delays or skips
-        // the rest of the restore. RestoreAsync isolates its own failures now; this is the second net, and the
-        // one that survives the next edit inside it. (fable review)
-        if (CstDockFactory.AssistantEnabled())
-        {
-            Dispatcher.UIThread.Post(async void () =>
-            {
-                try
-                {
-                    var assistant = ServiceProvider?.GetService<AiAssistantViewModel>();
-                    // Once: a panel shown mid-session restores itself through the same call
-                    // (LayoutViewModel.ShowAssistantPanel), and whichever runs second does nothing.
-                    if (assistant != null) await assistant.RestoreOnceAsync();
-                }
-                catch (Exception ex)
-                {
-                    // An async void continuation: an escape here reaches the unhandled handler and kills a
-                    // reading app over a transcript.
-                    Log.Error(ex, "Could not restore the assistant conversation");
-                }
-            });
-        }
+        // The Assistant panel's restore is NOT here: LoadApplicationStateAsync's finally hands it to
+        // AssistantRestoreTrigger once this has run, where the "is the assistant on" check and a panel shown by the
+        // Settings toggle are decided under one lock. [fsnow]: "Restore the last session silently". (#849)
 
         // #44: the recent-books menu reads the (now-loaded) persisted MRU list; refresh it so the saved list
         // shows on launch even if the window's menu was registered before this load finished.
@@ -1760,7 +1717,7 @@ public partial class App : Application
             sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>(),
             // The transcript store and the one line of application state that names the active conversation.
             // The panel writes a session at the end of every turn and reloads the last one at launch — see
-            // AiAssistantViewModel.RestoreAsync, which InitializeFromLoadedState calls once state is in. (#849)
+            // AiAssistantViewModel.RestoreOnceAsync, which AssistantRestoreTrigger calls once state is in. (#849)
             sp.GetService<Services.Ai.IAiSessionStore>(),
             sp.GetService<IApplicationStateService>()));
         // services.AddTransient<MainWindowViewModel>();
