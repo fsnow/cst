@@ -322,10 +322,8 @@ should aim for feature parity with CC in context management…"* (§0), not his 
   then sends. The summary call's tokens are folded into the turn's usage [suggestion: the reader paid for them as
   part of the turn] and also kept on the compaction record (`InputTokens`/`OutputTokens`); a manual compaction's
   are on its record only. The setting
-  defaults to 95; **0 is off**; outside 0–100 `SettingsValidator` puts it back to 95 [suggestion]. It is getting
-  a control in the Settings dialog (in progress on Kestrel, 2026-09-23) — **[fsnow]**, in the coordinating session,
-  2026-09-22/23: *"yes, I intended that the
-  setting would be in the Settings dialog"*. With
+  defaults to 95; **0 is off**; outside 0–100 `SettingsValidator` puts it back to 95 [suggestion]. Its control in
+  the Settings dialog is described under "The setting" below (#1015). With
   `ContextLength` unknown there is no automatic trigger, and on every turn once there is something to compact
   (five or more answered turns) the turn carries a notice saying so (`AiChatOrchestrator.UnknownContextNotice`) —
   **[fsnow]** *"Every turn past 5"*, keeping the gate an agent had proposed. Past the threshold with nothing older
