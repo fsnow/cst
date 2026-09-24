@@ -628,18 +628,26 @@
                                              again. A model that publishes no context window never triggers it;
                                              the Assistant says so under its answers once there is something to
                                              summarise, so this row does not. -->
-                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,14,0,0">
-                                            <CheckBox IsChecked="{Binding AutoCompactEnabled}"
-                                                      IsEnabled="{Binding AssistantFieldsEnabled}"
-                                                      Content="Summarise earlier turns automatically at"
-                                                      VerticalAlignment="Center"
-                                                      AutomationProperties.AutomationId="settings.ai.auto-compact"/>
+                                        <!-- Two lines, not one sentence: as one horizontal row it was 639px against
+                                             a card 604px wide at the default window size (measured with Inter,
+                                             review of #1015). -->
+                                        <CheckBox IsChecked="{Binding AutoCompactEnabled}"
+                                                  IsEnabled="{Binding AssistantFieldsEnabled}"
+                                                  Content="Summarise earlier turns automatically"
+                                                  Margin="0,14,0,0"
+                                                  AutomationProperties.AutomationId="settings.ai.auto-compact"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="28,6,0,0">
+                                            <TextBlock Text="At" VerticalAlignment="Center"/>
+                                            <!-- Integer parsing: a typed fraction is rejected like any other
+                                                 invalid entry, instead of showing one number and saving another. -->
                                             <NumericUpDown Value="{Binding AutoCompactPercent}"
+                                                           LostFocus="OnAutoCompactPercentLostFocus"
                                                            Minimum="1" Maximum="100" Increment="1"
-                                                           FormatString="0" Width="110"
+                                                           FormatString="0" ParsingNumberStyle="Integer"
+                                                           Width="110"
                                                            VerticalAlignment="Center"
                                                            AutomationProperties.AutomationId="settings.ai.auto-compact-percent"
-                                                           AutomationProperties.Name="Percent of the model's context window">
+                                                           AutomationProperties.Name="Summarise automatically at this percent of the model's context window">
                                                 <NumericUpDown.IsEnabled>
                                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                         <Binding Path="AssistantFieldsEnabled"/>

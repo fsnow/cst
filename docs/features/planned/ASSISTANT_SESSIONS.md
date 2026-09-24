@@ -333,9 +333,10 @@ switcher and the +, enabled by `CanCompact`; its flyout has an optional "what th
 Summarised turns are drawn unchanged. The placement, the flyout and the marker opening to the summary itself
 are [suggestion]; a turn sent after a compaction also shows the summary in its Sent block.
 
-**[observed] The setting (2026-09-23).** **[fsnow]** *"I intended that the setting would be in the Settings
-dialog"*: Settings → AI, under the answer language, *"Summarise earlier turns automatically at [95] % of the
-model's context window"*. Unticked stores 0 (off); the percentage (1–100) is kept for when it is ticked again.
+**The setting (2026-09-23).** **[fsnow]** *"I intended that the setting would be in the Settings dialog"*.
+[observed] It is in Settings → AI, under the answer language: a checkbox *"Summarise earlier turns
+automatically"*, then *"At [95] % of the model's context window"*. Unticked stores 0 (off); the percentage
+(1–100) is kept for when it is ticked again. The shape and the wording are [suggestion], not his.
 
 ### 3.5 Take me back (P5)
 
