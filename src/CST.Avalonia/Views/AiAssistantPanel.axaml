@@ -409,6 +409,10 @@
         </Border>
 
         <!-- ============ The session row, pinned ============ -->
+        <!-- Its three buttons show their tooltips while disabled (ToolTip.ShowOnDisabled). Avalonia hides a
+             disabled control's tooltip by default, and these are icon-only and often disabled - on a new or
+             short conversation, the tooltip is the only way to learn what the icon is. The Compact tooltip
+             names what it keeps ("all but the last 4"), which is also why it is off on a short one. -->
         <!-- + starts a new conversation (#850). [fsnow]: "I would like to create new conversations like in
              Claude Code, maybe also with a plus button, while saving the current one." The current one is
              not discarded: each turn is saved as it ends (#849), so + asks for no confirmation. [observed]
@@ -454,6 +458,7 @@
                         Padding="4,4"
                         IsEnabled="{Binding HasSessions}"
                         ToolTip.Tip="Conversations"
+                        ToolTip.ShowOnDisabled="True"
                         AutomationProperties.AutomationId="assistant.sessions"
                         AutomationProperties.Name="Conversations">
                     <Grid ColumnDefinitions="*,Auto">
@@ -610,7 +615,8 @@
                         VerticalAlignment="Center"
                         IsEnabled="{Binding CanCompact}"
                         Padding="6,4"
-                        ToolTip.Tip="Summarise earlier turns"
+                        ToolTip.Tip="{Binding Source={x:Static ai:AiCompaction.KeepVerbatim}, StringFormat='Summarise all but the last {0} turns'}"
+                        ToolTip.ShowOnDisabled="True"
                         AutomationProperties.AutomationId="assistant.compact"
                         AutomationProperties.Name="Summarise earlier turns">
                     <PathIcon Width="12" Height="12"
@@ -639,6 +645,7 @@
                         Command="{Binding NewConversationCommand}"
                         Padding="6,4"
                         ToolTip.Tip="New conversation"
+                        ToolTip.ShowOnDisabled="True"
                         AutomationProperties.AutomationId="assistant.new-conversation"
                         AutomationProperties.Name="New conversation">
                     <Button.IsEnabled>
