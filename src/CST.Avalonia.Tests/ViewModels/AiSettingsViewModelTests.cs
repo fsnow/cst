@@ -119,6 +119,69 @@ namespace CST.Avalonia.Tests.ViewModels
         //   - provider strings the resolver can parse
         //                                   -> ChatProviderResolverTests
 
+        // ---- Automatic compaction (#998) ------------------------------------------------------------
+        // [fsnow]: "95%, but make this a setting" - "I intended that the setting would be in the Settings dialog".
+        // The setting stores 0 for off; the dialog must show that as off, not as "0 %".
+
+        private static (AiSettingsViewModel Vm, Settings Settings) MakeWithAutoCompact(int stored)
+        {
+            var settings = new Settings();
+            settings.Ai.Chat.AutoCompactPercent = stored;
+            var svc = new Mock<ISettingsService>();
+            svc.SetupGet(s => s.Settings).Returns(settings);
+            return (new AiSettingsViewModel(svc.Object, new FakeCredentialStore(), null), settings);
+        }
+
+        [Fact]
+        public void Automatic_compaction_is_on_at_95_by_default()
+        {
+            var (vm, _) = MakeWithAutoCompact(new Settings().Ai.Chat.AutoCompactPercent);
+
+            Assert.True(vm.AutoCompactEnabled);
+            Assert.Equal(95, vm.AutoCompactPercent);
+        }
+
+        [Fact]
+        public void Off_is_shown_as_off_and_turning_it_back_on_offers_a_real_percentage()
+        {
+            var (vm, settings) = MakeWithAutoCompact(0);
+
+            Assert.False(vm.AutoCompactEnabled);
+            Assert.Equal(95, vm.AutoCompactPercent);   // not 0: the field is what ticking the box will use
+
+            vm.AutoCompactEnabled = true;
+            Assert.Equal(95, settings.Ai.Chat.AutoCompactPercent);
+        }
+
+        [Fact]
+        public void Turning_it_off_stores_zero_and_keeps_the_percentage_for_later()
+        {
+            var (vm, settings) = MakeWithAutoCompact(80);
+            Assert.Equal(80, vm.AutoCompactPercent);
+
+            vm.AutoCompactEnabled = false;
+            Assert.Equal(0, settings.Ai.Chat.AutoCompactPercent);
+
+            vm.AutoCompactPercent = 70;   // edited while off: remembered, not applied
+            Assert.Equal(0, settings.Ai.Chat.AutoCompactPercent);
+
+            vm.AutoCompactEnabled = true;
+            Assert.Equal(70, settings.Ai.Chat.AutoCompactPercent);
+        }
+
+        [Fact]
+        public void The_percentage_stays_within_1_to_100()
+        {
+            var (vm, settings) = MakeWithAutoCompact(95);
+
+            vm.AutoCompactPercent = 0;
+            Assert.Equal(1, settings.Ai.Chat.AutoCompactPercent);
+            Assert.True(vm.AutoCompactEnabled);
+
+            vm.AutoCompactPercent = 250;
+            Assert.Equal(100, settings.Ai.Chat.AutoCompactPercent);
+        }
+
         [Fact]
         public void An_empty_answer_language_falls_back_rather_than_asking_for_nothing()
         {
