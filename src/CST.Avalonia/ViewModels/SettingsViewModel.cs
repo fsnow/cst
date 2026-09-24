@@ -12,6 +12,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
+using CST.Avalonia.Services.Ai;
 using CST.Avalonia.Constants;
 using CST.Conversion;
 using Microsoft.Extensions.DependencyInjection;
@@ -1375,6 +1376,12 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
             // whichever connection happened to be active (the mis-filing #678 fixed), and CREATED a junk
             // "default / My provider" record merely by being opened. (fable review)
             _answerLanguage = string.IsNullOrWhiteSpace(chat.AnswerLanguage) ? "English" : chat.AnswerLanguage;
+            // 0 is "off" in the setting; the dialog shows that as an unticked box and keeps a percentage to offer
+            // when it is ticked again, rather than a field reading "0 %". (#998)
+            _autoCompactPercent = chat.AutoCompactPercent is > 0 and <= 100
+                ? chat.AutoCompactPercent
+                : AiCompaction.DefaultAutoCompactPercent;
+            _autoCompactEnabled = chat.AutoCompactPercent > 0;
 
 
             // The Providers tab (#691). Resolved rather than injected because this view model is constructed
@@ -1669,6 +1676,45 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
                     string.IsNullOrWhiteSpace(value) ? "English" : value.Trim();
                 _settingsService.RequestSave();
             }
+        }
+
+        private bool _autoCompactEnabled = true;
+        private int _autoCompactPercent = AiCompaction.DefaultAutoCompactPercent;
+
+        /// <summary>
+        /// Whether the assistant summarises earlier turns on its own when a request nears the model's context
+        /// window. <b>[fsnow]</b>: <i>"Manual and auto at a fraction of context length"</i>; the fraction <i>"95%,
+        /// but make this a setting"</i>, and <i>"I intended that the setting would be in the Settings dialog"</i>.
+        /// Stored as <c>AutoCompactPercent</c> = 0 when off; the percentage is remembered for when it is turned on.
+        /// </summary>
+        public bool AutoCompactEnabled
+        {
+            get => _autoCompactEnabled;
+            set
+            {
+                if (value == _autoCompactEnabled) return;
+                this.RaiseAndSetIfChanged(ref _autoCompactEnabled, value);
+                WriteAutoCompact();
+            }
+        }
+
+        /// <summary>The percentage of the model's context window at which it happens, 1–100.</summary>
+        public int AutoCompactPercent
+        {
+            get => _autoCompactPercent;
+            set
+            {
+                var clamped = Math.Clamp(value, 1, 100);
+                if (clamped == _autoCompactPercent) return;
+                this.RaiseAndSetIfChanged(ref _autoCompactPercent, clamped);
+                WriteAutoCompact();
+            }
+        }
+
+        private void WriteAutoCompact()
+        {
+            _settingsService.Settings.Ai.Chat.AutoCompactPercent = _autoCompactEnabled ? _autoCompactPercent : 0;
+            _settingsService.RequestSave();
         }
 
         /// <summary>

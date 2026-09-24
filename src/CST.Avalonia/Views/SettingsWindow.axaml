@@ -621,6 +621,42 @@
                                                         IsEnabled="{Binding AssistantFieldsEnabled}"
                                                         FilterMode="StartsWith"
                                                         Width="320" HorizontalAlignment="Left"/>
+
+                                        <!-- Automatic compaction (#998). [fsnow]: "95%, but make this a setting",
+                                             in this dialog. Off is an unticked box, not "0 %": the setting
+                                             stores 0 for off, and the percentage is kept for when it is ticked
+                                             again. A model that publishes no context window never triggers it;
+                                             the Assistant says so under its answers once there is something to
+                                             summarise, so this row does not. -->
+                                        <!-- Two lines, not one sentence: as one horizontal row it was 639px against
+                                             a card 604px wide at the default window size (measured with Inter,
+                                             review of #1015). -->
+                                        <CheckBox IsChecked="{Binding AutoCompactEnabled}"
+                                                  IsEnabled="{Binding AssistantFieldsEnabled}"
+                                                  Content="Summarise earlier turns automatically"
+                                                  Margin="0,14,0,0"
+                                                  AutomationProperties.AutomationId="settings.ai.auto-compact"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="28,6,0,0">
+                                            <TextBlock Text="At" VerticalAlignment="Center"/>
+                                            <!-- Integer parsing: a typed fraction is rejected like any other
+                                                 invalid entry, instead of showing one number and saving another. -->
+                                            <NumericUpDown Value="{Binding AutoCompactPercent}"
+                                                           LostFocus="OnAutoCompactPercentLostFocus"
+                                                           Minimum="1" Maximum="100" Increment="1"
+                                                           FormatString="0" ParsingNumberStyle="Integer"
+                                                           Width="110"
+                                                           VerticalAlignment="Center"
+                                                           AutomationProperties.AutomationId="settings.ai.auto-compact-percent"
+                                                           AutomationProperties.Name="Summarise automatically at this percent of the model's context window">
+                                                <NumericUpDown.IsEnabled>
+                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                        <Binding Path="AssistantFieldsEnabled"/>
+                                                        <Binding Path="AutoCompactEnabled"/>
+                                                    </MultiBinding>
+                                                </NumericUpDown.IsEnabled>
+                                            </NumericUpDown>
+                                            <TextBlock Text="% of the model's context window" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                     </StackPanel>
                                 </Border>
 
