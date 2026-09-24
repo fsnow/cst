@@ -409,6 +409,9 @@
         </Border>
 
         <!-- ============ The session row, pinned ============ -->
+        <!-- Its three buttons show their tooltips while disabled (ToolTip.ShowOnDisabled). Avalonia hides a
+             disabled control's tooltip by default, and all three are disabled on a new or short conversation;
+             Compact and + are icon-only, so there the tooltip is the only way to learn what they are. -->
         <!-- + starts a new conversation (#850). [fsnow]: "I would like to create new conversations like in
              Claude Code, maybe also with a plus button, while saving the current one." The current one is
              not discarded: each turn is saved as it ends (#849), so + asks for no confirmation. [observed]
@@ -454,6 +457,7 @@
                         Padding="4,4"
                         IsEnabled="{Binding HasSessions}"
                         ToolTip.Tip="Conversations"
+                        ToolTip.ShowOnDisabled="True"
                         AutomationProperties.AutomationId="assistant.sessions"
                         AutomationProperties.Name="Conversations">
                     <Grid ColumnDefinitions="*,Auto">
@@ -610,9 +614,10 @@
                         VerticalAlignment="Center"
                         IsEnabled="{Binding CanCompact}"
                         Padding="6,4"
-                        ToolTip.Tip="Summarise earlier turns"
+                        ToolTip.Tip="{Binding Source={x:Static ai:AiCompaction.KeepVerbatim}, StringFormat='Summarise all but the last {0} turns'}"
+                        ToolTip.ShowOnDisabled="True"
                         AutomationProperties.AutomationId="assistant.compact"
-                        AutomationProperties.Name="Summarise earlier turns">
+                        AutomationProperties.Name="{Binding Source={x:Static ai:AiCompaction.KeepVerbatim}, StringFormat='Summarise all but the last {0} turns'}">
                     <PathIcon Width="12" Height="12"
                               Data="M4,12H20V14H4V12M4,9H20V11H4V9M16,4L12,8L8,4H11V1H13V4H16M8,19L12,15L16,19H13V22H11V19H8Z"/>
                     <Button.Flyout>
@@ -639,6 +644,7 @@
                         Command="{Binding NewConversationCommand}"
                         Padding="6,4"
                         ToolTip.Tip="New conversation"
+                        ToolTip.ShowOnDisabled="True"
                         AutomationProperties.AutomationId="assistant.new-conversation"
                         AutomationProperties.Name="New conversation">
                     <Button.IsEnabled>
