@@ -1024,8 +1024,27 @@ public partial class App : Application
             var openBookViewModel = ServiceProvider?.GetService<OpenBookDialogViewModel>();
             if (openBookViewModel != null)
                 await Dispatcher.UIThread.InvokeAsync(() => openBookViewModel.InitializeFromState());
+
+            // In finally for the same reason: a failed load leaves the default state, and a panel shown after it
+            // should still list its conversations. See ApplicationStateLoaded.
+            ApplicationStateLoaded = true;
         }
     }
+
+    /// <summary>
+    /// Whether the application-state load has finished (or failed and left the defaults). Read by
+    /// <c>LayoutViewModel.ShowAssistantPanel</c>: an Assistant panel that appears after this — the reader switched
+    /// the feature on in Settings mid-session (#667) — restores its conversation there, because the launch restore
+    /// below ran only if the assistant was on at launch. One that appears before it is restored by the launch path
+    /// instead; restoring then would read the default empty state. (review, finding 5)
+    /// </summary>
+    internal static bool ApplicationStateLoaded
+    {
+        get => Volatile.Read(ref _applicationStateLoaded);
+        private set => Volatile.Write(ref _applicationStateLoaded, value);
+    }
+
+    private static bool _applicationStateLoaded;
     
     private async Task InitializeFromLoadedState(ApplicationState state)
     {
@@ -1082,7 +1101,9 @@ public partial class App : Application
                 try
                 {
                     var assistant = ServiceProvider?.GetService<AiAssistantViewModel>();
-                    if (assistant != null) await assistant.RestoreAsync();
+                    // Once: a panel shown mid-session restores itself through the same call
+                    // (LayoutViewModel.ShowAssistantPanel), and whichever runs second does nothing.
+                    if (assistant != null) await assistant.RestoreOnceAsync();
                 }
                 catch (Exception ex)
                 {

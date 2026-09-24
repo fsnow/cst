@@ -303,9 +303,44 @@ namespace CST.Avalonia.ViewModels
         /// would be recorded by the dock monitor as the reader's own choice and destroy their saved tab
         /// before #91 reads it. (#919)
         /// </param>
-        public void ShowAssistantPanel(bool activate = true) =>
+        public void ShowAssistantPanel(bool activate = true)
+        {
             ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
                 () => IsAssistantPanelVisible = true, "AI Assistant", activate);
+            RestoreAssistantOnce();
+        }
+
+        /// <summary>
+        /// Reopen the Assistant's last conversation and fill its session list, if nothing has yet. (review,
+        /// finding 5)
+        ///
+        /// <para>The launch restore (<c>App.InitializeFromLoadedState</c>) runs only when the assistant is on at
+        /// launch, so a panel created later by the Settings toggle (#667) was never restored: no conversation and
+        /// no session list until its first turn ended. This is the same call, made where that panel appears.
+        /// <see cref="AiAssistantViewModel.RestoreOnceAsync"/> makes the second caller a no-op, so launch — where
+        /// startup's own reconcile may show the panel too — still restores once.</para>
+        ///
+        /// <para>Skipped until application state has loaded: before then <c>ActiveAssistantSessionId</c> is the
+        /// default empty state, and the launch path restores instead. Posted and failure-isolated like the launch
+        /// path: a transcript must not be able to fail showing a panel.</para>
+        /// </summary>
+        private static void RestoreAssistantOnce()
+        {
+            if (!App.ApplicationStateLoaded) return;
+
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(async void () =>
+            {
+                try
+                {
+                    var assistant = App.ServiceProvider?.GetService<AiAssistantViewModel>();
+                    if (assistant != null) await assistant.RestoreOnceAsync();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Could not restore the assistant conversation");
+                }
+            });
+        }
 
         public void HideAssistantPanel() =>
             HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "AI Assistant");

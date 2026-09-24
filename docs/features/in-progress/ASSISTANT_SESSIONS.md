@@ -1,8 +1,13 @@
-# Assistant sessions — conversation, persistence, naming, compaction (Planned)
+# Assistant sessions — conversation, persistence, naming, compaction
 
-> Plan of record for #849 (retain and restore Assistant turns) and #850 (the + new-conversation control), drafted
-> 2026-09-11. Provenance is marked throughout: **[fsnow]** is the maintainer's decision, **[suggestion]** is
-> an agent's and advisory, **[observed]** is a fact from code or a named source. Unmarked text is context.
+> **What exists:** the Assistant holds a conversation — earlier turns are replayed to the model (#991) — and
+> every conversation is kept on disk, one file each, and reopened at launch (#849); the + starts a new one
+> (#850); a session list switches, renames and deletes them (#997); older turns can be summarised by hand or
+> automatically (#998). **Still open:** take me back (P5, §3.5, waiting on #1014 for the selection) and a
+> shutdown drain for the turn in flight at Quit (§3.2).
+>
+> Provenance is marked throughout: **[fsnow]** is the maintainer's decision, **[suggestion]** is an agent's and
+> advisory, **[observed]** is a fact from code or a named source. Unmarked text is context.
 
 ## 0. The request, and the model for it
 
@@ -18,32 +23,19 @@ restoration, etc."*
 
 So the target is the Claude Code session model, transposed to a reading app. §2 maps it feature by feature.
 
-## 1. Where things stand — one finding changes the shape of the work
+## 1. The finding that set the order of the work
 
-**[observed] Every Assistant turn is one-shot. The model never sees a previous turn, even within a
-session.** `AiChatOrchestrator.RunCoreAsync` builds the request as
+**[observed] 2026-09-11: every Assistant turn was one-shot** — `AiChatOrchestrator.RunCoreAsync` sent a single
+user message and `AiTurnRequest` had no field that could carry history, so the model never saw a previous turn,
+even within a session. There was no conversation to persist, so **building the conversation (P1, #991) came
+before persisting it (P2)**.
 
-```csharp
-new ChatRequest(provider.Model, prompt.MaxOutputTokens, prompt.System,
-    new[] { new ChatMessage(ChatRole.User, prompt.UserContent) }, effort);
-```
+Two further facts from the same survey shaped the work:
 
-— a single user message — and `AiTurnRequest` has no field that could carry history. `AI_SURFACE_B.md` §14
-lists this as an open question (*"Follow-up turns — one-shot per invocation, or a short conversation over the
-same bundle?"*). The panel is a transcript (#849 says so correctly) but the *model's* view is a series of
-unrelated requests: "what did you mean by the third word?" cannot work today.
-
-The tester's diagnosis was therefore right, and understated: the APIs are stateless *and the app does not
-resend anything*. There is no conversation to persist yet. **Building the conversation comes before persisting
-it**, and that reorders #849's plan.
-
-Two things make the rest cheaper than it looks:
-
-- **[observed] The wire layer is already multi-turn.** `ChatRequest.Messages` is a list, `ChatRole` has
-  `User` and `Assistant`, and both adapters iterate the list (`OpenAiCompatibleProvider.cs:237`,
-  `AnthropicMessagesProvider.cs:251`). Only the orchestrator's single-message construction stands between the
-  app and a conversation.
-- **[observed] A turn holds the display strings but not the facts they were made from.** `AiTurnViewModel` has
+- **[observed] The wire layer was already multi-turn.** `ChatRequest.Messages` is a list, `ChatRole` has
+  `User` and `Assistant`, and both adapters (`OpenAiCompatibleProvider`, `AnthropicMessagesProvider`) iterate
+  the list, so only the orchestrator's single-message construction stood between the app and a conversation.
+- **[observed] A turn held the display strings but not the facts they were made from.** `AiTurnViewModel` had
   the task, question, raw answer, marked answer, reasoning, notices, partial-passage flag and the `SentContext`
   (#665) — and, for the rest, only what is on screen. Four things a record needs were **not reachable from a
   turn** at the end of it:
@@ -102,22 +94,22 @@ turn, so a ten-turn session about one paragraph sends the paragraph ten times. W
 the model needs to know *which* passage an earlier answer was about once the reader has moved; the citation
 is the app's own text (never model output), so replaying it keeps the "chrome is built from bundle data" rule
 intact. **The passage is sent for the current position only** — a follow-up about an earlier passage after the
-reader has moved gets the citation, not the text. That is a limitation to state in the doc comment, not to
-solve now.
+reader has moved gets the citation, not the text. That limitation is stated on `AiTurnRequest.History`.
 
-Mechanics:
+[observed] Mechanics, as built in #991:
 
-- `AiTurnRequest` gains `IReadOnlyList<AiExchange> History` (question-side text + answer text, both already
-  rendered strings). The orchestrator prepends them to `Messages`. Failed turns with no answer text are not
-  replayed; a turn with partial text is replayed as-is (it stands on screen, so it stands in the history).
-- `SentContext` (#665) must show the replayed messages, or "what did the model see" stops being true. Shipped
-  in #991 as `SentContext.History` (plus `HasHistory`), rendered by the panel's Sent expander above the
-  message it sent.
-- The token estimate (`AiTokens.Estimate`) runs over the whole message list, and the "Estimated context"
-  field says how much of it is history — the input to auto-compaction in P4.
-- Reasoning is **never** replayed. It was segregated from the answer for a reason (§8 of the design doc).
-- Retry re-asks with the history *as it is now*, not as it was. Simpler, and what a reader pressing "Try
-  again" on a 504 wants.
+- `AiTurnRequest.History` is an `IReadOnlyList<AiExchange>` (the asked line and the answer **as the model wrote
+  it**, `[[…]]` markers intact — **[fsnow]**, before #991 merged, as recorded on `AiExchange`: *"I want to fix
+  this before we merge."*). The
+  orchestrator puts them ahead of the current turn in `ChatRequest.Messages`. The panel builds the list
+  (`AiAssistantViewModel.HistoryFor`): turns with no answer text are not replayed; a turn with partial text is
+  replayed as it is, since it stands on screen.
+- `SentContext.History` (plus `HasHistory`) records the replayed messages, and the panel's Sent expander shows
+  them above the message the turn sent, so "what did the model see" stays true.
+- The token estimate runs over the whole message list, and the "Estimated context" field names the history's
+  share — the input to automatic compaction (§3.4).
+- Reasoning is never replayed: only the marked answer goes into an `AiExchange`.
+- Retry re-asks with the history as it is now, not as it was when the retried turn was first sent.
 - **Prompt caching** (Anthropic `cache_control` on the stable prefix) is exactly what a replayed history
   benefits from, and **[observed] the request has no prefix that is stable by construction, and nothing asks
   for caching (2026-09-12)**. The layout above keeps the replayed messages byte-stable; the *system prompt* is
@@ -140,17 +132,15 @@ one file each (`AppConstants.DataDirectory` is the single source of truth for th
 rename, and on compaction — never per streamed delta. A crash mid-turn loses only the turn in flight, which is
 the Claude Code guarantee. Atomic write (temp + `File.Replace`), the pattern `ApplicationStateService` uses.
 
-**[observed] 2026-09-13: there is no shutdown drain, and two turns can be lost at Quit.** The store is not
+**Still open: there is no shutdown drain.** [observed] 2026-09-13, re-checked 2026-09-23: the store is not
 `IDisposable` and `SaveApplicationStateAsync` does not consult it, so (a) a turn still streaming when the reader
 quits never reaches the `finally` that saves it — Stop keeps a partial answer, Quit does not — and (b) a
 session's *first* turn ending inside the shutdown state save can be written after `ForceSaveAsync`, so the file
 exists but `ActiveAssistantSessionId` never reaches disk. The same window is open for a crash within
-`ApplicationStateService`'s 60-second save timer. **[observed] As of the #997 backend, (b) is listed:** a
-session file that is not the active one is returned by `ListAsync` like any other and appears in
-`AiAssistantViewModel.Sessions`, and `SwitchToSessionCommand` reopens it — pinned by
-`AiAssistantSessionListTests.A_conversation_nothing_points_at_is_listed_and_can_be_reopened`. There is no list
-UI yet, so a reader can reopen it once the #997 panel UI lands. (a) still loses the turn in flight; the fix is a
-drain hook, not yet built.
+`ApplicationStateService`'s 60-second save timer. (b) costs nothing but the automatic reopen: a session file
+that is not the active one is listed like any other, and the reader reopens it from the session list — pinned by
+`AiAssistantSessionListTests.A_conversation_nothing_points_at_is_listed_and_can_be_reopened`. (a) still loses
+the turn in flight; the fix is a drain hook, not yet built.
 
 **What a stored turn holds** — everything the panel shows, so a restored turn renders identically:
 
@@ -169,30 +159,41 @@ drain hook, not yet built.
 
 **Restore:** at launch the panel reads the active session and rebuilds `Turns` from records —
 `AiTurnViewModel.FromRecord(record, byId)` alongside the live constructor, with `IsRunning = false` and the
-answer published (`Blocks` exist only after `PublishAnswer`). No model call. A session file that fails to parse
-is moved aside with a timestamp (the `application-state.unreadable-*` pattern) and the panel starts empty with a
-notice, never a crash.
+answer published (`Blocks` exist only after `PublishAnswer`). No model call.
+
+**[observed] A file that will not read is one of two things** (review fix, 2026-09-23). A file that was read and
+**did not parse** is moved aside with a timestamp (the `application-state.unreadable-*` pattern), and a load the
+reader asked for says where it was kept. A file that **could not be opened** — a permission, a sharing violation,
+another process holding it — is left where it is and reported as `AiSessionUnreadable.Transient`: a listing skips
+it that time, and a restore, switch, rename or delete the reader asked for says it "could not be opened just
+now". Before the split, any read failure moved the file aside, and since the list is re-read after every turn,
+one unlucky moment took a good conversation out of the list. Reads open with `FileShare.ReadWrite |
+FileShare.Delete` so they do not block a concurrent replace or delete on Windows, and a save retries its
+`File.Replace` once, after 100 ms, on an `IOException` [suggestion — both reasoned from the Windows sharing
+rules, not measured on Windows]. A restore that fails leaves `ActiveAssistantSessionId` naming the file, so the
+next launch tries again; that conversation's row can still be deleted, and deleting it clears the id.
 
 **[observed] Launch sequencing.** The panel's view model is built during `CstDockFactory.CreateLayout`, which
 runs *before* `LoadStateAsync` completes — so a constructor reading `ActiveAssistantSessionId` would read the
 default empty state every launch. The restore is therefore pushed in by `App.InitializeFromLoadedState`, as
-`AiAssistantViewModel.RestoreAsync()`, next to `SearchViewModel.ApplyState` (#87) and
+`AiAssistantViewModel.RestoreOnceAsync()`, next to `SearchViewModel.ApplyState` (#87) and
 `DictionaryViewModel.ApplyState` (#479), which exist for exactly this. It is gated on
 `CstDockFactory.AssistantEnabled()`, because resolving the singleton would otherwise *create* a panel for a
-reader who has the feature switched off.
+reader who has the feature switched off. A panel that appears later — the reader switches the Assistant on in
+Settings (#667) — is restored by `LayoutViewModel.ShowAssistantPanel`, once `App.ApplicationStateLoaded` is set;
+`RestoreOnceAsync` makes whichever of the two calls comes second do nothing.
 
 ### 3.3 Sessions (P0, P3)
 
 **There is no Clear.** **[fsnow]** *"'Clear' was introduced by Claude at some point and is not relevant. I
 would like to create new conversations like in Claude Code, maybe also with a plus button, while saving the
 current one."* So the control is **+** — new conversation: the current session is saved (it already is, at
-every `EndTurn`), and the panel starts an empty one. Nothing is destroyed, so it needs no confirmation.
-`ClearCommand` and `Clear()` are removed, not rebound; #850 is rewritten to describe the + control.
+every `EndTurn`), and the panel starts an empty one. [suggestion] Nothing is destroyed, so it asks for no
+confirmation. #850 was rewritten to describe the + control.
 
-**[observed] The command exists as of the P2 wiring: `NewConversationCommand`** — `IsBusy`-guarded like every
-other, it clears `Turns`, drops the session, and clears `ActiveAssistantSessionId`. It saves nothing, because
-every turn was already written when it ended. `ClearCommand`/`Clear()` are gone. What is left for #850 is the
-button.
+**[observed] The + is bound to `NewConversationCommand`** — `IsBusy`-guarded like every other command, it clears
+`Turns`, drops the session, and clears `ActiveAssistantSessionId`. It saves nothing, because every turn was
+already written when it ended. `ClearCommand`/`Clear()` are gone.
 
 **Deletion** is a separate action on a row in the session list, and it confirms — the one irreversible thing
 here. **[fsnow]** chose *"Yes, with confirmation"*.
@@ -204,8 +205,10 @@ first ~60 characters of a question; the reader can rename. No model-generated ti
 its citations name. Click switches the panel to it (the in-flight turn, if any, blocks the switch, the way
 `IsBusy` guards every other command). Rename and Delete on the row.
 
-**[observed] What exists as of the #997 backend (2026-09-22)** — all on `AiAssistantViewModel`, tested in
-`AiAssistantSessionListTests`; the view is Kestrel's:
+**[observed] The backend (#997, 2026-09-22; review fixes 2026-09-23)** — all on `AiAssistantViewModel`, tested in
+`AiAssistantSessionListTests` and `AiAssistantSessionOverlapTests`. The view calls the methods directly
+(`SwitchToSessionAsync`, `RenameSessionAsync`, `DeleteSessionAsync`); the `*Command` wrappers beside them are not
+bound.
 
 - `Sessions` — an `ObservableCollection<AiSessionRowViewModel>` in the store's order (`Id`, `Name`, `LastActive`,
   `TurnCount`, `BookIds`, `IsActive`, `CanDelete`), plus `HasSessions`. Refreshed after every save, rename,
@@ -215,25 +218,33 @@ its citations name. Click switches the panel to it (the in-flight turn, if any, 
   file names (`s0101m.mul.xml`) — the summary carries no book names.
 - The store lists by reading every session file in full ([observed] review measurement: 361–488 ms and ~820 MB
   allocated per listing at 200 sessions × 30 turns). An index is a separate follow-up, not part of #997.
-- `SwitchToSessionCommand` (session id) — refused while `IsBusy`, and holds `IsBusy` itself while it reads. It
+- `SwitchToSessionAsync(id)` — refused while `IsBusy`, and holds `IsBusy` itself while it reads. It
   loads and maps through the same `ReadTranscriptAsync` / `ShowSession` path the launch restore uses, so the two
   render identically and share the whole-or-nothing mapping and failure isolation. Switching to the conversation
-  on screen does nothing; an unreadable or missing target leaves the current one on screen and sets `Status`.
-  [observed] Because a switch holds `IsBusy`, everything bound to it behaves as during a turn while the file is
+  on screen does nothing; an unreadable, unopenable or missing target leaves the current one on screen and sets
+  `Status`. Because a switch holds `IsBusy`, everything bound to it behaves as during a turn while the file is
   read: Stop shows (with nothing to stop), and the presets and + disable.
-- `RenameSessionCommand` (`AiSessionRename(Id, Name)`) — trimmed; empty or whitespace is refused and the old name
-  kept. Works on the active session (renaming the object the next turn will save) and on any listed one.
+- `RenameSessionAsync(id, name)` — trimmed; empty or whitespace is refused and the old name kept. Works on the
+  active session (renaming the object the next turn will save) and on any listed one. A rename whose save fails
+  puts the old name back on that object, so neither the switcher nor the next turn's save carries it.
   [suggestion] A rename does **not** move `LastActive`, so it does not reorder the list: "last active" is shown as
   when the conversation was last used, and a row that jumped to the top on rename would move out from under a
   reader working down the list. A rename of the conversation a switch is loading waits for the switch to land,
   then renames what it put on screen. Allowed while a turn runs.
-- `DeleteSessionCommand` (session id) — no confirmation (the view asks). Deleting the conversation on screen
-  leaves the panel as `NewConversationCommand` does, and it lets go before anything is awaited. Refused only for
-  the conversation a turn is running in and the one a switch is loading, which is per row:
-  `AiSessionRowViewModel.CanDelete`. Whether the delete worked is decided by the store (its answer, then whether
-  the file still loads), never by the list.
+- `DeleteSessionAsync(id)` — no confirmation here (the view asks). Deleting the conversation on screen leaves the
+  panel as the + does, and it lets go before anything is awaited. A conversation application state names but the
+  panel does not hold (its restore failed) loses that line and nothing on screen changes. Refused only for the
+  conversation a turn is running in and the one a switch is loading — one predicate, `IsDeleteBlocked`, which the
+  rows' `AiSessionRowViewModel.CanDelete` reads too, so a row never offers a Delete that does nothing. Whether the
+  delete worked is decided by the store (its answer, then whether the file still loads; a file that cannot be
+  opened just now is still there), never by the list.
+- **Rename, delete and switch run one at a time** (`_sessionOps`, one lock for the panel [suggestion: per-id was
+  not needed at these volumes]). Each reads a session file and then writes it, deletes it or adopts it, and two
+  overlapping on one file undid each other: a delete landing between a rename's read and its write was written
+  back by the rename, and a switch reading between them showed — and on the next turn saved — the old name. A
+  turn's own save is not behind the lock.
 - An unreadable file is announced in `Status` only for a load the reader asked for — the launch restore of the
-  active conversation, a switch, a rename. One found while listing is kept aside by the store and logged.
+  active conversation, a switch, a rename. One found while listing is handled by the store (§3.2) and logged.
 - Enablement is bindable flags, not `canExecute` observables (the reason is recorded at `RetryCommand`'s
   construction): `CanSwitchSession`, `CanRenameSession`, and per-row `CanDelete`. The + button is enabled by
   `CanAsk` **and** `HasTurns` together (a `MultiBinding` with `BoolConverters.And` in the Kestrel UI) —
@@ -258,7 +269,7 @@ should aim for feature parity with CC in context management…"* (§0), not his 
 **[fsnow] decisions, 2026-09-22** (the option labels he chose): compact-and-retry on a too-long rejection —
 *"Keep it"*; the unknown-context notice — *"Every turn past 5"*.
 
-**[observed] What exists as of the #998 backend (2026-09-22)** — the view is Kestrel's:
+**[observed] The backend (#998, 2026-09-22):**
 
 - **One mechanism, two triggers.** The answered turns outside the summary in force, all but the last four
   (`AiCompaction.KeepVerbatim`), are summarised by the active provider and model, and the summary replaces them
@@ -284,15 +295,15 @@ should aim for feature parity with CC in context management…"* (§0), not his 
   turns since it, and the new summary replaces both — one summary per request, ever. Each `AiCompactionRecord`
   lists every turn it stands in for, the previous record's included, so the latest record alone is the
   boundary.
-- **The record.** `AiSession.Compactions` gains `Id`, `AskedLine`, `Instructions`, `Automatic`, `ProviderId`,
+- **The record.** `AiSession.Compactions` holds `Id`, `AskedLine`, `Instructions`, `Automatic`, `ProviderId`,
   `ModelId` beside `When`, `Summary`, `SummarisedTurnIds`. A turn's `AiSentRecord.SummaryId` names the summary it
   was sent with, beside `ReplayedTurnIds` — by reference, like the turns — so a restored turn's Sent block rebuilds
   exactly what was sent, even after later compactions. Restore and switch hand the session's compactions to the
   panel, so the next turn replays the summary in force. Compaction is written at once (§3.2's cadence) and does
   not move `LastActive` [suggestion — the rename reasoning].
-- **Manual:** `AiAssistantViewModel.CompactCommand` (parameter: instructions, or null to use
-  `CompactInstructions`), enabled by `CanCompact` — not while `IsBusy`, and only with more than four answered
-  turns outside the summary in force. It holds `IsBusy` (and `IsCompacting`) while the model writes; Stop cancels
+- **Manual:** `AiAssistantViewModel.CompactAsync` (instructions, or null to use `CompactInstructions`) — what the
+  view's Summarise button calls — enabled by `CanCompact`: not while `IsBusy`, and only with more than four
+  answered turns outside the summary in force. It holds `IsBusy` (and `IsCompacting`) while the model writes; Stop cancels
   it and nothing changes; a failure is one sentence in `Status` and nothing changes.
 - **Automatic** (in the orchestrator, the only layer that knows the whole request's size): when the estimate the
   Sent block reports reaches `ChatSettings.AutoCompactPercent` of the resolved model's `ContextLength`, the turn
@@ -301,12 +312,13 @@ should aim for feature parity with CC in context management…"* (§0), not his 
   then sends. The summary call's tokens are folded into the turn's usage [suggestion: the reader paid for them as
   part of the turn] and also kept on the compaction record (`InputTokens`/`OutputTokens`); a manual compaction's
   are on its record only. The setting
-  defaults to 95; **0 is off**; outside 0–100 `SettingsValidator` puts it back to 95 [suggestion]. With
+  defaults to 95; **0 is off**; outside 0–100 `SettingsValidator` puts it back to 95 [suggestion]. It is getting
+  a control in the Settings dialog (in progress on Kestrel, 2026-09-23) — **[fsnow]** *"yes, I intended that the
+  setting would be in the Settings dialog"*. With
   `ContextLength` unknown there is no automatic trigger, and on every turn once there is something to compact
   (five or more answered turns) the turn carries a notice saying so (`AiChatOrchestrator.UnknownContextNotice`) —
-  **[fsnow]** *"Every turn past 5"*, keeping the gate an agent had proposed. The notice names no control, so it
-  stays true before the Compact button exists. Past the threshold with nothing older than the
-  last four, the turn goes as it is with a notice; a summary that fails leaves a notice and the whole conversation
+  **[fsnow]** *"Every turn past 5"*, keeping the gate an agent had proposed. Past the threshold with nothing older
+  than the last four, the turn goes as it is with a notice; a summary that fails leaves a notice and the whole conversation
   is sent.
 - **Compact and retry** — proposed as a [suggestion], **[fsnow]** *"Keep it"* (2026-09-22): a `ContextTooLong`
   rejection before anything streamed compacts and sends again, once, while automatic compaction is on. The
@@ -338,11 +350,14 @@ are [suggestion]; a turn sent after a compaction also shows the summary in its S
 **[fsnow]** *"A restored turn should be able to reopen its book and restore the selection, as something the
 reader chooses rather than something that happens on load."*
 
-An action on the turn: open `Citation.BookId` (the dock's existing open-or-activate path — the same one
-`NavigateService` drives for outside agents), go to `Citation.NormalizedReference`'s paragraph anchor, then
-apply the stored `ReadingPositionToken` through the #434 restore path. **The selection is not re-selected**
-— #849 comment 3 already concluded the position token gives "most of the value" and the exact span may not be
-recoverable; the control's label should promise the position, not the selection.
+Not built yet. [suggestion] An action on the turn: open `Citation.BookId` (the dock's existing open-or-activate
+path — the same one `NavigateService` drives for outside agents), go to `Citation.NormalizedReference`'s
+paragraph anchor, then apply the stored `ReadingPositionToken` through the #434 restore path.
+
+**Re-selecting needs a primitive that does not exist yet, filed as #1014.** [observed] 2026-09-23: nothing in
+the app sets a selection programmatically. The maintainer, 2026-09-23, on #1014: **[fsnow]** *"good. let's file
+this for later"*. P5 uses it when it lands; where the selected text cannot be found, it falls back to the
+paragraph plus the #434 position, and says so.
 
 ## 4. Phasing
 
@@ -351,29 +366,27 @@ UI phases are done by a Claude session on Kestrel, where the maintainer can prev
 
 | # | Issue | Work | UI-free | Depends on |
 |---|---|---|---|---|
-| **P0** | #850 | The **+** (new conversation) control; remove `ClearCommand`/`Clear()` | ✗ (one button) | — |
-| **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.History`, estimate over the whole request | ✅ | — |
-| **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch | ✅ except the launch wiring | P1 |
+| **P0** | #850 | The **+** (new conversation) control; remove `ClearCommand`/`Clear()` — **done** (§3.3) | ✗ (one button) | — |
+| **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.History`, estimate over the whole request — **done** (§3.1) | ✅ | — |
+| **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch — **done** (§3.2), except the shutdown drain | ✅ except the launch wiring | P1 |
 | **P3** | #997 | Session list, switch, rename, delete (new and auto-name landed with P2) — **done** (§3.3): backend on the panel view model, UI in the panel's top row | ✅ | P2 |
 | **P4** | #998 | Compaction: template, summariser, record, manual action, auto trigger from `ContextLength`, compact-and-retry — **done** (§3.4): backend, plus the Compact control and the marker row in the panel | ✅ | P1, P3 |
-| **P5** | #849 | Take me back: open + go-to + position restore, as a turn action | ✗ (dock + WebView) | P2 |
-
-**P1 is the walking skeleton.** With it alone, a follow-up question works for the first time; nothing else in
-the plan is visible to a reader until P1 exists. It is also the phase most worth a Fable design pass before
-building, because the message layout in §3.1 is the one decision that everything after it (persistence
-format, compaction boundary, prompt-cache stability) is shaped by.
+| **P5** | #849 | Take me back: open + go-to + position restore, as a turn action; re-selection when #1014 lands | ✗ (dock + WebView) | P2, #1014 |
 
 ## 5. Testing
 
-- **P1** — the fake-provider test that already asserts the assembled request (`AiChatOrchestrator` suite)
-  gains cases for: history prepended in order; a failed turn without text omitted; reasoning never replayed;
+- **P1** — the fake-provider tests that assert the assembled request (`AiChatOrchestrator` suite) cover:
+  history prepended in order; a failed turn without text omitted; reasoning never replayed;
   `SentContext.History` matches what was sent; the estimate covers the list.
-- **P2** — `IAiSessionStore` against a temp directory (the `ApplicationStateService` test seam pattern):
-  round-trip of every field; a truncated file is moved aside and reported, not thrown; save is atomic (no
-  `.tmp` promoted over good data); restore builds `Turns` identical to the live ones. A golden session file
+- **P2** — `AiSessionStoreTests`, against a temp directory (the `ApplicationStateService` test seam pattern):
+  round-trip of every field; a truncated file is moved aside and reported, not thrown; a file that cannot be
+  opened (no permission, or held exclusively) is left in place and reported as transient; save is atomic (no
+  `.tmp` promoted over good data); restore builds `Turns` identical to the live ones. A golden session file is
   checked in, so a format change is a visible diff.
-- **P3** — service-level: auto-name rules; switch blocked while busy; delete removes the file and clears the
-  active id when it was the active one.
+- **P3** — `AiAssistantSessionListTests` and `AiAssistantSessionOverlapTests`: auto-name rules; switch blocked
+  while busy; delete removes the file and clears the active id; rename, delete and switch against each other; a
+  failed rename not applied later; a row's Delete agreeing with the refusal; a restore once, whichever caller is
+  first.
 - **P4** — `AiCompactionOrchestratorTests` (a provider scripted per call) and `AiAssistantCompactionTests`: the
   boundary at four from both sides; the summary first, roles alternating, nothing empty; the summariser sent only
   the compacted turns, markers intact; the trigger at the threshold and not one token below; no trigger and a
@@ -384,22 +397,25 @@ format, compaction boundary, prompt-cache stability) is shaped by.
 
 ## 6. Decisions — record
 
-Decided by **[fsnow]** on 2026-09-12, answering the questions this plan raised. Where he chose one of the
+Decided by **[fsnow]** on 2026-09-12, answering the questions the design raised. Where he chose one of the
 options offered, the option's label is quoted; where he wrote his own answer, his words are.
 
-1. **History layout** (§3.1) — *"Citation + question → answer"*: each prior turn replayed as its citation
-   line plus the question, then the answer; the passage bundle sent once, for the current turn only.
+1. **History layout** (§3.1) — *"Citation + question → answer"*. [suggestion, the option's description as the
+   agent wrote it] Each prior turn is replayed as its citation line plus the question, then the answer; the
+   passage bundle is sent once, for the current turn only.
 2. **New conversation, not Clear** (§3.3) — *"'Clear' was introduced by Claude at some point and is not
    relevant. I would like to create new conversations like in Claude Code, maybe also with a plus button,
    while saving the current one."*
-3. **On launch** — *"Restore the last session silently"*: the panel reloads the last active session's
-   turns, no model call, the way books and reading positions are restored.
+3. **On launch** — *"Restore the last session silently"*. [observed] As built, the panel reloads the last active
+   session's turns with no model call, pushed in after application state loads like the other panels' restores
+   (§3.2).
 4. **The sent prompt is stored on disk** — *"Yes, in full"*.
 5. **Naming** — *"Auto from the first turn, renamable"*.
 6. **Scope** — *"One global list"*, not per book.
-7. **Retention** — *"Forever, no cap"*. Deletion is manual, per session.
+7. **Retention** — *"Forever, no cap"*. [observed] Nothing deletes a session except the reader's Delete on its
+   row (decision 9).
 8. **Compaction** (§3.4) — *"Manual and auto at a fraction of context length"*; the fraction is
    *"95%, but make this a setting"*; *"Last 4 turns"* stay verbatim.
-9. **Delete** — *"Yes, with confirmation"*, as an action on a row in the session list.
-10. **#850** — *"Retitle it as the + / New conversation button"*: the issue is kept and its body rewritten;
-    the dead `ClearCommand` is removed rather than bound.
+9. **Delete** — *"Yes, with confirmation"*. [observed] It is an action on a row in the session list (§3.3).
+10. **#850** — *"Retitle it as the + / New conversation button"*. [observed] The issue was kept and its body
+    rewritten; the dead `ClearCommand` was removed rather than bound.

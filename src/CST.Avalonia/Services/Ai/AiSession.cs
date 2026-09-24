@@ -528,4 +528,8 @@ public sealed record AiSessionSummary(
 /// <param name="Id">The session the file claimed to be.</param>
 /// <param name="KeptPath">Where the unreadable file now is. Nothing in it was deleted.</param>
 /// <param name="Error">Why it could not be read. For the log, not for the reader.</param>
-public sealed record AiSessionUnreadable(string Id, string KeptPath, string Error);
+/// <param name="Transient">The file could not be OPENED — a permission, a sharing violation, another process
+/// holding it — rather than read and found not to be a session. It has NOT been moved: <paramref name="KeptPath"/>
+/// is its own path, because it is most likely a good transcript that will open next time. A caller says "could not
+/// be opened right now", not "kept aside". (review, probe G)</param>
+public sealed record AiSessionUnreadable(string Id, string KeptPath, string Error, bool Transient = false);

@@ -651,6 +651,89 @@ public sealed class AiSessionStoreTests : IDisposable
         Assert.Single(Directory.GetFiles(_dir, "bad-one.unreadable-*.json"));
     }
 
+    /// <summary>
+    /// A good file that cannot be OPENED — here, no permission — is left where it is and reported as transient,
+    /// not moved aside as unreadable. The list is re-read after every turn, so moving it took a good conversation
+    /// out of the list for good over one unlucky moment. (review probe G) When it can be opened again, it is
+    /// listed again.
+    /// </summary>
+    [UnixFact]
+    public async Task A_session_that_cannot_be_opened_for_permission_is_left_in_place()
+    {
+        var store = Store();
+        Assert.True(await store.SaveAsync(new AiSession { Id = "good", Name = "Good", LastActive = Created }));
+        var path = PathFor("good");
+        File.SetUnixFileMode(path, UnixFileMode.None);
+
+        try
+        {
+            // The precondition, loudly: as root the mode is not enforced, and this test would prove nothing.
+            Assert.ThrowsAny<UnauthorizedAccessException>(() => File.ReadAllText(path));
+
+            var reports = new List<AiSessionUnreadable>();
+            store.Unreadable += reports.Add;
+
+            Assert.Empty(await store.ListAsync());
+            Assert.Null(await store.LoadAsync("good"));
+
+            Assert.True(File.Exists(path));
+            Assert.Empty(Directory.GetFiles(_dir, "good.unreadable-*.json"));
+            Assert.Equal(2, reports.Count);
+            Assert.All(reports, r => Assert.True(r.Transient));
+            Assert.All(reports, r => Assert.Equal(path, r.KeptPath));
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        Assert.Equal("good", Assert.Single(await store.ListAsync()).Id);
+    }
+
+    /// <summary>
+    /// The same for a file another process holds exclusively — a sharing violation on Windows, an exclusive lock
+    /// that .NET takes for <see cref="FileShare.None"/> on Unix. An I/O failure is not corruption.
+    /// </summary>
+    [Fact]
+    public async Task A_session_held_exclusively_by_another_handle_is_left_in_place()
+    {
+        var store = Store();
+        Assert.True(await store.SaveAsync(new AiSession { Id = "held", Name = "Held", LastActive = Created }));
+        var path = PathFor("held");
+
+        var reports = new List<AiSessionUnreadable>();
+        store.Unreadable += reports.Add;
+
+        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            Assert.Null(await store.LoadAsync("held"));
+            Assert.Empty(await store.ListAsync());
+        }
+
+        Assert.True(File.Exists(path));
+        Assert.Empty(Directory.GetFiles(_dir, "held.unreadable-*.json"));
+        Assert.Equal(2, reports.Count);
+        Assert.All(reports, r => Assert.True(r.Transient));
+
+        Assert.Equal("Held", (await store.LoadAsync("held"))!.Name);
+    }
+
+    /// <summary>The contrast: a file that opened and did not parse is still kept aside, and not as transient.</summary>
+    [Fact]
+    public async Task A_session_that_opens_but_does_not_parse_is_still_kept_aside()
+    {
+        File.WriteAllText(PathFor("bad"), "{ not json");
+        var store = Store();
+        var reports = new List<AiSessionUnreadable>();
+        store.Unreadable += reports.Add;
+
+        Assert.Null(await store.LoadAsync("bad"));
+
+        Assert.False(Assert.Single(reports).Transient);
+        Assert.False(File.Exists(PathFor("bad")));
+        Assert.Single(Directory.GetFiles(_dir, "bad.unreadable-*.json"));
+    }
+
     // ---- writing ----------------------------------------------------------------------------------------
 
     /// <summary>The temp file is an implementation detail and must not outlive the save — a directory the

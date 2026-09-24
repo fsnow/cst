@@ -79,6 +79,15 @@ public class AiAssistantSessionWiringTests
         /// store does.</summary>
         internal HashSet<string> UnreadableIds { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>Ids whose file is there but cannot be OPENED just now — a permission, a sharing violation. A load
+        /// or a listing reports it as transient and leaves it on the disk, as the real store now does. (review,
+        /// finding 1)</summary>
+        internal HashSet<string> TransientIds { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Like <see cref="Gate"/>, one per load in order, for tests that must hold two loads at once —
+        /// a rename's and then a switch's.</summary>
+        internal Queue<TaskCompletionSource> Gates { get; } = new();
+
         internal bool DeleteFails { get; set; }
 
         /// <summary>
@@ -121,6 +130,12 @@ public class AiAssistantSessionWiringTests
                 return null;
             }
 
+            if (TransientIds.Contains(id) && Disk.ContainsKey(id))
+            {
+                Unreadable?.Invoke(new AiSessionUnreadable(id, $"/sessions/{id}.json", "denied", Transient: true));
+                return null;
+            }
+
             // Read BEFORE waiting, as a real read would have: what a held load answers is what the file said when
             // it was read, whatever has been written since.
             var read = ToLoad ?? OnDisk(id);
@@ -129,6 +144,10 @@ public class AiAssistantSessionWiringTests
             {
                 Gate = null;
                 await gate.Task;
+            }
+            else if (Gates.Count > 0)
+            {
+                await Gates.Dequeue().Task;
             }
 
             return read;
@@ -165,6 +184,7 @@ public class AiAssistantSessionWiringTests
         private IReadOnlyList<AiSessionSummary> Snapshot()
         {
             var summaries = Disk.Keys
+                .Where(id => !TransientIds.Contains(id))
                 .Select(id => OnDisk(id)!)
                 .Select(s => new AiSessionSummary(
                     s.Id, s.Name, s.Created, s.LastActive, s.Turns.Count,

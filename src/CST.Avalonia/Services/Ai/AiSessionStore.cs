@@ -21,17 +21,19 @@ namespace CST.Avalonia.Services.Ai;
 /// confirmation"</i>); this layer provides the delete, not the question.</para>
 ///
 /// <para><b>Failures are reported, never thrown.</b> A transcript that cannot be read or written must not be
-/// able to stop the Assistant panel from opening. So <see cref="LoadAsync"/> answers null and keeps the bad
-/// file, <see cref="SaveAsync"/> answers false, and <see cref="Unreadable"/> is how the panel learns enough to
+/// able to stop the Assistant panel from opening. So <see cref="LoadAsync"/> answers null (keeping aside a file
+/// that did not parse, leaving alone one that could not be opened), <see cref="SaveAsync"/> answers false, and <see cref="Unreadable"/> is how the panel learns enough to
 /// say so on screen.</para>
 /// </summary>
 public interface IAiSessionStore
 {
     /// <summary>
     /// One conversation, or null when there is no such file — and also null when the file could not be read,
-    /// in which case it has been moved aside and <see cref="Unreadable"/> has fired. Those two cases are
-    /// deliberately one return value and two reports: a caller restoring the last session does the same thing
-    /// either way (start empty), while a caller that wants to TELL the reader has the event.
+    /// in which case <see cref="Unreadable"/> has fired: either the file did not parse and has been moved aside,
+    /// or it could not be opened just now (<see cref="AiSessionUnreadable.Transient"/>) and is still in place.
+    /// Those cases are deliberately one return value and separate reports: a caller restoring the last session
+    /// does the same thing either way (start empty), while a caller that wants to TELL the reader has the
+    /// event.
     /// </summary>
     Task<AiSession?> LoadAsync(string id, CancellationToken cancellationToken = default);
 
@@ -47,9 +49,10 @@ public interface IAiSessionStore
     Task<bool> SaveAsync(AiSession session, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Every readable session on disk as a list row, newest-active first. Unreadable files are kept aside and
-    /// reported through <see cref="Unreadable"/>; they do not appear and do not fail the listing, because one
-    /// broken transcript must not cost the reader the list of the other ninety-nine.
+    /// Every readable session on disk as a list row, newest-active first. A file that does not parse is kept
+    /// aside and one that cannot be opened just now is left in place; both are reported through
+    /// <see cref="Unreadable"/>, neither appears, and neither fails the listing, because one broken transcript
+    /// must not cost the reader the list of the other ninety-nine.
     /// </summary>
     Task<IReadOnlyList<AiSessionSummary>> ListAsync(CancellationToken cancellationToken = default);
 
@@ -62,7 +65,9 @@ public interface IAiSessionStore
     Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// A session file could not be read and has been kept. Subscribe before loading or listing.
+    /// A session file could not be read: it did not parse and has been kept aside, or it could not be opened just
+    /// now and is still in place (<see cref="AiSessionUnreadable.Transient"/>). Subscribe before loading or
+    /// listing.
     ///
     /// <para>An event rather than a return value because both <see cref="LoadAsync"/> and
     /// <see cref="ListAsync"/> can hit it, and in the listing case there may be several while the call still
@@ -234,14 +239,43 @@ public sealed class AiSessionStore : IAiSessionStore
     }
 
     /// <summary>
-    /// Read one file, or keep it aside and report it. Never throws for the file's own sake — only cancellation
-    /// propagates.
+    /// Read one file, or report why not. Never throws for the file's own sake — only cancellation propagates.
+    ///
+    /// <para><b>Reading and parsing fail differently, and only a parse failure moves the file.</b> A file that was
+    /// read and is not a session will never become one, so it is kept aside before the next save can write over
+    /// it. A file that could not be OPENED — a permission, an indexer or virus scanner holding it, a concurrent
+    /// replace — is most likely a good transcript that will open next time, and moving it aside cost the reader
+    /// the conversation: the list is re-read after every turn, so one unlucky moment took it out of the list for
+    /// good. That is reported as <see cref="AiSessionUnreadable.Transient"/>, and the file stays where it is.
+    /// (review, probe G: <c>chmod 000</c> on a valid file emptied the list and renamed the file.)</para>
     /// </summary>
     private async Task<AiSession?> ReadAsync(string id, string path, CancellationToken cancellationToken)
     {
+        string json;
         try
         {
-            var json = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+            json = await ReadSharedAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // Gone between the existence check and the open — a delete from another window. That is "no such
+            // session", which is what the caller would have been told a moment earlier.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex,
+                "The assistant session {Id} could not be opened just now; it has been left in place", id);
+            Unreadable?.Invoke(new AiSessionUnreadable(id, path, ex.Message, Transient: true));
+            return null;
+        }
+
+        try
+        {
             var session = JsonSerializer.Deserialize<AiSession>(json, JsonOptions);
 
             // A file holding the literal token `null` deserializes to null without throwing; an empty file
@@ -262,15 +296,30 @@ public sealed class AiSessionStore : IAiSessionStore
 
             return session;
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
         catch (Exception ex)
         {
             PreserveUnreadable(id, path, ex.Message);
             return null;
         }
+    }
+
+    /// <summary>
+    /// The whole file as text, opened so that it does not stand in a writer's way.
+    ///
+    /// <para><c>File.ReadAllTextAsync</c> opens with <see cref="FileShare.Read"/>, which on Windows makes a
+    /// concurrent <c>File.Replace</c> or <c>File.Delete</c> of the same file fail for as long as the read is open —
+    /// and the list is read after every turn, just when a rename or a delete may be writing. Sharing write and
+    /// delete costs nothing here: a replace swaps the directory entry, so this read sees the old whole file or
+    /// fails, never half of each. [suggestion — reasoned from the Windows sharing rules, not measured on
+    /// Windows.]</para>
+    /// </summary>
+    private static async Task<string> ReadSharedAsync(string path, CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(
+            path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
+            bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -419,8 +468,21 @@ public sealed class AiSessionStore : IAiSessionStore
             // Temp then replace. The window in which a session file is half-written is the window in which a
             // crash costs the reader the whole conversation rather than the turn in flight, and it closes for
             // free.
-            if (File.Exists(path)) File.Replace(temp, path, null);
-            else File.Move(temp, path);
+            try
+            {
+                Promote(temp, path);
+            }
+            catch (IOException first) when (File.Exists(temp))
+            {
+                // Once more, after a moment. On Windows a replace fails while anything holds the target open
+                // without sharing delete — an indexer or a virus scanner looking at the file the last save wrote —
+                // and those hold it for milliseconds. One retry, bounded, and only while the temp file is still
+                // there to promote; a second failure is reported like any other. [suggestion — the Windows case is
+                // reasoned, not measured.]
+                _logger?.LogDebug(first, "Retrying the write of assistant session {Id}", session.Id);
+                await Task.Delay(ReplaceRetryDelay, CancellationToken.None).ConfigureAwait(false);
+                Promote(temp, path);
+            }
 
             return true;
         }
@@ -475,6 +537,15 @@ public sealed class AiSessionStore : IAiSessionStore
             _logger?.LogError(ex, "Could not delete assistant session {Id}", id);
             return Task.FromResult(false);
         }
+    }
+
+    /// <summary>How long a failed promote waits before its one retry. See <see cref="SaveAsync"/>.</summary>
+    private static readonly TimeSpan ReplaceRetryDelay = TimeSpan.FromMilliseconds(100);
+
+    private static void Promote(string temp, string path)
+    {
+        if (File.Exists(path)) File.Replace(temp, path, null);
+        else File.Move(temp, path);
     }
 
     // ---- paths --------------------------------------------------------------------------------------
