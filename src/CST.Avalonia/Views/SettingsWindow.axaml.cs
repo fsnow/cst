@@ -162,6 +162,18 @@ namespace CST.Avalonia.Views
         /// Copies the sample prompt — the same shape as <see cref="OnCopyMcpConfig"/>, and here for the same
         /// reason: the clipboard needs a TopLevel, which the view model has no access to.
         /// </summary>
+        /// <summary>
+        /// A cleared automatic-compaction box would otherwise stay blank beside a ticked box, reading as "no
+        /// threshold", while the saved value is unchanged. Put the saved value back when focus leaves. Done here
+        /// because the binding does not re-publish a value it believes it already showed, so no change
+        /// notification from the view model repaints the box (measured headless; review of #1015).
+        /// </summary>
+        private void OnAutoCompactPercentLostFocus(object? sender, RoutedEventArgs e)
+        {
+            if (sender is NumericUpDown { Value: null } box && box.DataContext is AiSettingsViewModel vm)
+                box.Value = vm.AutoCompactPercent;
+        }
+
         private async void OnCopySamplePrompt(object? sender, RoutedEventArgs e)
         {
             try
