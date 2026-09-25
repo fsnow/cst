@@ -1016,26 +1016,40 @@ public partial class App : Application
         }
         finally
         {
-            // The Assistant's conversation, now that ActiveAssistantSessionId is real — or, after a failed load, the
-            // defaults, which still have conversations to list. Restores now if the assistant is on; if it is
-            // switched on later, the panel's show restores it. See AssistantRestoreTrigger. (#849; review finding 5)
-            //
-            // FIRST in this finally, before the open-book work below: that work can throw, and anything after it
-            // would then never run — which here would leave the trigger thinking state never loaded, and the
-            // Assistant with no restore and no list for the whole session. This call cannot throw in its turn
-            // (AssistantEnabled swallows its own failures; the restore itself is posted and failure-isolated), so
-            // putting it first protects it without changing how an open-book failure propagates. (review L1)
-            AssistantRestoreTrigger.Shared.OnStateLoaded();
-
-            // Deterministic replacement for the Open Book panel's old ctor Task.Delay(100) guess: build its
-            // tree only after the state load has settled, so restore reads the real ExpandedNodeKeys and the
-            // user's first expand/collapse can't clobber the persisted expansion. In finally (not the try)
-            // so a failed load still builds the panel against the default empty state rather than leaving it
-            // blank. Idempotent. (SCRIPT-5)
-            var openBookViewModel = ServiceProvider?.GetService<OpenBookDialogViewModel>();
-            if (openBookViewModel != null)
-                await Dispatcher.UIThread.InvokeAsync(() => openBookViewModel.InitializeFromState());
+            await SettleStateLoadAsync(
+                AssistantRestoreTrigger.Shared,
+                async () =>
+                {
+                    // Deterministic replacement for the Open Book panel's old ctor Task.Delay(100) guess: build
+                    // its tree only after the state load has settled, so restore reads the real ExpandedNodeKeys
+                    // and the user's first expand/collapse can't clobber the persisted expansion. In finally (not
+                    // the try) so a failed load still builds the panel against the default empty state rather than
+                    // leaving it blank. Idempotent. (SCRIPT-5)
+                    var openBookViewModel = ServiceProvider?.GetService<OpenBookDialogViewModel>();
+                    if (openBookViewModel != null)
+                        await Dispatcher.UIThread.InvokeAsync(() => openBookViewModel.InitializeFromState());
+                });
         }
+    }
+
+    /// <summary>
+    /// What happens once the state load has settled, whether or not it succeeded. Pulled out of
+    /// <see cref="LoadApplicationStateAsync"/> so its ORDER can be tested: <c>App</c> cannot be built in a test
+    /// host, but this can, with both steps handed in.
+    ///
+    /// <para><b>The Assistant's trigger goes first.</b> It tells the restore that
+    /// <c>ActiveAssistantSessionId</c> is now real — or, after a failed load, that the defaults are in, which still
+    /// have conversations to list — and restores now if the Assistant is on (#849; review finding 5). The
+    /// open-book work after it can throw, and anything placed after a throw never runs: the trigger would then
+    /// believe state had never loaded, and the Assistant would have no restore and no list for the whole session.
+    /// The trigger cannot throw in its turn (<c>AssistantEnabled</c> swallows its own failures; the restore is
+    /// posted and failure-isolated), so putting it first protects it without changing how an open-book failure
+    /// propagates. (review L1; tested by <c>AppStateLoadSettleTests</c>)</para>
+    /// </summary>
+    internal static async Task SettleStateLoadAsync(AssistantRestoreTrigger trigger, Func<Task> initializeOpenBook)
+    {
+        trigger.OnStateLoaded();
+        await initializeOpenBook();
     }
     
     private async Task InitializeFromLoadedState(ApplicationState state)
