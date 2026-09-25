@@ -139,6 +139,38 @@ public class AiAssistantSessionOverlapTests
         Assert.Equal("Renamed", vm.ActiveSessionName);
     }
 
+    /// <summary>
+    /// When the extra write after an overlapping turn save fails, the reader is told: the rename stands on the
+    /// held session, but the file still has the old name until the next turn, and a quit in between would bring
+    /// the old name back. It used to return true and say nothing. (review L2)
+    /// </summary>
+    [Fact]
+    public async Task A_failed_catch_up_write_after_a_rename_says_so()
+    {
+        var (vm, store, state, _) = Panel(new Answering());
+        await vm.AskAsync(AiTask.Explain);
+        await vm.RefreshSessionsAsync();
+        var id = state.ActiveAssistantSessionId!;
+        var before = store.OnDisk(id)!.Name;
+
+        var hold = new TaskCompletionSource<bool>();
+        store.HoldNextSave = hold;
+        var rename = vm.RenameSessionAsync(id, "Renamed");
+        var turn = vm.AskAsync(AiTask.Explain);   // its save is decided (succeeds) now, and queues behind the rename
+
+        store.SaveSucceeds = false;                // ...so only the catch-up write fails
+        hold.SetResult(true);
+        Assert.True(await rename);
+        await turn;
+
+        Assert.Equal("The new name could not be saved yet; it will be saved with the next turn.", vm.Status);
+        Assert.Equal(before, store.OnDisk(id)!.Name);
+
+        store.SaveSucceeds = true;
+        await vm.AskAsync(AiTask.Explain);
+        Assert.Equal("Renamed", store.OnDisk(id)!.Name);
+    }
+
     // ---- finding 3: rename against delete and switch ----------------------------------------------------
 
     /// <summary>

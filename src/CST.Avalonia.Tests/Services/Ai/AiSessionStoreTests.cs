@@ -713,18 +713,58 @@ public sealed class AiSessionStoreTests : IDisposable
         Assert.Contains("Only copy", File.ReadAllText(temp));
     }
 
-    /// <summary>The contrast: a write cancelled before its temp file was complete leaves nothing behind, since a
-    /// half-written temp is never the only copy of anything.</summary>
+    /// <summary>
+    /// The contrast: a temp file whose write failed PART-way is cleaned up even with no session file beside it —
+    /// half a session is never the only copy of anything. Reached through the write seam, which writes a fragment
+    /// and then fails as a full disk would; a cancelled token cannot reach this, because it is refused before the
+    /// temp file exists. (review T1)
+    /// </summary>
     [Fact]
-    public async Task A_cancelled_write_of_a_new_session_leaves_no_temp_file()
+    public async Task A_temp_file_whose_write_failed_part_way_is_not_kept()
     {
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
+        var store = new AiSessionStore(_dir)
+        {
+            WriteTempAsync = async (path, contents, ct) =>
+            {
+                await File.WriteAllTextAsync(path, contents[..10], ct);
+                throw new IOException("No space left on device");
+            },
+        };
 
-        Assert.False(await Store().SaveAsync(new AiSession { Id = "fresh", LastActive = Created }, cancelled.Token));
+        Assert.False(await store.SaveAsync(new AiSession { Id = "fresh", LastActive = Created }));
 
         Assert.False(File.Exists(PathFor("fresh") + ".tmp"));
         Assert.False(File.Exists(PathFor("fresh")));
+    }
+
+    /// <summary>A delete takes a kept temp file with it: otherwise a conversation the reader deleted survives, in
+    /// full, as <c>&lt;id&gt;.json.tmp</c>. (review L3)</summary>
+    [Fact]
+    public async Task A_delete_removes_a_kept_temp_file_too()
+    {
+        Directory.CreateDirectory(PathFor("orphan"));
+        var store = Store();
+        Assert.False(await store.SaveAsync(new AiSession { Id = "orphan", Name = "Only copy", LastActive = Created }));
+        Directory.Delete(PathFor("orphan"));
+        Assert.True(File.Exists(PathFor("orphan") + ".tmp"));
+
+        Assert.True(await store.DeleteAsync("orphan"));
+
+        Assert.False(File.Exists(PathFor("orphan") + ".tmp"));
+    }
+
+    /// <summary>And with the session file present, both go.</summary>
+    [Fact]
+    public async Task A_delete_removes_the_session_and_a_leftover_temp_file()
+    {
+        var store = Store();
+        Assert.True(await store.SaveAsync(new AiSession { Id = "both", LastActive = Created }));
+        File.WriteAllText(PathFor("both") + ".tmp", "{ \"name\": \"left over\" }");
+
+        Assert.True(await store.DeleteAsync("both"));
+
+        Assert.False(File.Exists(PathFor("both")));
+        Assert.False(File.Exists(PathFor("both") + ".tmp"));
     }
 
     /// <summary>

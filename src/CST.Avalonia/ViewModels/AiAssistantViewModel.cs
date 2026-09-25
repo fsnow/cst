@@ -1684,8 +1684,18 @@ public class AiAssistantViewModel : ReactiveTool
                     // A save of the held session called while this one was pending serialized the OLD name and may
                     // have landed after it. Writing once more puts the file in step with the panel now, rather than
                     // at the next turn.
-                    if (ReferenceEquals(target, _session) && _heldSaves != savesBefore)
-                        await SaveHeldAsync(target);
+                    //
+                    // If THAT write fails, the rename stands — it is on the held session and was written once — but
+                    // the file may still carry the old name until the next turn's save, and a quit in between would
+                    // bring the old name back. Say so rather than let it happen silently. (review L2)
+                    if (ReferenceEquals(target, _session) && _heldSaves != savesBefore
+                        && !await SaveHeldAsync(target))
+                    {
+                        _logger.Warning(
+                            "Assistant session {Id} was renamed, but the write after an overlapping save failed; "
+                            + "the file may keep the old name until the next turn", id);
+                        Status = "The new name could not be saved yet; it will be saved with the next turn.";
+                    }
                 }
             }
         }

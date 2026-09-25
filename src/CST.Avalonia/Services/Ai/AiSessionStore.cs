@@ -60,7 +60,8 @@ public interface IAiSessionStore
     /// Remove one conversation. False when there was no such file — <b>not an error</b>: the id can only have
     /// come from a list the reader was looking at or from <c>ActiveAssistantSessionId</c>, and both can name a
     /// session that has since gone (a second window, a hand-deleted file). Treating that as a failure would
-    /// mean an error dialog for work already done.
+    /// mean an error dialog for work already done. A temp file a failed save kept for the conversation goes with
+    /// it.
     /// </summary>
     Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default);
 
@@ -146,6 +147,13 @@ public sealed class AiSessionStore : IAiSessionStore
     }
 
     public event Action<AiSessionUnreadable>? Unreadable;
+
+    /// <summary>
+    /// Test seam: how the temp file is written. A write that fails PART-way — a full disk, a pulled drive — leaves an
+    /// unfinished temp that must be cleaned up, never kept as "the only copy"; nothing on a test machine produces
+    /// that on demand, and a cancelled token is refused before the temp file exists. (review T1)
+    /// </summary>
+    internal Func<string, string, CancellationToken, Task> WriteTempAsync { get; init; } = File.WriteAllTextAsync;
 
     // ---- reading ------------------------------------------------------------------------------------
 
@@ -464,7 +472,7 @@ public sealed class AiSessionStore : IAiSessionStore
 
             Directory.CreateDirectory(_directory);
 
-            await File.WriteAllTextAsync(temp, json, cancellationToken).ConfigureAwait(false);
+            await WriteTempAsync(temp, json, cancellationToken).ConfigureAwait(false);
             tempComplete = true;
 
             // Temp then replace. The window in which a session file is half-written is the window in which a
@@ -535,10 +543,22 @@ public sealed class AiSessionStore : IAiSessionStore
         }
 
         var path = PathFor(id);
+        var temp = path + ".tmp";
 
         try
         {
-            if (!File.Exists(path)) return Task.FromResult(false);
+            // The temp file too. A save that failed with the session file gone keeps its temp as the only copy
+            // (see SaveAsync); a delete that left it would leave the deleted conversation's text on disk. Removed
+            // first, so a failure deleting it is reported like any other failed delete — the reader has not been
+            // told the conversation is gone while a copy of it survives. (review L3)
+            var removedTemp = false;
+            if (File.Exists(temp))
+            {
+                File.Delete(temp);
+                removedTemp = true;
+            }
+
+            if (!File.Exists(path)) return Task.FromResult(removedTemp);
 
             File.Delete(path);
             _logger?.LogInformation("Deleted assistant session {Id}", id);

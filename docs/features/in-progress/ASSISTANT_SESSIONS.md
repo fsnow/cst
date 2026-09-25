@@ -171,7 +171,7 @@ one unlucky moment took a good conversation out of the list. Reads open with `Fi
 FileShare.Delete` so they do not block a concurrent replace or delete on Windows, and a save retries its
 `File.Replace` once, after 100 ms, on an `IOException`; if that fails too with the session file gone, the complete
 temp file is kept rather than cleaned up, since it is then the only copy [suggestion — all three reasoned from
-the Windows file rules, not measured on Windows]. A restore that fails leaves `ActiveAssistantSessionId` naming
+the Windows file rules, not measured on Windows]; deleting the conversation removes that temp file too. A restore that fails leaves `ActiveAssistantSessionId` naming
 the file, so the next launch tries again. Whether the reader can delete it meanwhile depends on why: a file that
 opened but could not be mapped (`Failed`) is still listed, so its row is there and deletable, and deleting it
 clears the id; a file that could not be opened (`Unavailable`) is skipped by the listing too, so it has no row
