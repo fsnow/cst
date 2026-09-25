@@ -651,6 +651,166 @@ public sealed class AiSessionStoreTests : IDisposable
         Assert.Single(Directory.GetFiles(_dir, "bad-one.unreadable-*.json"));
     }
 
+    /// <summary>
+    /// A good file that cannot be OPENED — here, no permission — is left where it is and reported as transient,
+    /// not moved aside as unreadable. The list is re-read after every turn, so moving it took a good conversation
+    /// out of the list for good over one unlucky moment. (review probe G) When it can be opened again, it is
+    /// listed again.
+    /// </summary>
+    [UnixPermissionFact]
+    public async Task A_session_that_cannot_be_opened_for_permission_is_left_in_place()
+    {
+        // The attribute has already skipped Windows; this line is what tells the platform analyzer (CA1416) so.
+        if (OperatingSystem.IsWindows()) return;
+
+        var store = Store();
+        Assert.True(await store.SaveAsync(new AiSession { Id = "good", Name = "Good", LastActive = Created }));
+        var path = PathFor("good");
+        File.SetUnixFileMode(path, UnixFileMode.None);
+
+        try
+        {
+            // The precondition. The attribute skips a privileged run, where the mode is not enforced; this catches
+            // any other way the file might still open, which would leave the test proving nothing.
+            Assert.ThrowsAny<UnauthorizedAccessException>(() => File.ReadAllText(path));
+
+            var reports = new List<AiSessionUnreadable>();
+            store.Unreadable += reports.Add;
+
+            Assert.Empty(await store.ListAsync());
+            Assert.Null(await store.LoadAsync("good"));
+
+            Assert.True(File.Exists(path));
+            Assert.Empty(Directory.GetFiles(_dir, "good.unreadable-*.json"));
+            Assert.Equal(2, reports.Count);
+            Assert.All(reports, r => Assert.True(r.Transient));
+            Assert.All(reports, r => Assert.Equal(path, r.KeptPath));
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        Assert.Equal("good", Assert.Single(await store.ListAsync()).Id);
+    }
+
+    /// <summary>
+    /// A write that fails when there is no session file left keeps the temp file — at that point the only copy of
+    /// the conversation — instead of cleaning it up. Arranged here with a directory where the file should be, so the
+    /// promote (and its one retry) fails with the target absent; the Windows case it stands for, a failed
+    /// <c>File.Replace</c> that has already moved the target away, is reasoned, not measured.
+    /// </summary>
+    [Fact]
+    public async Task A_write_that_fails_with_no_file_left_keeps_the_temp_file()
+    {
+        Directory.CreateDirectory(PathFor("orphan"));
+        var session = new AiSession { Id = "orphan", Name = "Only copy", LastActive = Created };
+
+        Assert.False(await Store().SaveAsync(session));
+
+        var temp = PathFor("orphan") + ".tmp";
+        Assert.True(File.Exists(temp));
+        Assert.Contains("Only copy", File.ReadAllText(temp));
+    }
+
+    /// <summary>
+    /// The contrast: a temp file whose write failed PART-way is cleaned up even with no session file beside it —
+    /// half a session is never the only copy of anything. Reached through the write seam, which writes a fragment
+    /// and then fails as a full disk would; a cancelled token cannot reach this, because it is refused before the
+    /// temp file exists. (review T1)
+    /// </summary>
+    [Fact]
+    public async Task A_temp_file_whose_write_failed_part_way_is_not_kept()
+    {
+        var store = new AiSessionStore(_dir)
+        {
+            WriteTempAsync = async (path, contents, ct) =>
+            {
+                await File.WriteAllTextAsync(path, contents[..10], ct);
+                throw new IOException("No space left on device");
+            },
+        };
+
+        Assert.False(await store.SaveAsync(new AiSession { Id = "fresh", LastActive = Created }));
+
+        Assert.False(File.Exists(PathFor("fresh") + ".tmp"));
+        Assert.False(File.Exists(PathFor("fresh")));
+    }
+
+    /// <summary>A delete takes a kept temp file with it: otherwise a conversation the reader deleted survives, in
+    /// full, as <c>&lt;id&gt;.json.tmp</c>. (review L3)</summary>
+    [Fact]
+    public async Task A_delete_removes_a_kept_temp_file_too()
+    {
+        Directory.CreateDirectory(PathFor("orphan"));
+        var store = Store();
+        Assert.False(await store.SaveAsync(new AiSession { Id = "orphan", Name = "Only copy", LastActive = Created }));
+        Directory.Delete(PathFor("orphan"));
+        Assert.True(File.Exists(PathFor("orphan") + ".tmp"));
+
+        Assert.True(await store.DeleteAsync("orphan"));
+
+        Assert.False(File.Exists(PathFor("orphan") + ".tmp"));
+    }
+
+    /// <summary>And with the session file present, both go.</summary>
+    [Fact]
+    public async Task A_delete_removes_the_session_and_a_leftover_temp_file()
+    {
+        var store = Store();
+        Assert.True(await store.SaveAsync(new AiSession { Id = "both", LastActive = Created }));
+        File.WriteAllText(PathFor("both") + ".tmp", "{ \"name\": \"left over\" }");
+
+        Assert.True(await store.DeleteAsync("both"));
+
+        Assert.False(File.Exists(PathFor("both")));
+        Assert.False(File.Exists(PathFor("both") + ".tmp"));
+    }
+
+    /// <summary>
+    /// The same for a file another process holds exclusively — a sharing violation on Windows, an exclusive lock
+    /// that .NET takes for <see cref="FileShare.None"/> on Unix. An I/O failure is not corruption.
+    /// </summary>
+    [Fact]
+    public async Task A_session_held_exclusively_by_another_handle_is_left_in_place()
+    {
+        var store = Store();
+        Assert.True(await store.SaveAsync(new AiSession { Id = "held", Name = "Held", LastActive = Created }));
+        var path = PathFor("held");
+
+        var reports = new List<AiSessionUnreadable>();
+        store.Unreadable += reports.Add;
+
+        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            Assert.Null(await store.LoadAsync("held"));
+            Assert.Empty(await store.ListAsync());
+        }
+
+        Assert.True(File.Exists(path));
+        Assert.Empty(Directory.GetFiles(_dir, "held.unreadable-*.json"));
+        Assert.Equal(2, reports.Count);
+        Assert.All(reports, r => Assert.True(r.Transient));
+
+        Assert.Equal("Held", (await store.LoadAsync("held"))!.Name);
+    }
+
+    /// <summary>The contrast: a file that opened and did not parse is still kept aside, and not as transient.</summary>
+    [Fact]
+    public async Task A_session_that_opens_but_does_not_parse_is_still_kept_aside()
+    {
+        File.WriteAllText(PathFor("bad"), "{ not json");
+        var store = Store();
+        var reports = new List<AiSessionUnreadable>();
+        store.Unreadable += reports.Add;
+
+        Assert.Null(await store.LoadAsync("bad"));
+
+        Assert.False(Assert.Single(reports).Transient);
+        Assert.False(File.Exists(PathFor("bad")));
+        Assert.Single(Directory.GetFiles(_dir, "bad.unreadable-*.json"));
+    }
+
     // ---- writing ----------------------------------------------------------------------------------------
 
     /// <summary>The temp file is an implementation detail and must not outlive the save — a directory the

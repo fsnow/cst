@@ -304,8 +304,29 @@ namespace CST.Avalonia.ViewModels
         /// before #91 reads it. (#919)
         /// </param>
         public void ShowAssistantPanel(bool activate = true) =>
-            ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
-                () => IsAssistantPanelVisible = true, "AI Assistant", activate);
+            ShowAssistant(
+                () => ShowToolPanel("AiAssistantTool",
+                    () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
+                    () => IsAssistantPanelVisible = true, "AI Assistant", activate),
+                AssistantRestoreTrigger.Shared);
+
+        /// <summary>
+        /// Show the Assistant panel, then tell the restore trigger it is there. (review, findings 5 and 2)
+        ///
+        /// <para>The launch restore runs only if the assistant is on when application state finishes loading, so a
+        /// panel created later by the Settings toggle (#667) was never restored: no conversation and no session list
+        /// until its first turn ended. <see cref="AssistantRestoreTrigger.OnPanelShown"/> restores it once state has
+        /// loaded, and <see cref="AiAssistantViewModel.RestoreOnceAsync"/> keeps launch — where startup's own
+        /// reconcile may show the panel too — to one restore.</para>
+        ///
+        /// <para>Static, with the show and the trigger passed in, so a test can hold this wiring to account: the
+        /// view model cannot be built outside the running app.</para>
+        /// </summary>
+        internal static void ShowAssistant(Action showPanel, AssistantRestoreTrigger restore)
+        {
+            showPanel();
+            restore.OnPanelShown();
+        }
 
         public void HideAssistantPanel() =>
             HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "AI Assistant");

@@ -1016,15 +1016,40 @@ public partial class App : Application
         }
         finally
         {
-            // Deterministic replacement for the Open Book panel's old ctor Task.Delay(100) guess: build its
-            // tree only after the state load has settled, so restore reads the real ExpandedNodeKeys and the
-            // user's first expand/collapse can't clobber the persisted expansion. In finally (not the try)
-            // so a failed load still builds the panel against the default empty state rather than leaving it
-            // blank. Idempotent. (SCRIPT-5)
-            var openBookViewModel = ServiceProvider?.GetService<OpenBookDialogViewModel>();
-            if (openBookViewModel != null)
-                await Dispatcher.UIThread.InvokeAsync(() => openBookViewModel.InitializeFromState());
+            await SettleStateLoadAsync(
+                AssistantRestoreTrigger.Shared,
+                async () =>
+                {
+                    // Deterministic replacement for the Open Book panel's old ctor Task.Delay(100) guess: build
+                    // its tree only after the state load has settled, so restore reads the real ExpandedNodeKeys
+                    // and the user's first expand/collapse can't clobber the persisted expansion. In finally (not
+                    // the try) so a failed load still builds the panel against the default empty state rather than
+                    // leaving it blank. Idempotent. (SCRIPT-5)
+                    var openBookViewModel = ServiceProvider?.GetService<OpenBookDialogViewModel>();
+                    if (openBookViewModel != null)
+                        await Dispatcher.UIThread.InvokeAsync(() => openBookViewModel.InitializeFromState());
+                });
         }
+    }
+
+    /// <summary>
+    /// What happens once the state load has settled, whether or not it succeeded. Pulled out of
+    /// <see cref="LoadApplicationStateAsync"/> so its ORDER can be tested: <c>App</c> cannot be built in a test
+    /// host, but this can, with both steps handed in.
+    ///
+    /// <para><b>The Assistant's trigger goes first.</b> It tells the restore that
+    /// <c>ActiveAssistantSessionId</c> is now real — or, after a failed load, that the defaults are in, which still
+    /// have conversations to list — and restores now if the Assistant is on (#849; review finding 5). The
+    /// open-book work after it can throw, and anything placed after a throw never runs: the trigger would then
+    /// believe state had never loaded, and the Assistant would have no restore and no list for the whole session.
+    /// The trigger cannot throw in its turn (<c>AssistantEnabled</c> swallows its own failures; the restore is
+    /// posted and failure-isolated), so putting it first protects it without changing how an open-book failure
+    /// propagates. (review L1; tested by <c>AppStateLoadSettleTests</c>)</para>
+    /// </summary>
+    internal static async Task SettleStateLoadAsync(AssistantRestoreTrigger trigger, Func<Task> initializeOpenBook)
+    {
+        trigger.OnStateLoaded();
+        await initializeOpenBook();
     }
     
     private async Task InitializeFromLoadedState(ApplicationState state)
@@ -1061,37 +1086,9 @@ public partial class App : Application
             dictionaryViewModel?.ApplyState();
         });
 
-        // And the Assistant panel: reload the conversation it was in. [fsnow]: "Restore the last session
-        // silently" — no model call, the way books and reading positions are restored. Same sequencing story as
-        // the two panels above (the VM is built during the layout build, before this load finishes), so the
-        // restore is pushed here rather than done in its constructor. (#849)
-        //
-        // Gated on the assistant being switched on, because resolving the VM CREATES it: a reader with the
-        // feature off would otherwise get a panel constructed, an environment-key probe subscribed to, and a
-        // readiness check run, for a tool that is not in the layout. (CstDockFactory.CreateLayout resolves it
-        // only when enabled, for the same reason.)
-        //
-        // POSTED, not awaited, for the same reason the two panels above are: awaiting it puts the assistant's
-        // restore on the path to the reader's books, so anything unexpected in one transcript delays or skips
-        // the rest of the restore. RestoreAsync isolates its own failures now; this is the second net, and the
-        // one that survives the next edit inside it. (fable review)
-        if (CstDockFactory.AssistantEnabled())
-        {
-            Dispatcher.UIThread.Post(async void () =>
-            {
-                try
-                {
-                    var assistant = ServiceProvider?.GetService<AiAssistantViewModel>();
-                    if (assistant != null) await assistant.RestoreAsync();
-                }
-                catch (Exception ex)
-                {
-                    // An async void continuation: an escape here reaches the unhandled handler and kills a
-                    // reading app over a transcript.
-                    Log.Error(ex, "Could not restore the assistant conversation");
-                }
-            });
-        }
+        // The Assistant panel's restore is NOT here: LoadApplicationStateAsync's finally hands it to
+        // AssistantRestoreTrigger once this has run, where the "is the assistant on" check and a panel shown by the
+        // Settings toggle are decided under one lock. [fsnow]: "Restore the last session silently". (#849)
 
         // #44: the recent-books menu reads the (now-loaded) persisted MRU list; refresh it so the saved list
         // shows on launch even if the window's menu was registered before this load finished.
@@ -1739,7 +1736,7 @@ public partial class App : Application
             sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>(),
             // The transcript store and the one line of application state that names the active conversation.
             // The panel writes a session at the end of every turn and reloads the last one at launch — see
-            // AiAssistantViewModel.RestoreAsync, which InitializeFromLoadedState calls once state is in. (#849)
+            // AiAssistantViewModel.RestoreOnceAsync, which AssistantRestoreTrigger calls once state is in. (#849)
             sp.GetService<Services.Ai.IAiSessionStore>(),
             sp.GetService<IApplicationStateService>()));
         // services.AddTransient<MainWindowViewModel>();

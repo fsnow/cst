@@ -781,7 +781,7 @@ public class AiAssistantViewModel : ReactiveTool
 
             // Not LastActive: [suggestion] the list orders by when the conversation was last asked something, and
             // tidying what it sends is not that — the same reasoning as a rename.
-            if (_store is not null && _session is not null && !await _store.SaveAsync(_session))
+            if (_store is not null && _session is not null && !await SaveHeldAsync(_session))
                 Status = "The summary could not be saved, so it will not be there next time.";
         }
         catch (OperationCanceledException)
@@ -1155,7 +1155,7 @@ public class AiAssistantViewModel : ReactiveTool
             // Deliberately NOT the turn's cancellation token. A stopped turn is exactly the one whose partial
             // answer most needs keeping, and handing the save the token the reader has just cancelled would
             // abandon the write that was supposed to keep it.
-            if (!await _store.SaveAsync(session))
+            if (!await SaveHeldAsync(session))
             {
                 // The store has already logged why. What is left to say is what it means for the reader.
                 Status = "That answer could not be saved, so this conversation will not reopen next time.";
@@ -1293,6 +1293,8 @@ public class AiAssistantViewModel : ReactiveTool
     /// </summary>
     public async Task RestoreAsync(CancellationToken ct = default)
     {
+        _restoreStarted = true;
+
         try
         {
             await RestoreActiveAsync(ct);
@@ -1303,6 +1305,20 @@ public class AiAssistantViewModel : ReactiveTool
         }
     }
 
+    /// <summary>
+    /// <see cref="RestoreAsync"/>, unless a restore has already been started on this panel. What both the launch
+    /// and the panel appearing later call, so that whichever comes second does nothing.
+    ///
+    /// <para><b>Why two callers.</b> <see cref="AssistantRestoreTrigger"/> calls this when application state has
+    /// loaded with the assistant on, and when the panel is shown after that — a reader switching the assistant on in
+    /// Settings mid-session, whose panel was otherwise never restored. (review, finding 5) Both can fire at launch.</para>
+    /// </summary>
+    public Task RestoreOnceAsync(CancellationToken ct = default) =>
+        _restoreStarted ? Task.CompletedTask : RestoreAsync(ct);
+
+    /// <summary>Set by the first <see cref="RestoreAsync"/>. UI thread only, like every caller of it.</summary>
+    private bool _restoreStarted;
+
     private async Task RestoreActiveAsync(CancellationToken ct)
     {
         if (_store is null || _appState is null) return;
@@ -1311,34 +1327,62 @@ public class AiAssistantViewModel : ReactiveTool
         var id = _appState.Current.ActiveAssistantSessionId;
         if (string.IsNullOrEmpty(id)) return;
 
-        var read = await ReadTranscriptAsync(id, ct);
-
-        switch (read.Outcome)
+        // Behind any rename, delete or switch in flight, like them (_sessionOps).
+        await _sessionOps.WaitAsync(ct);
+        try
         {
-            case TranscriptOutcome.Missing:
-            case TranscriptOutcome.Unreadable:
-                // The panel starts empty either way, and only the unreadable case has anything to say — which
-                // OnSessionUnreadable has said, because this load was announced.
-                return;
+            var read = await ReadTranscriptAsync(id, ct);
 
-            case TranscriptOutcome.Failed:
-                Status = "The last conversation could not be reopened. It is still on disk.";
-                return;
-        }
+            switch (read.Outcome)
+            {
+                case TranscriptOutcome.Missing:
+                case TranscriptOutcome.Unreadable:
+                    // The panel starts empty either way, and only the unreadable case has anything to say — which
+                    // OnSessionUnreadable has said, because this load was announced.
+                    return;
 
-        // Re-checked after the await: the reader can ask a question while the file is being read, and the two
-        // must not interleave. A live turn wins — it is on screen, and this is only a restore.
-        if (_session is not null || Turns.Count > 0)
-        {
+                // Both leave ActiveAssistantSessionId naming the file, deliberately: it is still on disk, and the
+                // next launch should try it again. A delete clears the id. The reader can reach that delete only
+                // for Failed: an unmappable file is still listed, so it has a row (IsDeleteBlocked asks about the
+                // session the panel HOLDS, so that row stays deletable); a file that cannot be opened is skipped
+                // by the listing too, so it has no row until it opens. (review, finding 4)
+                case TranscriptOutcome.Unavailable:
+                    Status = "The last conversation could not be opened just now. It is still on disk.";
+                    return;
+
+                case TranscriptOutcome.Failed:
+                    Status = "The last conversation could not be reopened. It is still on disk.";
+                    return;
+            }
+
+            // Re-checked after the await: the reader can ask a question while the file is being read, and the two
+            // must not interleave. A live turn wins — it is on screen, and this is only a restore.
+            if (_session is not null || Turns.Count > 0)
+            {
+                _logger.Information(
+                    "Not restoring assistant session {Id}: the panel was used while it was loading", id);
+                return;
+            }
+
+            // And the id: a delete of this conversation while it was being read clears it before it waits its
+            // turn, and showing the session now would put the id back and have the next turn write the deleted
+            // file back. (review probe D1)
+            if (!string.Equals(_appState.Current.ActiveAssistantSessionId, id, StringComparison.Ordinal))
+            {
+                _logger.Information(
+                    "Not restoring assistant session {Id}: it was deleted or replaced while it was loading", id);
+                return;
+            }
+
+            ShowSession(read.Session!, read.Turns!);
+
             _logger.Information(
-                "Not restoring assistant session {Id}: the panel was used while it was loading", id);
-            return;
+                "Restored assistant session {Id} with {Count} turn(s)", id, read.Turns!.Count);
         }
-
-        ShowSession(read.Session!, read.Turns!);
-
-        _logger.Information(
-            "Restored assistant session {Id} with {Count} turn(s)", id, read.Turns!.Count);
+        finally
+        {
+            _sessionOps.Release();
+        }
     }
 
     private enum TranscriptOutcome
@@ -1350,6 +1394,10 @@ public class AiAssistantViewModel : ReactiveTool
 
         /// <summary>A file the store could not read; it has been kept aside, and the reader told where.</summary>
         Unreadable,
+
+        /// <summary>A file that could not be OPENED just now (permission, sharing, another process). Left where it
+        /// is and not announced by the store's report; the caller says so. (review, finding 1)</summary>
+        Unavailable,
 
         /// <summary>The file read, and mapping it to turns threw.</summary>
         Failed,
@@ -1376,10 +1424,12 @@ public class AiAssistantViewModel : ReactiveTool
     {
         try
         {
-            var (session, unreadable) = await LoadAnnouncedAsync(id, ct);
+            var (session, report) = await LoadWatchedAsync(id, announce: true, ct);
             if (session is null)
                 return new Transcript(
-                    unreadable ? TranscriptOutcome.Unreadable : TranscriptOutcome.Missing, null, null);
+                    report is null ? TranscriptOutcome.Missing
+                    : report.Transient ? TranscriptOutcome.Unavailable
+                    : TranscriptOutcome.Unreadable, null, null);
 
             // By id, so a turn's replayed-history can be rebuilt from the ids it stored rather than from copies
             // of earlier answers. Built over the whole session first: the references point backwards today, and
@@ -1460,8 +1510,9 @@ public class AiAssistantViewModel : ReactiveTool
     ///
     /// <para>Switching to the conversation already on screen does nothing. <b>A target that cannot be read leaves
     /// the current conversation on screen</b> and says why in <see cref="Status"/>: an unreadable file has been
-    /// kept aside and <c>Unreadable</c> has said where; a missing one (deleted from another window, or by hand)
-    /// gets its own sentence. The list is refreshed either way, which removes the row that could not be
+    /// kept aside and <c>Unreadable</c> has said where; one that could not be opened just now is left in place and
+    /// says so; a missing one (deleted from another window, or by hand) gets its own sentence. The read waits
+    /// behind any rename or delete in flight (<see cref="_sessionOps"/>). The list is refreshed either way, which removes the row that could not be
     /// opened.</para>
     ///
     /// <para>[observed] <b>For the view:</b> because a switch holds <see cref="IsBusy"/> while it reads, everything
@@ -1480,8 +1531,15 @@ public class AiAssistantViewModel : ReactiveTool
         _switchDone = done.Task;
         UpdateRowAvailability();
 
+        var locked = false;
         try
         {
+            // Behind any rename or delete already running, so the file read here is the one they left — a switch
+            // that read X while a rename of X was between its read and its write showed the old name, and the next
+            // turn wrote it back. See _sessionOps.
+            await _sessionOps.WaitAsync();
+            locked = true;
+
             var read = await ReadTranscriptAsync(id, CancellationToken.None);
 
             switch (read.Outcome)
@@ -1498,6 +1556,10 @@ public class AiAssistantViewModel : ReactiveTool
                     // of it would be wrong.
                     break;
 
+                case TranscriptOutcome.Unavailable:
+                    Status = "That conversation could not be opened just now. It is still on disk.";
+                    break;
+
                 case TranscriptOutcome.Missing:
                     Status = "That conversation is no longer on disk.";
                     break;
@@ -1509,6 +1571,7 @@ public class AiAssistantViewModel : ReactiveTool
         }
         finally
         {
+            if (locked) _sessionOps.Release();
             _switchingTo = null;
             IsBusy = false;
             done.TrySetResult();
@@ -1546,13 +1609,21 @@ public class AiAssistantViewModel : ReactiveTool
     /// already read the file — showed the old one, and the next turn's save wrote the old name back. (review probe
     /// P3) Deferring rather than refusing keeps what the reader typed.</para>
     ///
-    /// <para><b>Allowed while a turn runs.</b> The rename's save and the turn's save both write the whole session
-    /// object, both from this thread. That is safe because of an ordering in <c>AiSessionStore.SaveAsync</c> that its
-    /// contract does not state [observed]: it serializes the session <i>synchronously, before</i> it awaits its write
-    /// lock, so each save's JSON is a snapshot taken at the moment it was called, and the two cannot interleave
-    /// inside one serialization. Writes then go through the lock in the order the saves were called, so the later
-    /// call — which holds everything the earlier one did — lands last. A store that serialized after taking the lock,
-    /// or off this thread, would need this reconsidered.</para>
+    /// <para><b>The new name reaches the held object only after it has reached the disk.</b> The rename writes a copy
+    /// carrying the new name; the panel's object is renamed once that write has succeeded. So a rename that failed
+    /// leaves nothing behind for the switcher or for the next turn's save, and no other save — a turn ending, a
+    /// compaction — can serialize a name that has not been written. Setting it first and putting it back on failure
+    /// was not enough: a turn ending while the rename's write was pending saved the tentative name, and the next
+    /// turn after the failure reverted it. (review probes A, R1)</para>
+    ///
+    /// <para><b>Allowed while a turn runs.</b> Both saves go through the store's write lock in the order they were
+    /// called [observed: <c>AiSessionStore.SaveAsync</c> serializes synchronously, before it awaits that lock]. A
+    /// turn's save called while the rename's write is pending holds the OLD name and lands after it; the rename sees
+    /// that (<see cref="_heldSaves"/>) and writes the held object once more after taking the name, so the file is in
+    /// step with the panel without waiting for the next turn.</para>
+    ///
+    /// <para><b>Its read and its write are one step against delete and switch</b> (<see cref="_sessionOps"/>): a
+    /// delete that landed between them was undone by the write. (review probe C)</para>
     /// </summary>
     public async Task<bool> RenameSessionAsync(string? id, string? name)
     {
@@ -1562,15 +1633,22 @@ public class AiAssistantViewModel : ReactiveTool
         if (string.IsNullOrEmpty(trimmed)) return false;
 
         var written = false;
+        var locked = false;
         try
         {
             if (string.Equals(_switchingTo, id, StringComparison.Ordinal)) await _switchDone;
 
+            // Read-then-write as one step against delete and switch: a delete that landed between this read and
+            // this write was undone by the write (review probe C), and a switch that read the file in the same gap
+            // showed the old name. See _sessionOps.
+            await _sessionOps.WaitAsync();
+            locked = true;
+
             AiSession? target = ActiveSession(id);
-            var unreadable = false;
+            AiSessionUnreadable? report = null;
             if (target is null)
             {
-                (var loaded, unreadable) = await LoadAnnouncedAsync(id, CancellationToken.None);
+                (var loaded, report) = await LoadWatchedAsync(id, announce: true, CancellationToken.None);
 
                 // Switched to while it was being read: the panel's object is the one that will be saved from now on.
                 target = ActiveSession(id) ?? loaded;
@@ -1579,7 +1657,8 @@ public class AiAssistantViewModel : ReactiveTool
             if (target is null)
             {
                 // An unreadable file has been announced with where it was kept; that sentence stays.
-                if (!unreadable) Status = "That conversation is no longer on disk.";
+                if (report is null) Status = "That conversation is no longer on disk.";
+                else if (report.Transient) Status = "That conversation could not be renamed just now.";
             }
             else if (target.Name == trimmed)
             {
@@ -1587,9 +1666,37 @@ public class AiAssistantViewModel : ReactiveTool
             }
             else
             {
-                target.Name = trimmed;
-                written = await _store.SaveAsync(target);
-                if (!written) Status = "That conversation could not be renamed.";
+                // A COPY carries the new name to disk; the object the panel holds takes it only once that write has
+                // succeeded. Named on the held object first, the name was there for any other save to serialize while
+                // this one was pending — a turn ending in that window wrote a rename the reader was then told had
+                // failed. (review probes A and R1)
+                var savesBefore = _heldSaves;
+                written = await _store.SaveAsync(CopyWithName(target, trimmed));
+
+                if (!written)
+                {
+                    Status = "That conversation could not be renamed.";
+                }
+                else
+                {
+                    target.Name = trimmed;
+
+                    // A save of the held session called while this one was pending serialized the OLD name and may
+                    // have landed after it. Writing once more puts the file in step with the panel now, rather than
+                    // at the next turn.
+                    //
+                    // If THAT write fails, the rename stands — it is on the held session and was written once — but
+                    // the file may still carry the old name until the next turn's save, and a quit in between would
+                    // bring the old name back. Say so rather than let it happen silently. (review L2)
+                    if (ReferenceEquals(target, _session) && _heldSaves != savesBefore
+                        && !await SaveHeldAsync(target))
+                    {
+                        _logger.Warning(
+                            "Assistant session {Id} was renamed, but the write after an overlapping save failed; "
+                            + "the file may keep the old name until the next turn", id);
+                        Status = "The new name could not be saved yet; it will be saved with the next turn.";
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -1597,9 +1704,34 @@ public class AiAssistantViewModel : ReactiveTool
             _logger.Error(ex, "Could not rename the assistant session {Id}", id);
             Status = "That conversation could not be renamed.";
         }
+        finally
+        {
+            if (locked) _sessionOps.Release();
+        }
 
         await RefreshSessionsAsync();
         return written;
+    }
+
+    /// <summary>The session as it stands, with another name — what a rename writes. A round trip through the store's
+    /// own options, so the copy holds exactly what a save of the original would, and shares nothing with it.</summary>
+    private static AiSession CopyWithName(AiSession session, string name)
+    {
+        var copy = System.Text.Json.JsonSerializer.Deserialize<AiSession>(
+            System.Text.Json.JsonSerializer.Serialize(session, AiSessionStore.JsonOptions),
+            AiSessionStore.JsonOptions)!;
+        copy.Name = name;
+        return copy;
+    }
+
+    /// <summary>Saves of the session the panel holds, counted, so a rename can tell whether one was called while its
+    /// own write was pending. See <see cref="RenameSessionAsync"/>.</summary>
+    private int _heldSaves;
+
+    private Task<bool> SaveHeldAsync(AiSession session)
+    {
+        _heldSaves++;
+        return _store!.SaveAsync(session);
     }
 
     private AiSession? ActiveSession(string id) =>
@@ -1612,13 +1744,17 @@ public class AiAssistantViewModel : ReactiveTool
     ///
     /// <para><b>Deleting the conversation on screen empties the panel</b>, exactly as <see
     /// cref="NewConversationCommand"/> would: the transcript clears and <c>ActiveAssistantSessionId</c> is cleared,
-    /// so neither the next turn nor the next launch brings it back. "On screen" includes the case where the panel
-    /// is empty because the active session could not be read — the id in application state is what the next
-    /// launch would try, so it goes too.</para>
+    /// so neither the next turn nor the next launch brings it back. A conversation that application state names but
+    /// the panel does not hold — the launch restore could not open it — loses that line too, so the next launch
+    /// does not try it; nothing on screen is touched, since whatever is there belongs to a conversation not yet
+    /// saved.</para>
     ///
-    /// <para><b>Refused only for the conversation a turn is running in, or the one a switch is loading</b>: that
-    /// turn's save, or the next one after the switch lands, would write the file straight back. Any other row can
-    /// be deleted mid-turn.</para>
+    /// <para><b>Refused only for the conversation a turn is running in, or the one a switch is loading</b>
+    /// (<see cref="IsDeleteBlocked"/>, which the rows' <c>CanDelete</c> reads too): that turn's save, or the next
+    /// one after the switch lands, would write the file straight back. Any other row can be deleted mid-turn.</para>
+    ///
+    /// <para>A load after a failed delete that cannot open the file just now counts as a delete that failed — the
+    /// file is still there.</para>
     ///
     /// <para><b>The active conversation is let go of BEFORE anything is awaited.</b> Nothing is running (the guard
     /// above), so nothing can start between the check and the let-go, and no later turn can save into the session
@@ -1635,20 +1771,46 @@ public class AiAssistantViewModel : ReactiveTool
     {
         if (_store is null || string.IsNullOrEmpty(id)) return;
 
-        if (IsBusy && (IsActiveId(id) || string.Equals(_switchingTo, id, StringComparison.Ordinal)))
-            return;
+        if (IsDeleteBlocked(id)) return;
 
-        var wasActive = IsActiveId(id);
-        var heldSession = wasActive ? _session : null;
-        var heldTurns = wasActive ? Turns.ToList() : null;
-        if (wasActive) LetGoOfSession();
+        // Two different things, which the first cut folded into one "active" test. HELD: the conversation is on
+        // screen, so the panel lets go of it (and nothing is running — IsDeleteBlocked). POINTED AT: the panel holds
+        // nothing, but application state still names this id — the launch restore could not open it — so only that
+        // line goes; the turns on screen, if any, belong to a conversation that has not been saved yet. Treating the
+        // second as the first refused the delete during that turn while the row offered it. (review probe F)
+        var heldSession = ActiveSession(id);
+        var heldTurns = heldSession is not null ? Turns.ToList() : null;
+        var pointedAt = heldSession is null
+                        && string.Equals(_appState?.Current.ActiveAssistantSessionId, id, StringComparison.Ordinal);
+
+        if (heldSession is not null)
+        {
+            LetGoOfSession();
+        }
+        else if (pointedAt)
+        {
+            _appState!.Current.ActiveAssistantSessionId = null;
+            _appState.MarkDirty();
+        }
 
         bool gone;
+        var locked = false;
         try
         {
+            // After the let-go above, never before it: see the remarks. Behind any rename or switch in flight, so a
+            // rename's read-then-write cannot straddle this delete and write the file back. See _sessionOps.
+            await _sessionOps.WaitAsync();
+            locked = true;
+
             // Not an announced load: a file that turns out unreadable here is gone from the list either way, and
-            // telling the reader about it in the middle of deleting it would be noise. It is logged.
-            gone = await _store.DeleteAsync(id) || await _store.LoadAsync(id) is null;
+            // telling the reader about it in the middle of deleting it would be noise. It is logged. A file that
+            // could not be OPENED just now is still there, so that is a delete that failed.
+            gone = await _store.DeleteAsync(id);
+            if (!gone)
+            {
+                var (still, report) = await LoadWatchedAsync(id, announce: false, CancellationToken.None);
+                gone = still is null && report?.Transient != true;
+            }
         }
         catch (Exception ex)
         {
@@ -1656,15 +1818,20 @@ public class AiAssistantViewModel : ReactiveTool
             _logger.Error(ex, "Could not delete the assistant session {Id}", id);
             gone = false;
         }
+        finally
+        {
+            if (locked) _sessionOps.Release();
+        }
 
         if (!gone)
         {
-            if (wasActive && _session is null && Turns.Count == 0 && !IsBusy
+            if ((heldSession is not null || pointedAt)
+                && _session is null && !IsBusy
                 && string.IsNullOrEmpty(_appState?.Current.ActiveAssistantSessionId))
             {
                 if (heldSession is not null)
                 {
-                    ShowSession(heldSession, heldTurns!);
+                    if (Turns.Count == 0) ShowSession(heldSession, heldTurns!);
                 }
                 else if (_appState is not null)
                 {
@@ -1679,9 +1846,34 @@ public class AiAssistantViewModel : ReactiveTool
         await RefreshSessionsAsync();
     }
 
-    private bool IsActiveId(string id) =>
-        ActiveSession(id) is not null
-        || string.Equals(_appState?.Current.ActiveAssistantSessionId, id, StringComparison.Ordinal);
+    /// <summary>
+    /// Whether a conversation's Delete is refused right now: a turn (or compaction) is running in it, or a switch is
+    /// loading it — the save that follows would write the file straight back. <b>The one predicate</b> behind both
+    /// the refusal in <see cref="DeleteSessionAsync"/> and each row's <see cref="AiSessionRowViewModel.CanDelete"/>,
+    /// so a row can never offer a Delete that then does nothing. (review probe F: the two disagreed about an id that
+    /// application state named but the panel did not hold.)
+    ///
+    /// <para>About the session the panel HOLDS, not the id in application state: while the panel holds nothing, a
+    /// running turn will save into a NEW conversation, so no save can bring the named file back.</para>
+    /// </summary>
+    private bool IsDeleteBlocked(string id) =>
+        IsBusy
+        && (ActiveSession(id) is not null || string.Equals(_switchingTo, id, StringComparison.Ordinal));
+
+    /// <summary>
+    /// One rename, delete, switch or restore at a time. Each is a read of a session file followed by a write or a delete of
+    /// it (or, for a switch, by the panel adopting what it read), and two of them overlapping on the same file undid
+    /// one another: a delete landing between a rename's read and its write was written back by the rename (review
+    /// probe C), and a switch reading a file between a rename's read and write showed — and on the next turn saved —
+    /// the old name.
+    ///
+    /// <para>One lock for the panel rather than one per id [suggestion]: these are reader gestures a file read long,
+    /// and serialising a rename of X behind a delete of Y costs nothing a reader could notice, where a per-id table
+    /// is a second thing to get right. A turn's own save is NOT behind it — the delete and switch guards
+    /// (<see cref="IsDeleteBlocked"/>, <see cref="IsBusy"/>) already keep a turn away from the files these touch, and
+    /// a turn must never wait on a reader's rename.</para>
+    /// </summary>
+    private readonly SemaphoreSlim _sessionOps = new(1, 1);
 
     private int _sessionsGeneration;
 
@@ -1765,16 +1957,17 @@ public class AiAssistantViewModel : ReactiveTool
         {
             var active = _session is not null && string.Equals(row.Id, _session.Id, StringComparison.Ordinal);
             row.IsActive = active;
-            row.CanDelete = !(IsBusy
-                              && (active || string.Equals(row.Id, _switchingTo, StringComparison.Ordinal)));
+            row.CanDelete = !IsDeleteBlocked(row.Id);
         }
 
         ActiveSessionName = Sessions.FirstOrDefault(r => r.IsActive)?.Name ?? NewConversationName;
     }
 
     /// <summary>
-    /// A transcript that could not be read. It has been kept aside, not deleted, and this is the only place the
-    /// reader learns either fact.
+    /// A transcript that could not be read. One that did not parse has been kept aside, not deleted, and this is
+    /// the only place the reader learns either fact. One that could not be opened just now
+    /// (<see cref="AiSessionUnreadable.Transient"/>) is still in place and is not announced here — the load's caller
+    /// says what it means.
     ///
     /// <para><b>Posted, because this arrives off the UI thread.</b> The store raises it from inside the catch in
     /// its own read, after an <c>await … ConfigureAwait(false)</c> — so a thread-pool continuation. Assigning
@@ -1796,17 +1989,29 @@ public class AiAssistantViewModel : ReactiveTool
         // on the panel after every answer until the file was moved. It is kept aside by the store either way, and
         // logged. (#997 review)
         //
-        // Marked before anything is posted, so the caller can tell "unreadable, and already said so" from "simply
-        // gone" when its load returns, without waiting on the dispatcher. Keyed by the report's own id, so a
-        // listing that trips over file Y while a switch is loading X cannot be mistaken for X's report.
-        if (!_announceUnreadable.TryUpdate(report.Id, true, false)
-            && !_announceUnreadable.ContainsKey(report.Id))
+        // Recorded on the watch before anything is posted, so the caller can tell "unreadable, and already said so"
+        // from "simply gone" when its load returns, without waiting on the dispatcher. Keyed by the report's own id,
+        // so a listing that trips over file Y while a switch is loading X cannot be mistaken for X's report.
+        if (!_watchedLoads.TryGetValue(report.Id, out var watch))
         {
-            _logger.Warning(
-                "An assistant session found while listing ({Id}) could not be read and has been kept at {Path}",
-                report.Id, report.KeptPath);
+            // Warning, not Information: a file that can NEVER be opened (a lasting permission error) is otherwise
+            // missing from the list with nothing but this line to say why.
+            if (report.Transient)
+                _logger.Warning(
+                    "An assistant session found while listing ({Id}) could not be opened just now; left in place",
+                    report.Id);
+            else
+                _logger.Warning(
+                    "An assistant session found while listing ({Id}) could not be read and has been kept at {Path}",
+                    report.Id, report.KeptPath);
             return;
         }
+
+        watch.Report = report;
+
+        // A file that could not be opened just now has not been moved, so "kept at" would be false; the caller,
+        // which gets the report back, says what it means for what the reader was doing. (review, finding 1)
+        if (!watch.Announce || report.Transient) return;
 
         var sentence = $"That conversation could not be read. It has been kept at {report.KeptPath}.";
 
@@ -1814,29 +2019,46 @@ public class AiAssistantViewModel : ReactiveTool
         else Dispatcher.UIThread.Post(() => Status = sentence);
     }
 
+    /// <summary>A load the panel is waiting on, and the store's report about it if one arrives.</summary>
+    private sealed class LoadWatch
+    {
+        internal LoadWatch(bool announce) => Announce = announce;
+
+        /// <summary>Whether a file kept aside is announced in <see cref="Status"/> — true for a load the reader
+        /// asked for, false for the check after a failed delete.</summary>
+        internal bool Announce { get; }
+
+        private volatile AiSessionUnreadable? _report;
+
+        /// <summary>Written from the store's thread, read on the UI thread after the load returns.</summary>
+        internal AiSessionUnreadable? Report { get => _report; set => _report = value; }
+    }
+
     /// <summary>
-    /// The ids whose load the reader asked for, while it runs — and whether an unreadable report has arrived for
-    /// each. See <see cref="OnSessionUnreadable"/>. Concurrent because the store raises its report from a
-    /// thread-pool continuation.
+    /// The ids whose load the panel is waiting on, while it runs. See <see cref="OnSessionUnreadable"/>. Concurrent
+    /// because the store raises its report from a thread-pool continuation.
     /// </summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _announceUnreadable =
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, LoadWatch> _watchedLoads =
         new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Load a session the reader asked for, so that an unreadable file is announced on the panel rather than only
-    /// logged. Answers the session (null when missing or unreadable) and whether it was reported unreadable.
+    /// Load a session and catch the store's report about it: a file kept aside (announced on the panel when
+    /// <paramref name="announce"/>, rather than only logged) or one that could not be opened just now. Answers the
+    /// session (null when missing or unreadable) and the report, null when there was none.
     /// </summary>
-    private async Task<(AiSession? Session, bool Unreadable)> LoadAnnouncedAsync(string id, CancellationToken ct)
+    private async Task<(AiSession? Session, AiSessionUnreadable? Report)> LoadWatchedAsync(
+        string id, bool announce, CancellationToken ct)
     {
-        _announceUnreadable[id] = false;
+        var watch = new LoadWatch(announce);
+        _watchedLoads[id] = watch;
         try
         {
             var session = await _store!.LoadAsync(id, ct);
-            return (session, _announceUnreadable.TryGetValue(id, out var reported) && reported);
+            return (session, watch.Report);
         }
         finally
         {
-            _announceUnreadable.TryRemove(id, out _);
+            _watchedLoads.TryRemove(new KeyValuePair<string, LoadWatch>(id, watch));
         }
     }
 

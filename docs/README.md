@@ -74,6 +74,7 @@ Active work happening now:
 - [Show Source PDF](features/in-progress/SHOW_SOURCE_PDF.md) - View Burmese CST PDFs (core ships; mapping model #76 deferred)
 - [Dictionaries](features/in-progress/DICTIONARIES.md) - Pali-English and Pali-Hindi dictionaries (core ships; #25/#109 open)
 - [AI Surface B](features/in-progress/AI_SURFACE_B.md) - The in-app Assistant (explain/translate/grammar over the open passage) — v1 by context injection; the beta 6 headline feature
+- [Assistant Sessions](features/in-progress/ASSISTANT_SESSIONS.md) - The Assistant's conversations: replayed history, persistence, the session list, compaction (#849, #997, #998); take-me-back (P5) and the shutdown drain still open
 
 - **windows/** - Windows 11 port — planning now tracked in [GitHub issue #28](https://github.com/fsnow/cst/issues/28) (Windows epic + child issues), not docs. The `WindowsFontService` design is folded into [#29](https://github.com/fsnow/cst/issues/29).
 
@@ -85,7 +86,6 @@ Features planned for future implementation (from CST4 analysis):
 - [Vector Search](features/planned/VECTOR_SEARCH.md) - Semantic search (future exploration)
 - [App Intents / Siri & Apple Intelligence](features/planned/APP_INTENTS_SUPPORT.md) - macOS assistant integration (research/feasibility)
 - [AI Integration](features/planned/AI_INTEGRATION.md) - Claude & agent access to the corpus (local HTTP + llms.txt, MCP adapter, agent-driven navigation) — design of record
-- [Assistant Sessions](features/planned/ASSISTANT_SESSIONS.md) - Conversation, persistence, named sessions, compaction for the Assistant (#849, #850) — Claude Code parity plan
 
 ### 🔬 **research/** - Research & Exploration
 Exploratory research and investigations:
