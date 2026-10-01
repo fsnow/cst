@@ -13,6 +13,7 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
     private readonly bool _hasFormsTable;
     private readonly bool _hasDecon;    // forms.deconstructor column (enclitic +iti resolution, #247 Phase 2)
     private readonly bool _hasReport;   // report-grade columns (root_key on lemma + a root table)
+    private readonly bool _hasRootSign; // root.root_sign (schema 2); read when present (#1002)
 
     public bool IsAvailable { get; }
     public DpdLemmaMeta? Meta { get; }
@@ -53,6 +54,7 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
             _hasFormsTable = TableExists(c, "forms");
             _hasDecon = _hasFormsTable && ColumnExists(c, "forms", "deconstructor");
             _hasReport = TableExists(c, "root") && ColumnExists(c, "lemma", "root_key");
+            _hasRootSign = _hasReport && ColumnExists(c, "root", "root_sign");
             Meta = LoadMeta(c);
             IsAvailable = true;
         }
@@ -238,22 +240,77 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
 
         long? ebt = r.IsDBNull(9) ? null : r.GetInt64(9);
         string? rootKey = Str(r, 15);
-        RootDetail? root = rootKey is null ? null : ReadRoot(c, rootKey);
+        RootDetail? root = rootKey is null ? null : ReadRoot(c, rootKey, _hasRootSign);
         return new LemmaDetail(id, lemma, pos, gloss, df,
             Str(r, 5), Str(r, 6), Str(r, 7), Str(r, 8), ebt,
             Str(r, 10), Str(r, 11), Str(r, 12), Str(r, 13), Str(r, 14), root);
     }
 
-    private static RootDetail? ReadRoot(SqliteConnection c, string rootKey)
+    private static RootDetail? ReadRoot(SqliteConnection c, string rootKey, bool hasRootSign)
     {
         using var cmd = c.CreateCommand();
-        cmd.CommandText = @"SELECT root_key,root_meaning,root_group,sanskrit_root,sanskrit_root_meaning,
-            dhatupatha_pali,dhatupatha_english FROM root WHERE root_key=$rk";
+        cmd.CommandText = RootColumns(hasRootSign) + " FROM root WHERE root_key=$rk";
         cmd.Parameters.AddWithValue("$rk", rootKey);
         using var r = cmd.ExecuteReader();
-        if (!r.Read()) return null;
+        return r.Read() ? ReadRootRow(r, hasRootSign) : null;
+    }
+
+    private static string RootColumns(bool hasRootSign) =>
+        "SELECT root_key,root_meaning,root_group,sanskrit_root,sanskrit_root_meaning,dhatupatha_pali,dhatupatha_english"
+        + (hasRootSign ? ",root_sign" : "");
+
+    private static RootDetail ReadRootRow(SqliteDataReader r, bool hasRootSign)
+    {
         long? grp = r.IsDBNull(2) ? null : r.GetInt64(2);
-        return new RootDetail(r.GetString(0), Str(r, 1), grp, Str(r, 3), Str(r, 4), Str(r, 5), Str(r, 6));
+        return new RootDetail(r.GetString(0), Str(r, 1), grp, Str(r, 3), Str(r, 4), Str(r, 5), Str(r, 6),
+            hasRootSign ? Str(r, 7) : null);
+    }
+
+    public IReadOnlyList<RootEntry>? FindRoots(string key, bool prefix, int maxRoots, int maxLemmasPerRoot)
+    {
+        if (!IsAvailable || !_hasReport || key is null) return null;
+        if (maxRoots <= 0 || key.Length == 0) return Array.Empty<RootEntry>();
+        using var c = Open();
+
+        // The prefix test is substr(...) = $k rather than GLOB/LIKE so a '*', '%', '_' or '[' in the query is a
+        // literal character, not a pattern. The root table is ~750 rows, so not using the key index costs nothing.
+        var roots = new List<RootDetail>();
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = RootColumns(_hasRootSign) + " FROM root WHERE "
+                + (prefix ? "substr(root_key, 1, length($k)) = $k" : "root_key = $k")
+                + " ORDER BY root_key LIMIT $max";
+            cmd.Parameters.AddWithValue("$k", key);
+            cmd.Parameters.AddWithValue("$max", maxRoots);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) roots.Add(ReadRootRow(r, _hasRootSign));
+        }
+        if (roots.Count == 0) return Array.Empty<RootEntry>();
+
+        // One pass over lemma for every matched root (the asset has no index on lemma.root_key, so a query per
+        // root would be a full scan per root). maxRoots is bounded by the caller's entry cap (500 for the panel),
+        // well under SQLite's bound-parameter limit.
+        var byRoot = roots.ToDictionary(rd => rd.RootKey, _ => (List: new List<LemmaCandidate>(), Count: new int[1]),
+            StringComparer.Ordinal);
+        using (var cmd = c.CreateCommand())
+        {
+            var names = new List<string>(roots.Count);
+            for (int i = 0; i < roots.Count; i++)
+            {
+                names.Add("$r" + i);
+                cmd.Parameters.AddWithValue("$r" + i, roots[i].RootKey);
+            }
+            cmd.CommandText = "SELECT id, lemma, pos, gloss, derived_from, root_key FROM lemma WHERE root_key IN ("
+                + string.Join(",", names) + ") ORDER BY id";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                var slot = byRoot[r.GetString(5)];
+                if (slot.Count[0]++ < maxLemmasPerRoot)
+                    slot.List.Add(new LemmaCandidate(r.GetInt64(0), r.GetString(1), Str(r, 2), Str(r, 3), Str(r, 4)));
+            }
+        }
+        return roots.Select(rd => new RootEntry(rd, byRoot[rd.RootKey].List, byRoot[rd.RootKey].Count[0])).ToList();
     }
 
     private static LemmaCandidate? ReadLemma(SqliteConnection c, long id)

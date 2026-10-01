@@ -227,12 +227,32 @@ caller looks a word up the same way regardless of source:
 - **Digital Pāḷi Dictionary (DPD)** — the reserved language code **`dpd`**, present
   only when the dpd-cst-subset asset (`dpd-cst-subset.db`) is installed. DPD ships **no
   rendered-HTML definitions**, so entries are **composed on the fly** from the
-  asset's structured columns (pos + gloss + literal meaning + construction) by
-  `CompositeDictionaryTool`. The word→entry key reuses the same `form_lemma`
+  asset's structured columns (pos + gloss + literal meaning + root + construction)
+  by `DpdDictionarySource`. The word→entry key reuses the same `form_lemma`
   index the lemma endpoints use, so an **inflected** word resolves and a homograph
   returns several entries. Each entry carries a `lemmaId` that chains to the lemma
   report (`/v1/lemma-report/{lemmaId}`) for the full dossier — the dictionary
   meaning is deliberately compact; depth lives in the report.
+
+**DPD roots (#1002).** **[fsnow]**, 2026-10-01: *"Let's do (1) and (2) and not
+worry about *how* Antonio is entering the root symbol."* — (1) show the root on
+every word entry that has one, linked to the root; (2) make roots searchable.
+Root families and the root matrix are #1023 (beta 9).
+  - **[observed]** The asset's `root` table (753 rows in v0.4.20260531) and
+    `lemma.root_key` (36,703 headwords) carry this; `ILemmaProvider.FindRoots`
+    reads both in one pass (no index on `lemma.root_key`, so one scan per lookup,
+    not per root).
+  - A word entry gets a line `root <see>√var 1</see> · cover, dress, restrain`.
+  - A `dpd` query starting with `√` (U+221A, which every converter passes
+    through unchanged) is a root query: by prefix (`√var` → `√var 1`, `√var 2`),
+    exact when it ends in a homonym number (`√var 1`; native digits folded, so a
+    root link followed in Devanagari resolves), nothing for a lone `√`. A bare
+    `var` stays a word query — **[fsnow]** no input affordance for `√`.
+  - **[suggestion]** The root entry's layout and fields: meaning; group and sign;
+    Sanskrit root (left in IAST); Dhātupāṭha (Pāli in the display script, English
+    beside it); then the headwords built on it as `<see>` links, one per lookup
+    target (homonyms share one), in headword-id order, capped at 1000
+    (`DpdDictionarySource.MaxRootWords`, above the largest root, √kar's 817).
 
 **Attribution (`source.json`, #268).** Each flat `<lang>/` dir may carry a
 `source.json` — the authoritative citation `{ title, compiler, edition, year,
