@@ -81,7 +81,7 @@ namespace CST.Avalonia.ViewModels
         /// The flattened list the view renders: group headers and model rows in one sequence.
         ///
         /// <para>Flat so it can virtualize. A provider listing runs to hundreds of entries, and a nested
-        /// items control inside the settings page's scroll viewer would build a control for every one of
+        /// items control inside the Models tab's scroll viewer would build a control for every one of
         /// them.</para>
         /// </summary>
         public ObservableCollection<object> Rows { get; } = new();

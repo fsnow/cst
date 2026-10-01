@@ -579,7 +579,7 @@
                                The category list on the left already behaved this way. -->
                           <TabItem Header="General" AutomationProperties.AutomationId="settings.ai.tab.general">
                             <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                            <StackPanel Margin="0,12,0,0">
+                            <StackPanel Margin="0,12,0,0" HorizontalAlignment="Left">
                             <Border Classes="SettingGroup">
                                 <StackPanel>
                                     <TextBlock Text="AI Features" Classes="SettingLabel"/>
@@ -753,7 +753,7 @@
                                    AutomationProperties.AutomationId="settings.ai.tab.providers">
                             <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                               <views:AiProvidersView DataContext="{Binding Connections}"
-                                                     Margin="0,12,0,0"/>
+                                                     Margin="0,12,0,0" HorizontalAlignment="Left"/>
                             </ScrollViewer>
                           </TabItem>
 
@@ -761,7 +761,7 @@
                                    AutomationProperties.AutomationId="settings.ai.tab.models">
                             <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                               <views:AiModelsView DataContext="{Binding Models}"
-                                                  Margin="0,12,0,0"/>
+                                                  Margin="0,12,0,0" HorizontalAlignment="Left"/>
                             </ScrollViewer>
                           </TabItem>
                         </TabControl>
@@ -821,12 +821,14 @@
                 </ScrollViewer>
 
                 <!-- Not in a scroll viewer, so the panel's own width and height bound it: text wraps at
-                     the visible edge without a MaxWidth, and each tab's viewer gets a finite height. -->
+                     the visible edge without a MaxWidth, and each tab's viewer gets a finite height.
+                     Stretched across the pane, so each tab's viewer - its scroll bar and its wheel area -
+                     spans the whole pane as SettingsScroll does; each tab's content is left-aligned inside
+                     it instead, so the cards keep the width they had (review of #1019). -->
                 <ContentControl x:Name="TabbedHost"
                                 Content="{Binding TabbedContent}"
                                 IsVisible="{Binding HasTabbedContent}"
                                 VerticalAlignment="Top"
-                                HorizontalAlignment="Left"
                                 Padding="20"/>
             </Panel>
         </Grid>

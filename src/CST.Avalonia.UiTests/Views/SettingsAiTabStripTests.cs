@@ -40,7 +40,7 @@ public class SettingsAiTabStripTests
         var w = Open();
         try
         {
-            ShowScrolled(w, TallCategory());
+            ShowScrolled(w, ShortCategory());
             ShowAi(w);
 
             AssertArrangedAtDesiredSize(w.Tabbed);
@@ -76,6 +76,36 @@ public class SettingsAiTabStripTests
         }
     }
 
+    /// <summary>
+    /// The tab's viewer spans the pane, as SettingsScroll does, so its scroll bar is at the window's edge and the
+    /// wheel works anywhere in the pane - not only over the cards (review of #1019). Wide, so the page's natural
+    /// width is well short of the pane and a host sized to its content would show.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_tabs_viewer_spans_the_pane_in_a_wide_window()
+    {
+        var w = Open(width: 1600);
+        try
+        {
+            ShowAi(w);
+            var tabs = w.Tabbed.GetVisualDescendants().OfType<TabControl>().Single();
+            var body = Assert.IsType<ScrollViewer>(tabs.Items.OfType<TabItem>().First().Content);
+            var cards = Assert.IsType<StackPanel>(body.Content);
+
+            double Right(Control c) => c.TranslatePoint(new Point(c.Bounds.Width, 0), w.Window)!.Value.X;
+            Assert.True(Right(body) - Right(cards) > 100,
+                "Precondition: at this width the cards are well short of the pane.");
+            Assert.True(Right(w.Tabbed) - Right(tabs) <= w.Tabbed.Padding.Right + 0.5,
+                $"The tab control ends at x={Right(tabs)}, short of the pane's edge at x={Right(w.Tabbed)}.");
+            Assert.True(Right(tabs) - Right(body) <= tabs.Padding.Right + 0.5,
+                $"The tab's viewer ends at x={Right(body)}, short of the tab control's edge at x={Right(tabs)}.");
+        }
+        finally
+        {
+            w.Window.Close();
+        }
+    }
+
     [AvaloniaFact]
     public void Switching_back_from_AI_lays_the_other_category_out_at_its_own_size()
     {
@@ -83,11 +113,9 @@ public class SettingsAiTabStripTests
         try
         {
             ShowAi(w);
-            ShowScrolled(w, TallCategory());
+            ShowScrolled(w, ShortCategory());
 
             AssertArrangedAtDesiredSize(w.Scrolled);
-            Assert.True(w.Scroll.Extent.Height > w.Scroll.Viewport.Height,
-                "The other category no longer scrolls in the window's viewer.");
         }
         finally
         {
@@ -97,9 +125,9 @@ public class SettingsAiTabStripTests
 
     private sealed record Hosts(Window Window, ScrollViewer Scroll, ContentControl Scrolled, ContentControl Tabbed);
 
-    private static Hosts Open()
+    private static Hosts Open(double width = 900)
     {
-        var window = new SettingsWindow { Width = 900, Height = 600 };
+        var window = new SettingsWindow { Width = width, Height = 600 };
         window.Show();
         Pump(window);
         return new Hosts(window,
@@ -131,14 +159,23 @@ public class SettingsAiTabStripTests
         Pump(w.Window);
     }
 
-    // Wider and taller than the window, like Pali Script Fonts: the case that was clipped after leaving AI.
-    private static Control TallCategory() => new Border { Width = 2000, Height = 1500 };
+    // SHORTER than the window, like Pali Script Fonts (680x519 at 900x700). The stale layout the first version of
+    // this fix produced appears only when the previous page fits in the viewport: the viewer then hands the next
+    // page the same rect and Avalonia skips its arrange. A page taller than the window changes the rect and
+    // forces a fresh arrange, so it could never show that bug (measured by the review of #1019).
+    private static Control ShortCategory() => new Border { Width = 400, Height = 300 };
 
+    // Arranged at the size it asked for - or, along a stretched axis, at the size of the panel it fills. Anything
+    // else is a size kept from an earlier category, which clips part of the page.
     private static void AssertArrangedAtDesiredSize(Control host)
     {
-        Assert.True(Math.Abs(host.Bounds.Width - host.DesiredSize.Width) < 0.5
-                    && Math.Abs(host.Bounds.Height - host.DesiredSize.Height) < 0.5,
-            $"{host.Name} is arranged at {host.Bounds.Size} but wants {host.DesiredSize}: it kept an earlier " +
+        var pane = ((Control)host.GetVisualParent()!).Bounds.Size;
+        var width = host.HorizontalAlignment == global::Avalonia.Layout.HorizontalAlignment.Stretch
+            ? pane.Width : host.DesiredSize.Width;
+        var height = host.VerticalAlignment == global::Avalonia.Layout.VerticalAlignment.Stretch
+            ? pane.Height : host.DesiredSize.Height;
+        Assert.True(Math.Abs(host.Bounds.Width - width) < 0.5 && Math.Abs(host.Bounds.Height - height) < 0.5,
+            $"{host.Name} is arranged at {host.Bounds.Size} but should be {width} x {height}: it kept an earlier " +
             "category's size, and part of the page is clipped.");
     }
 
