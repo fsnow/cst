@@ -20,7 +20,8 @@ namespace CST.Avalonia.Services.Dictionaries
     /// <para>Roots (#1002): a word entry whose lemma has a root shows it as a link (<c>root √var 1 · cover, …</c>),
     /// and a query that starts with the root sign <c>√</c> looks up DPD's <c>root</c> table instead of the form
     /// index — one entry per root (headword <c>√var 1</c>, no <c>lemmaId</c>) with its meaning, group and sign,
-    /// Sanskrit root and Dhātupāṭha, and links to the headwords built on it. A bare word never matches a root.</para>
+    /// Sanskrit root and Dhātupāṭha, and a link to each headword built on it (number included, e.g. <c>accita 2.1</c>).
+    /// A numbered word query returns just that headword. A query without the sign is a word query.</para>
     /// </summary>
     public sealed class DpdDictionarySource : IDictionarySource
     {
@@ -71,6 +72,17 @@ namespace CST.Avalonia.Services.Dictionaries
             if (iast.Length > 0 && iast[0] == RootSign)
                 return LookupRoots(iast, request, ct);
 
+            // A numbered headword ("accita 2.1", as a root entry links it) names one lemma: resolve the word without
+            // the number, then keep only the candidate with that exact headword. No word form carries a number,
+            // so this never shadows a form lookup. (#1002)
+            string? headword = null;
+            var folded = Whitespace.Replace(PaliDigits.ToAscii(iast), " ").Trim();
+            if (HomonymNumber.IsMatch(folded))
+            {
+                headword = folded;
+                iast = LemmaHeadword.StripHomonym(folded);
+            }
+
             var resolution = _lemma.ResolveForm(iast);
             if (resolution is null || resolution.Candidates.Count == 0)
                 return Array.Empty<DictionaryEntry>();
@@ -80,6 +92,7 @@ namespace CST.Avalonia.Services.Dictionaries
             var entries = new List<DictionaryEntry>(Math.Min(cap, resolution.Candidates.Count));
             foreach (var cand in resolution.Candidates)
             {
+                if (headword != null && !string.Equals(cand.Lemma, headword, StringComparison.Ordinal)) continue;
                 if (entries.Count >= cap) break;
                 ct.ThrowIfCancellationRequested();
                 var detail = _lemma.GetDetail(cand.LemmaId);
@@ -93,19 +106,31 @@ namespace CST.Avalonia.Services.Dictionaries
             return entries;
         }
 
-        // A root query (#1002). "√var" → every root whose key starts with it (√var 1, √var 2, then any longer
-        // root key with that prefix); "√var 1" (a trailing homonym number) → that root only; a lone "√" →
-        // nothing, as an empty query is nothing. Native digits are folded first: following a root link in
-        // Devanagari puts the key with a Devanagari "1" in the search box, and the converters leave that digit
-        // as it is.
+        // A root query (#1002), widest last:
+        //   "√var 1" (a trailing homonym number) → that root only;
+        //   "√var"   → the root with that key or its numbered homonyms (√var 1, √var 2) - so "√man", which is what
+        //              a word entry links to, finds √man and not √mant;
+        //   "√va"    → no such root, so every root whose key starts with it;
+        //   "√"      → nothing, as an empty query is nothing.
+        // Native digits are folded first: following a root link in Devanagari puts the key with a Devanagari "1"
+        // in the search box, and the converters leave that digit as it is. Results are in Pāli order (by IPE,
+        // whose code points sort in alphabet order), not code-point order, which put √bhā after √bhus.
         private IReadOnlyList<DictionaryEntry> LookupRoots(string iast, DictionaryRequest request, CancellationToken ct)
         {
-            var rest = Whitespace.Replace(FoldDigits(iast.Substring(1)), " ").Trim();
+            var rest = Whitespace.Replace(PaliDigits.ToAscii(iast.Substring(1)), " ").Trim();
             int cap = Math.Clamp(request.MaxEntries, 0, MaxDictEntries);
             if (rest.Length == 0) return Array.Empty<DictionaryEntry>();
 
-            bool exact = HomonymNumber.IsMatch(rest);
-            var roots = _lemma.FindRoots(RootSign + rest, prefix: !exact, maxRoots: cap, maxLemmasPerRoot: _maxRootWords);
+            var key = RootSign + rest;
+            IReadOnlyList<RootEntry>? roots;
+            if (HomonymNumber.IsMatch(rest))
+                roots = _lemma.FindRoots(key, RootMatch.Exact, cap, _maxRootWords, PaliOrder);
+            else
+            {
+                roots = _lemma.FindRoots(key, RootMatch.Homonyms, cap, _maxRootWords, PaliOrder);
+                if (roots is { Count: 0 })
+                    roots = _lemma.FindRoots(key, RootMatch.Prefix, cap, _maxRootWords, PaliOrder);
+            }
             if (roots is null || roots.Count == 0) return Array.Empty<DictionaryEntry>();
 
             ct.ThrowIfCancellationRequested();
@@ -124,16 +149,7 @@ namespace CST.Avalonia.Services.Dictionaries
         private static readonly Regex HomonymNumber = new(@" [0-9][0-9.]*$", RegexOptions.Compiled);
         private static readonly Regex BoldTag = new(@"(</?b>)", RegexOptions.Compiled);
 
-        private static string FoldDigits(string s)
-        {
-            var sb = new StringBuilder(s.Length);
-            foreach (var ch in s)
-            {
-                int d = CharUnicodeInfo.GetDecimalDigitValue(ch);
-                sb.Append(d >= 0 ? (char)('0' + d) : ch);
-            }
-            return sb.ToString();
-        }
+        private static string PaliOrder(string rootKey) => Any2Ipe.Convert(rootKey);
 
         // The root entry. Pāli (sign, Dhātupāṭha) follows the requested script; the Sanskrit root stays in IAST
         // (it is Sanskrit, and the Pāli converters have no ṛ); English is English. Root and word links are <see>
@@ -170,17 +186,13 @@ namespace CST.Avalonia.Services.Dictionaries
                 sb.Append(e.Lemmas.Count < e.LemmaCount
                     ? $"first {e.Lemmas.Count} of {e.LemmaCount} headwords: "
                     : $"{e.LemmaCount} headwords: ");
-                // One link per lookup target: homonyms (āvaraṇa 1, āvaraṇa 2) share a target, and following it
-                // shows all of them anyway.
-                var seen = new HashSet<string>(StringComparer.Ordinal);
-                bool first = true;
-                foreach (var l in e.Lemmas)
+                // One link per headword, number included ("accita 2.1"): a homonym is a different word, often
+                // with a different root, and the number is what lets the lookup land on this one rather than
+                // whichever homonym comes first.
+                for (int i = 0; i < e.Lemmas.Count; i++)
                 {
-                    var target = StripHomonym(l.Lemma);
-                    if (!seen.Add(target)) continue;
-                    if (!first) sb.Append(", ");
-                    sb.Append("<see>").Append(Enc(target)).Append("</see>");
-                    first = false;
+                    if (i > 0) sb.Append(", ");
+                    sb.Append("<see>").Append(Enc(e.Lemmas[i].Lemma)).Append("</see>");
                 }
             }
             sb.Append("</div>");
@@ -202,17 +214,6 @@ namespace CST.Avalonia.Services.Dictionaries
             foreach (var part in BoldTag.Split(s))
                 sb.Append(part is "<b>" or "</b>" ? part : Enc(ToScript(part, script)));
             return sb.ToString();
-        }
-
-        // "āvaraṇa 1" → "āvaraṇa", "apavārita 1.1" → "apavārita": the form a lookup resolves. A trailing token of
-        // digits and dots is a homonym number (mirrors SqliteLemmaProvider.StripHomonym, which is internal).
-        private static string StripHomonym(string lemma)
-        {
-            int sp = lemma.LastIndexOf(' ');
-            if (sp <= 0 || sp + 1 >= lemma.Length) return lemma;
-            for (int i = sp + 1; i < lemma.Length; i++)
-                if (!char.IsDigit(lemma[i]) && lemma[i] != '.') return lemma;
-            return lemma[..sp];
         }
 
         private static string ComposeMeaning(LemmaDetail d)

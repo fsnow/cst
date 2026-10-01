@@ -21,7 +21,7 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "query (each a headword + definition HTML). A query that shares no leading prefix with any "
             + "headword returns an empty list. Query may be in any script; headwords come back in the requested "
             + "output script. For 'dpd', a word starting with the root sign \u221A (e.g. '\u221Avar') looks up DPD "
-            + "roots by prefix instead of word forms.")]
+            + "roots instead of word forms.")]
         public static async Task<IReadOnlyList<DictionaryEntry>> LookupAsync(
             IDictionaryTool dictionary,
             [Description("The headword to look up, in any script.")]

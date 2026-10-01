@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CST.Avalonia.Services;
 using CST.Avalonia.Services.Dictionaries;
+using CST.Avalonia.ViewModels;
 using CST.Conversion;
 using CST.Lemma;
 using CST.Tools;
@@ -63,7 +64,16 @@ public sealed class DpdRootLookupTests : IDisposable
                 ('{R}var 2','e, aya','wish, choose',8,'{R}vṛ','choose','āvaraṇ’-<b>icchāsu</b>','obstructing and <b>wishing</b>'),
                 ('{R}vas 1','a','live, dwell',1,'{R}vas','dwell','nivāse','dwelling'),
                 ('{R}vas 11','a','a <i>made-up</i> root & more',1,NULL,NULL,NULL,NULL),
-                ('{R}kar','o','do, make',7,'{R}kṛ','do','-','-');
+                ('{R}kar','o','do, make',7,'{R}kṛ','do','-','-'),
+                -- Not real DPD keys: shapes that are not a homonym of kar, for the Homonyms guards.
+                ('{R}kar 1x',NULL,'not a homonym',NULL,NULL,NULL,NULL,NULL),
+                ('{R}kar77',NULL,'not a homonym',NULL,NULL,NULL,NULL,NULL),
+                ('{R}man','a','think',3,NULL,NULL,NULL,NULL),
+                ('{R}mant','e, aya','advise',8,NULL,NULL,NULL,NULL),
+                ('{R}bhus','a','bark',1,NULL,NULL,NULL,NULL),
+                ('{R}bhā','a','shine',1,NULL,NULL,NULL,NULL),
+                ('{R}acc 1','a','glow',1,NULL,NULL,NULL,NULL),
+                ('{R}acc 2','e, aya','honour',8,NULL,NULL,NULL,NULL);
             INSERT INTO lemma (id,lemma,pos,gloss,derived_from,root_key,construction) VALUES
                 (10,'vāreti 1','pr','prevents',NULL,'{R}var 1','{R}var + e + ti'),
                 (11,'āvaraṇa 1','nt','obstruction',NULL,'{R}var 1',NULL),
@@ -71,9 +81,13 @@ public sealed class DpdRootLookupTests : IDisposable
                 (13,'vara 1','adj','excellent',NULL,'{R}var 2',NULL),
                 (14,'paññā 1','fem','wisdom',NULL,NULL,'pa + {R}ñā'),
                 (15,'vasati 1','pr','lives',NULL,'{R}vas 1',NULL),
-                (16,'ghost','pr','root row missing',NULL,'{R}gho',NULL);
+                (16,'ghost','pr','root row missing',NULL,'{R}gho',NULL),
+                (17,'maññati','pr','thinks',NULL,'{R}man',NULL),
+                (18,'manteti','pr','advises',NULL,'{R}mant',NULL),
+                (20,'accita 1.1','pp','honoured',NULL,'{R}acc 2',NULL),
+                (21,'accita 2.1','pp','glowed',NULL,'{R}acc 1',NULL);
             INSERT INTO form_lemma VALUES ('vāreti',10),('āvaraṇa',11),('āvaraṇa',12),('vara',13),('paññā',14),
-                ('vasati',15),('ghost',16);");
+                ('vasati',15),('ghost',16),('maññati',17),('manteti',18),('accita',20),('accita',21);");
     }
 
     private DpdDictionarySource Dpd(int maxRootWords = DpdDictionarySource.MaxRootWords) =>
@@ -89,7 +103,7 @@ public sealed class DpdRootLookupTests : IDisposable
     public void FindRoots_by_prefix_returns_each_matching_root_with_its_fields_and_words()
     {
         using var p = new SqliteLemmaProvider(_dbPath);
-        var roots = p.FindRoots($"{R}var", prefix: true, maxRoots: 10, maxLemmasPerRoot: 100)!;
+        var roots = p.FindRoots($"{R}var", RootMatch.Prefix, maxRoots: 10, maxLemmasPerRoot: 100)!;
 
         Assert.Equal(new[] { $"{R}var 1", $"{R}var 2" }, roots.Select(r => r.Root.RootKey));
         var v1 = roots[0];
@@ -107,16 +121,16 @@ public sealed class DpdRootLookupTests : IDisposable
     public void FindRoots_exact_matches_only_the_named_root()
     {
         using var p = new SqliteLemmaProvider(_dbPath);
-        var roots = p.FindRoots($"{R}var 1", prefix: false, maxRoots: 10, maxLemmasPerRoot: 100)!;
+        var roots = p.FindRoots($"{R}var 1", RootMatch.Exact, maxRoots: 10, maxLemmasPerRoot: 100)!;
         Assert.Equal($"{R}var 1", Assert.Single(roots).Root.RootKey);
-        Assert.Empty(p.FindRoots($"{R}var", prefix: false, maxRoots: 10, maxLemmasPerRoot: 100)!);
+        Assert.Empty(p.FindRoots($"{R}var", RootMatch.Exact, maxRoots: 10, maxLemmasPerRoot: 100)!);
     }
 
     [Fact]
     public void FindRoots_caps_the_words_per_root_but_reports_the_full_count()
     {
         using var p = new SqliteLemmaProvider(_dbPath);
-        var v1 = Assert.Single(p.FindRoots($"{R}var 1", prefix: false, maxRoots: 10, maxLemmasPerRoot: 2)!);
+        var v1 = Assert.Single(p.FindRoots($"{R}var 1", RootMatch.Exact, maxRoots: 10, maxLemmasPerRoot: 2)!);
         Assert.Equal(new[] { "vāreti 1", "āvaraṇa 1" }, v1.Lemmas.Select(l => l.Lemma));
         Assert.Equal(3, v1.LemmaCount);
     }
@@ -125,19 +139,37 @@ public sealed class DpdRootLookupTests : IDisposable
     public void FindRoots_caps_the_roots()
     {
         using var p = new SqliteLemmaProvider(_dbPath);
-        Assert.Single(p.FindRoots($"{R}va", prefix: true, maxRoots: 1, maxLemmasPerRoot: 10)!);
-        Assert.Equal(4, p.FindRoots($"{R}va", prefix: true, maxRoots: 10, maxLemmasPerRoot: 10)!.Count);
-        Assert.Empty(p.FindRoots($"{R}va", prefix: true, maxRoots: 0, maxLemmasPerRoot: 10)!);
-        Assert.Empty(p.FindRoots($"{R}va", prefix: true, maxRoots: -1, maxLemmasPerRoot: 10)!);   // SQLite: LIMIT -1 = all
+        Assert.Single(p.FindRoots($"{R}va", RootMatch.Prefix, maxRoots: 1, maxLemmasPerRoot: 10)!);
+        Assert.Equal(4, p.FindRoots($"{R}va", RootMatch.Prefix, maxRoots: 10, maxLemmasPerRoot: 10)!.Count);
+        // With a sort key the cap applies after sorting: a complemented key sorts "vas" before "var", so the one
+        // root kept is a vas root ("vas 1", which as a prefix of "vas 11" still sorts first), not "var 1".
+        var last = Assert.Single(p.FindRoots($"{R}va", RootMatch.Prefix, 1, 10,
+            k => new string(k.Select(ch => (char)(0xFFFF - ch)).ToArray()))!);
+        Assert.Equal($"{R}vas 1", last.Root.RootKey);
+        Assert.Empty(p.FindRoots($"{R}va", RootMatch.Prefix, maxRoots: 0, maxLemmasPerRoot: 10)!);
+        Assert.Empty(p.FindRoots($"{R}va", RootMatch.Prefix, maxRoots: -1, maxLemmasPerRoot: 10)!);   // SQLite: LIMIT -1 = all
+    }
+
+    [Fact]
+    public void FindRoots_homonyms_finds_the_key_and_its_numbered_homonyms_only()
+    {
+        using var p = new SqliteLemmaProvider(_dbPath);
+        Assert.Equal(new[] { $"{R}var 1", $"{R}var 2" },
+            p.FindRoots($"{R}var", RootMatch.Homonyms, 10, 10)!.Select(r => r.Root.RootKey));
+        Assert.Equal(new[] { $"{R}man" }, p.FindRoots($"{R}man", RootMatch.Homonyms, 10, 10)!.Select(r => r.Root.RootKey));
+        Assert.Empty(p.FindRoots($"{R}va", RootMatch.Homonyms, 10, 10)!);
+        // A numbered homonym is the key, a space, then only digits and dots.
+        Assert.Equal(new[] { $"{R}kar" }, p.FindRoots($"{R}kar", RootMatch.Homonyms, 10, 10)!.Select(r => r.Root.RootKey));
+        Assert.Empty(p.FindRoots($"{R}v_r", RootMatch.Homonyms, 10, 10)!);
     }
 
     [Fact]
     public void FindRoots_treats_glob_and_like_metacharacters_literally()
     {
         using var p = new SqliteLemmaProvider(_dbPath);
-        Assert.Empty(p.FindRoots($"{R}v*", prefix: true, maxRoots: 10, maxLemmasPerRoot: 10)!);
-        Assert.Empty(p.FindRoots($"{R}v%", prefix: true, maxRoots: 10, maxLemmasPerRoot: 10)!);
-        Assert.Empty(p.FindRoots($"{R}v_r", prefix: true, maxRoots: 10, maxLemmasPerRoot: 10)!);
+        Assert.Empty(p.FindRoots($"{R}v*", RootMatch.Prefix, maxRoots: 10, maxLemmasPerRoot: 10)!);
+        Assert.Empty(p.FindRoots($"{R}v%", RootMatch.Prefix, maxRoots: 10, maxLemmasPerRoot: 10)!);
+        Assert.Empty(p.FindRoots($"{R}v_r", RootMatch.Prefix, maxRoots: 10, maxLemmasPerRoot: 10)!);
     }
 
     [Fact]
@@ -155,10 +187,10 @@ public sealed class DpdRootLookupTests : IDisposable
         }
         using var leanP = new SqliteLemmaProvider(lean);
         Assert.True(leanP.IsAvailable);
-        Assert.Null(leanP.FindRoots($"{R}var", true, 10, 10));
+        Assert.Null(leanP.FindRoots($"{R}var", RootMatch.Prefix, 10, 10));
 
         using var absent = new SqliteLemmaProvider(Path.Combine(_dir, "absent.db"));
-        Assert.Null(absent.FindRoots($"{R}var", true, 10, 10));
+        Assert.Null(absent.FindRoots($"{R}var", RootMatch.Prefix, 10, 10));
     }
 
     [Fact]
@@ -182,7 +214,7 @@ public sealed class DpdRootLookupTests : IDisposable
             cmd.ExecuteNonQuery();
         }
         using var p = new SqliteLemmaProvider(old);
-        var v = Assert.Single(p.FindRoots($"{R}var", true, 10, 10)!);
+        var v = Assert.Single(p.FindRoots($"{R}var", RootMatch.Prefix, 10, 10)!);
         Assert.Null(v.Root.RootSign);
         Assert.Equal(1, v.LemmaCount);
         Assert.Equal($"{R}var 1", p.GetDetail(1)!.Root!.RootKey);
@@ -199,7 +231,7 @@ public sealed class DpdRootLookupTests : IDisposable
     public void The_reopenable_wrapper_passes_FindRoots_through()
     {
         using var p = new ReopenableLemmaProvider(_dbPath);
-        Assert.Equal(2, p.FindRoots($"{R}var", true, 10, 10)!.Count);
+        Assert.Equal(2, p.FindRoots($"{R}var", RootMatch.Prefix, 10, 10)!.Count);
     }
 
     // ---- root queries through the dictionary source ----
@@ -226,15 +258,12 @@ public sealed class DpdRootLookupTests : IDisposable
     }
 
     [Fact]
-    public async Task A_root_entry_lists_its_words_as_links_one_per_distinct_word()
+    public async Task A_root_entry_links_each_headword_with_its_homonym_number_and_the_count_matches()
     {
         var v1 = (await Look(Dpd(), $"{R}var 1")).Single().MeaningHtml;
-        Assert.Contains("3 headwords", v1);
-        Assert.Contains("<see>vāreti</see>", v1);
-        Assert.Contains("<see>āvaraṇa</see>", v1);
-        // āvaraṇa 1 and āvaraṇa 2 share a lookup target: one link, not two identical ones.
-        Assert.Equal(1, CountOf(v1, "<see>āvaraṇa</see>"));
-        Assert.DoesNotContain("<see>vara</see>", v1);         // root var 2's word, not root var 1's
+        Assert.Contains("\">3 headwords: <see>vāreti 1</see>, <see>āvaraṇa 1</see>, <see>āvaraṇa 2</see></div>", v1);
+        Assert.Equal(3, SeeTargets(v1).Length);              // the count states what is listed
+        Assert.DoesNotContain("<see>vara 1</see>", v1);      // root var 2's word, not root var 1's
     }
 
     [Fact]
@@ -265,6 +294,23 @@ public sealed class DpdRootLookupTests : IDisposable
     }
 
     [Fact]
+    public async Task A_whole_root_key_finds_that_root_and_its_homonyms_not_longer_roots()
+    {
+        // A word entry links "√man"; it must open √man, not √man and √mant.
+        Assert.Equal(new[] { $"{R}man" }, (await Look(Dpd(), $"{R}man")).Select(e => e.Headword));
+        Assert.Equal(new[] { $"{R}var 1", $"{R}var 2" }, (await Look(Dpd(), $"{R}var")).Select(e => e.Headword));
+        // A partial key still gets the prefix run.
+        Assert.Equal(new[] { $"{R}man", $"{R}mant" }, (await Look(Dpd(), $"{R}ma")).Select(e => e.Headword));
+    }
+
+    [Fact]
+    public async Task Roots_come_back_in_Pali_order_not_code_point_order()
+    {
+        // By code point "u" (U+0075) sorts before "ā" (U+0101); in the Pāli alphabet ā comes first.
+        Assert.Equal(new[] { $"{R}bhā", $"{R}bhus" }, (await Look(Dpd(), $"{R}bh")).Select(e => e.Headword));
+    }
+
+    [Fact]
     public async Task Markup_in_root_fields_other_than_bold_is_escaped()
     {
         var html = (await Look(Dpd(), $"{R}vas 11")).Single().MeaningHtml;
@@ -283,7 +329,8 @@ public sealed class DpdRootLookupTests : IDisposable
     [Fact]
     public async Task A_bare_root_word_without_the_sign_does_not_find_roots()
     {
-        // [fsnow] no input affordance: "var" is a word query, never a root query.
+        // [suggestion] Out of scope for #1002, not forbidden: a bare "var" stays a word query. Frank asked not to
+        // worry about how the root sign is entered.
         var res = await Look(Dpd(), "var");
         Assert.DoesNotContain(res, e => e.Headword.StartsWith(R, StringComparison.Ordinal));
     }
@@ -300,7 +347,8 @@ public sealed class DpdRootLookupTests : IDisposable
     {
         var capped = (await Look(Dpd(maxRootWords: 2), $"{R}var 1")).Single().MeaningHtml;
         Assert.Contains("first 2 of 3 headwords", capped);
-        Assert.Contains("<see>vāreti</see>", capped);
+        Assert.Contains("<see>vāreti 1</see>, <see>āvaraṇa 1</see></div>", capped);
+        Assert.Equal(2, SeeTargets(capped).Length);
         Assert.DoesNotContain("\">3 headwords:", capped);
 
         var full = (await Look(Dpd(maxRootWords: 3), $"{R}var 1")).Single().MeaningHtml;
@@ -325,7 +373,7 @@ public sealed class DpdRootLookupTests : IDisposable
         Assert.Contains("sign \u0905", deva.MeaningHtml);   // a -> Devanagari letter a
         Assert.Contains(ScriptConverter.Convert("varaṇa-sambhattisu", Script.Latin, Script.Devanagari), deva.MeaningHtml);
         Assert.Contains($"Sanskrit {R}vṛ", deva.MeaningHtml);
-        Assert.Contains("<see>vāreti</see>", deva.MeaningHtml);                             // targets stay Latin
+        Assert.Contains("<see>vāreti 1</see>", deva.MeaningHtml);                           // targets stay Latin
 
         var sinh = (await Look(Dpd(), $"{R}var 2", Script.Sinhala)).Single();
         Assert.Equal(ScriptConverter.Convert($"{R}var 2", Script.Latin, Script.Sinhala), sinh.Headword);
@@ -370,13 +418,58 @@ public sealed class DpdRootLookupTests : IDisposable
         var root = (await Look(dpd, rootTarget)).Single();
         Assert.Equal($"{R}var 1", root.Headword);
 
-        // root → word: every word link resolves to an entry whose root is this root.
+        // root → word: every word link, followed the way the panel does, selects that headword, whose root is
+        // this root; and the numbered target looked up directly (as an agent would) is that one headword.
         foreach (var target in SeeTargets(root.MeaningHtml))
         {
-            var back = await Look(dpd, target);
-            Assert.NotEmpty(back);
-            Assert.All(back, b => Assert.Contains($"<see>{R}var 1</see>", b.MeaningHtml));
+            var chosen = await Follow(dpd, target, Script.Latin);
+            Assert.Equal(target, chosen.DisplayWord);
+            Assert.Contains($"<see>{R}var 1</see>", chosen.Source.MeaningHtml);
+            Assert.Equal(target, Assert.Single(await Look(dpd, target)).Headword);
         }
+    }
+
+    [Fact]
+    public async Task A_homonym_link_selects_that_homonym_not_the_first_listed()
+    {
+        // accita 1.1 (root acc 2) is listed first for the form "accita"; root acc 1 links accita 2.1.
+        var dpd = Dpd();
+        var acc1 = (await Look(dpd, $"{R}acc 1")).Single().MeaningHtml;
+        var target = Assert.Single(SeeTargets(acc1));
+        Assert.Equal("accita 2.1", target);
+
+        var all = await Look(dpd, "accita");
+        Assert.Equal("accita 1.1", all[0].Headword);             // what the link used to open
+        foreach (var script in new[] { Script.Latin, Script.Devanagari, Script.Sinhala })
+        {
+            var chosen = await Follow(dpd, target, script);
+            Assert.Equal(ScriptConverter.Convert(target, Script.Latin, script), chosen.DisplayWord);
+            Assert.Contains($"<see>{R}acc 1</see>", chosen.Source.MeaningHtml);
+        }
+    }
+
+    [Fact]
+    public async Task A_numbered_word_query_returns_only_that_headword_and_nothing_for_an_unknown_number()
+    {
+        var dpd = Dpd();
+        Assert.Equal("accita 2.1", Assert.Single(await Look(dpd, "accita 2.1")).Headword);
+        Assert.Equal("accita 1.1", Assert.Single(await Look(dpd, "accita  1.1 ")).Headword);
+        Assert.Empty(await Look(dpd, "accita 9"));
+        // Native digits fold, so a numbered headword typed in Devanagari resolves.
+        var deva = ScriptConverter.Convert("accita 2.1", Script.Latin, Script.Devanagari);
+        Assert.Equal(deva, Assert.Single(await Look(dpd, deva, Script.Devanagari)).Headword);
+    }
+
+    [Theory]
+    [InlineData("accita 2.1", "accita", "accita 2.1")]
+    [InlineData("vāreti", "vāreti", null)]
+    [InlineData("uda vā", "uda vā", null)]
+    [InlineData("\u221Avar 1", "\u221Avar 1", null)]
+    [InlineData("\u221Aman", "\u221Aman", null)]
+    public void SplitLinkTarget_strips_a_homonym_for_the_query_and_keeps_it_as_the_selection(
+        string target, string query, string? select)
+    {
+        Assert.Equal((query, select), DictionaryViewModel.SplitLinkTarget(target));
     }
 
     [Fact]
@@ -405,18 +498,25 @@ public sealed class DpdRootLookupTests : IDisposable
 
         var root = (await Look(dpd, $"{R}var 1", Script.Devanagari)).Single();
         var rhtml = DictionaryHtmlRenderer.Render(root.MeaningHtml, Display, "font", 12);
-        Assert.Contains($"href=\"cst-see:vāreti\">{Display("vāreti")}</a>", rhtml);
+        Assert.Contains($"href=\"cst-see:vāreti 1\">{Display("vāreti 1")}</a>", rhtml);
     }
 
-    private static string[] SeeTargets(string html) =>
+    /// <summary>What clicking a <c>&lt;see&gt;</c> link in the panel selects: <c>NavigateToWord</c> splits the
+    /// target, puts the query in the search box in the display script, and the completed lookup selects through
+    /// <c>ChooseSelection</c>. (The throttle and dispatcher around it need a live view model.)</summary>
+    internal static async Task<DictionaryEntryViewModel> Follow(DpdDictionarySource dpd, string target, Script script)
+    {
+        var (query, select) = DictionaryViewModel.SplitLinkTarget(target);
+        var typed = ScriptConverter.Convert(Any2Ipe.Convert(query), Script.Ipe, script);
+        var res = await dpd.LookupAsync(new DictionaryRequest("dpd", typed, script, 500));
+        var chosen = DictionaryViewModel.ChooseSelection(select, res.Select(e => new DictionaryEntryViewModel(e)).ToList());
+        Assert.NotNull(chosen);
+        return chosen!;
+    }
+
+    internal static string[] SeeTargets(string html) =>
         System.Text.RegularExpressions.Regex.Matches(html, "<see>(.*?)</see>").Select(m => m.Groups[1].Value).ToArray();
 
-    private static int CountOf(string s, string sub)
-    {
-        int n = 0;
-        for (int i = s.IndexOf(sub, StringComparison.Ordinal); i >= 0; i = s.IndexOf(sub, i + sub.Length, StringComparison.Ordinal)) n++;
-        return n;
-    }
 }
 
 /// <summary>
@@ -445,10 +545,43 @@ public sealed class DpdRootRealAssetTests
         Assert.Contains("wish, choose", res[1].MeaningHtml);
         Assert.Contains("<see>", res[0].MeaningHtml);
 
-        var roots = p.FindRoots(R + "var", true, 10, int.MaxValue)!;
+        var roots = p.FindRoots(R + "var", RootMatch.Prefix, 10, int.MaxValue)!;
         Assert.Equal("a", roots[0].Root.RootSign);
         Assert.Equal(roots[0].LemmaCount, roots[0].Lemmas.Count);
         Assert.True(roots[0].LemmaCount > 100);
+    }
+
+    [Theory]
+    [InlineData("acc 1", "accita 2.1")]   // the form "accita" lists accita 1.1 (root acc 2) first
+    [InlineData("an", "udāna 1")]         // the form "udāna" lists uda 2.1 ("water") first
+    public async Task A_root_entry_link_opens_the_listed_headword(string root, string headword)
+    {
+        if (!File.Exists(AssetPath)) return;
+        using var p = new SqliteLemmaProvider(AssetPath);
+        if (!p.IsAvailable) return;
+        var dpd = new DpdDictionarySource(p);
+
+        var entry = (await dpd.LookupAsync(new DictionaryRequest("dpd", R + root, Script.Latin))).Single();
+        Assert.Contains($"<see>{headword}</see>", entry.MeaningHtml);
+        foreach (var script in new[] { Script.Latin, Script.Devanagari })
+        {
+            var chosen = await DpdRootLookupTests.Follow(dpd, headword, script);
+            Assert.Equal(ScriptConverter.Convert(headword, Script.Latin, script), chosen.DisplayWord);
+            Assert.Contains($"<see>{R}{root}</see>", chosen.Source.MeaningHtml);
+        }
+    }
+
+    [Fact]
+    public async Task Man_finds_man_not_mant_and_roots_are_in_Pali_order()
+    {
+        if (!File.Exists(AssetPath)) return;
+        using var p = new SqliteLemmaProvider(AssetPath);
+        if (!p.IsAvailable) return;
+        var dpd = new DpdDictionarySource(p);
+        Assert.Equal(new[] { R + "man" },
+            (await dpd.LookupAsync(new DictionaryRequest("dpd", R + "man", Script.Latin))).Select(e => e.Headword));
+        var bh = (await dpd.LookupAsync(new DictionaryRequest("dpd", R + "bh", Script.Latin))).Select(e => e.Headword).ToList();
+        Assert.True(bh.IndexOf(R + "bh\u0101") < bh.IndexOf(R + "bhus"));
     }
 
     [Fact]
@@ -457,7 +590,7 @@ public sealed class DpdRootRealAssetTests
         if (!File.Exists(AssetPath)) return;
         using var p = new SqliteLemmaProvider(AssetPath);
         if (!p.IsAvailable) return;
-        var all = p.FindRoots(R, true, 10_000, DpdDictionarySource.MaxRootWords)!;
+        var all = p.FindRoots(R, RootMatch.Prefix, 10_000, DpdDictionarySource.MaxRootWords)!;
         Assert.True(all.Count > 700);
         Assert.All(all, r => Assert.Equal(r.LemmaCount, r.Lemmas.Count));
     }

@@ -234,25 +234,51 @@ caller looks a word up the same way regardless of source:
   report (`/v1/lemma-report/{lemmaId}`) for the full dossier — the dictionary
   meaning is deliberately compact; depth lives in the report.
 
-**DPD roots (#1002).** **[fsnow]**, 2026-10-01: *"Let's do (1) and (2) and not
-worry about *how* Antonio is entering the root symbol."* — (1) show the root on
-every word entry that has one, linked to the root; (2) make roots searchable.
-Root families and the root matrix are #1023 (beta 9).
+**DPD roots (#1002).** **[fsnow]**, 2026-10-01: *"1002 is an enhancement.
+Let's do (1) and (2) and not worry about *how* Antonio is entering the root
+symbol. He is. Move (3) and (4) to a separate issue"* — (3) and (4), root
+families and the root matrix, are #1023 (beta 9). (1) and (2) were items of an
+agent's plan that he approved; their wording below is the agent's
+**[suggestion]**:
+
+  - **[suggestion]** (1) Show the root on every word entry that has one, linked to
+    the root: `root <see>√var 1</see> · cover, dress, restrain`.
+  - **[suggestion]** (2) Make roots searchable: a `dpd` query starting with `√` is
+    a root query, with one entry per root.
   - **[observed]** The asset's `root` table (753 rows in v0.4.20260531) and
-    `lemma.root_key` (36,703 headwords) carry this; `ILemmaProvider.FindRoots`
-    reads both in one pass (no index on `lemma.root_key`, so one scan per lookup,
-    not per root).
-  - A word entry gets a line `root <see>√var 1</see> · cover, dress, restrain`.
-  - A `dpd` query starting with `√` (U+221A, which every converter passes
-    through unchanged) is a root query: by prefix (`√var` → `√var 1`, `√var 2`),
-    exact when it ends in a homonym number (`√var 1`; native digits folded, so a
-    root link followed in Devanagari resolves), nothing for a lone `√`. A bare
-    `var` stays a word query — **[fsnow]** no input affordance for `√`.
+    `lemma.root_key` (36,703 headwords) carry this. `ILemmaProvider.FindRoots`
+    reads both in one pass: there is no index on `lemma.root_key`, so it scans
+    `lemma` once per lookup, not once per root. The converters pass `√` (U+221A)
+    through unchanged.
+  - **[suggestion]** Matching, widest last: `√var 1` (ends in a homonym number)
+    is exact; `√var` is that key or its numbered homonyms (`√var 1`, `√var 2`),
+    so `√man`, which is what a word entry links to, does not also return `√mant`;
+    a query that is no whole key (`√va`) gets the prefix run; a lone `√` returns
+    nothing. Native digits are folded before matching. Results are in Pāli order:
+    sorted by IPE, whose code points sort in alphabet order, not by code point,
+    which put `√bhā` after `√bhus`.
+  - **[suggestion]** A bare `var` stays a word query. That is out of scope here,
+    not a decision: how the root sign is entered was left alone.
   - **[suggestion]** The root entry's layout and fields: meaning; group and sign;
     Sanskrit root (left in IAST); Dhātupāṭha (Pāli in the display script, English
-    beside it); then the headwords built on it as `<see>` links, one per lookup
-    target (homonyms share one), in headword-id order, capped at 1000
+    beside it); then one `<see>` link per headword built on the root, homonym
+    number included (`accita 2.1`), in headword-id order, capped at 1000
     (`DpdDictionarySource.MaxRootWords`, above the largest root, √kar's 817).
+    The count states the number listed ("N headwords", or "first N of M").
+  - **[suggestion]** Following a numbered link: the panel looks the word up
+    without the number, so every homonym is listed, and selects the linked one
+    through the #935 one-shot selection (`DictionaryViewModel.SplitLinkTarget`,
+    `ChooseSelection`). A numbered `dpd` query (`accita 2.1`, from an agent)
+    returns just that headword.
+  - **[observed]** Measured on v0.4.20260531, 2026-10-01: all 36,703 word links
+    select the linked headword, and each names its root; every root link opens
+    exactly its root. Root links followed in the display script resolve for all
+    753 roots in Latin, Devanagari, Sinhala, Thai, Myanmar, Bengali, Gujarati,
+    Kannada, Khmer, Malayalam and Telugu. Known misses, all pre-existing converter
+    behaviour and not addressed here: Cyrillic 669 (the legacy transliteration
+    that doesn't round-trip; consonant-final keys make it systematic), Gurmukhi
+    46 (e.g. √dev, √dhov: a borrowed Gujarati va, U+0AB5), Tibetan 9 (the ḷ
+    roots).
 
 **Attribution (`source.json`, #268).** Each flat `<lang>/` dir may carry a
 `source.json` — the authoritative citation `{ title, compiler, edition, year,

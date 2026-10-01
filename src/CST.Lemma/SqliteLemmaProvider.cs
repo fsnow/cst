@@ -266,25 +266,41 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
             hasRootSign ? Str(r, 7) : null);
     }
 
-    public IReadOnlyList<RootEntry>? FindRoots(string key, bool prefix, int maxRoots, int maxLemmasPerRoot)
+    public IReadOnlyList<RootEntry>? FindRoots(string key, RootMatch match, int maxRoots, int maxLemmasPerRoot,
+        Func<string, string>? sortKey = null)
     {
         if (!IsAvailable || !_hasReport || key is null) return null;
         if (maxRoots <= 0 || key.Length == 0) return Array.Empty<RootEntry>();
         using var c = Open();
 
-        // The prefix test is substr(...) = $k rather than GLOB/LIKE so a '*', '%', '_' or '[' in the query is a
-        // literal character, not a pattern. The root table is ~750 rows, so not using the key index costs nothing.
+        // Every test is substr(...) = $k rather than GLOB/LIKE on the key, so a '*', '%', '_' or '[' in the query
+        // is a literal character, not a pattern. The root table is ~750 rows, so skipping the key index costs
+        // nothing.
+        string where = match switch
+        {
+            RootMatch.Exact => "root_key = $k",
+            // The key itself or a numbered homonym of it: "√var" → "√var 1", "√var 2", but not "√vara".
+            RootMatch.Homonyms => @"(root_key = $k OR (substr(root_key, 1, length($k) + 1) = $k || ' '
+                AND length(root_key) > length($k) + 1
+                AND substr(root_key, length($k) + 2) NOT GLOB '*[^0-9.]*'))",
+            _ => "substr(root_key, 1, length($k)) = $k",
+        };
         var roots = new List<RootDetail>();
         using (var cmd = c.CreateCommand())
         {
-            cmd.CommandText = RootColumns(_hasRootSign) + " FROM root WHERE "
-                + (prefix ? "substr(root_key, 1, length($k)) = $k" : "root_key = $k")
-                + " ORDER BY root_key LIMIT $max";
+            // With a sort key every match is read and the cap applied after sorting, so the cap keeps the first
+            // roots in the caller's order rather than in code-point order.
+            cmd.CommandText = RootColumns(_hasRootSign) + " FROM root WHERE " + where + " ORDER BY root_key"
+                + (sortKey is null ? " LIMIT $max" : "");
             cmd.Parameters.AddWithValue("$k", key);
             cmd.Parameters.AddWithValue("$max", maxRoots);
             using var r = cmd.ExecuteReader();
             while (r.Read()) roots.Add(ReadRootRow(r, _hasRootSign));
         }
+        if (sortKey is not null)
+            roots = roots.OrderBy(rd => sortKey(rd.RootKey), StringComparer.Ordinal)
+                         .ThenBy(rd => rd.RootKey, StringComparer.Ordinal)
+                         .Take(maxRoots).ToList();
         if (roots.Count == 0) return Array.Empty<RootEntry>();
 
         // One pass over lemma for every matched root (the asset has no index on lemma.root_key, so a query per
@@ -356,16 +372,8 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
 
     private static string? Str(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
 
-    /// <summary>"paññāya 1" → "paññāya"; DPD's dotted sub-numbering "dhamma 1.01" → "dhamma";
-    /// "pajānāti" → "pajānāti". A trailing token of only digits and dots is a homonym marker.</summary>
-    internal static string StripHomonym(string lemma)
-    {
-        int sp = lemma.LastIndexOf(' ');
-        if (sp <= 0 || sp + 1 >= lemma.Length) return lemma;
-        for (int i = sp + 1; i < lemma.Length; i++)
-            if (!char.IsDigit(lemma[i]) && lemma[i] != '.') return lemma;
-        return lemma[..sp];
-    }
+    /// <summary>See <see cref="LemmaHeadword.StripHomonym"/>.</summary>
+    internal static string StripHomonym(string lemma) => LemmaHeadword.StripHomonym(lemma);
 
     public void Dispose()
     {

@@ -67,6 +67,18 @@ public sealed record RootDetail(
     string? SanskritRoot, string? SanskritRootMeaning, string? DhatupathaPali, string? DhatupathaEnglish,
     string? RootSign = null);
 
+/// <summary>How <see cref="ILemmaProvider.FindRoots"/> matches a root key. (#1002)</summary>
+public enum RootMatch
+{
+    /// <summary>The root whose key equals the query (<c>√var 1</c>).</summary>
+    Exact,
+    /// <summary>The root whose key equals the query, or its numbered homonyms (<c>√var</c> → <c>√var 1</c>,
+    /// <c>√var 2</c>), and no longer key (<c>√man</c> does not find <c>√mant</c>).</summary>
+    Homonyms,
+    /// <summary>Every root whose key starts with the query (<c>√va</c>).</summary>
+    Prefix,
+}
+
 /// <summary>
 /// One root and the DPD headwords built on it (<c>lemma.root_key</c>), in headword-id order. <see cref="Lemmas"/>
 /// is capped by the caller; <see cref="LemmaCount"/> is the uncapped total, so a caller can say the list is
