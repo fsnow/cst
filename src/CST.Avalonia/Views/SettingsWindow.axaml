@@ -120,696 +120,715 @@
                 </ListBox>
             </Border>
             
-            <!-- Settings Content -->
-            <!-- Explicit scroll config + top-aligned content so a tab taller than the window scrolls
-                 instead of being clipped by the window frame (#100). -->
-            <!-- Except for AI, whose tabs scroll their own bodies so the tab strip stays put (#986):
-                 ContentScrollBarVisibility is Disabled there, which hands the tab control the
-                 viewport's height rather than an unbounded one. -->
-            <ScrollViewer x:Name="SettingsScroll" Grid.Column="1"
-                          HorizontalScrollBarVisibility="Disabled"
-                          VerticalScrollBarVisibility="{Binding ContentScrollBarVisibility}">
-                <!-- Cap content to the scroll viewport width so long wrapping text (e.g. setting
-                     descriptions) wraps at the visible edge. The viewer measures content with
-                     unbounded width, so without this cap a panel sizes to its content's natural
-                     (unwrapped) width and overflows off the right of the window. The 20px padding
-                     lives on this ContentControl (inside its MaxWidth box), NOT on the ScrollViewer:
-                     the viewport width does not subtract the ScrollViewer's own padding, so padding
-                     there would push the capped content right and re-introduce the clip. -->
-                <ContentControl Content="{Binding SelectedCategory.Content}"
-                                VerticalAlignment="Top"
-                                HorizontalAlignment="Left"
-                                Padding="20"
-                                MaxWidth="{Binding #SettingsScroll.Viewport.Width}">
-                    <ContentControl.DataTemplates>
-                        
-                        <!-- General Settings Template -->
-                        <DataTemplate DataType="vm:GeneralSettingsViewModel">
-                            <StackPanel>
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="XML Books Directory" Classes="SettingLabel"/>
+            <!-- Settings Content. Two hosts share one set of templates (below):
+
+                 - SettingsScroll scrolls every category but AI. Explicit scroll config + top-aligned
+                   content so a category taller than the window scrolls instead of being clipped by the
+                   window frame (#100).
+                 - TabbedHost shows AI, which does NOT scroll as a whole: each of its tabs scrolls its own
+                   body, so the General / Providers / Models strip stays in view (#986). It needs a host
+                   that gives it a bounded height, and that host must not be SettingsScroll with its
+                   scrolling switched off: changing a live viewer's VerticalScrollBarVisibility in the same
+                   layout pass as its content left the content arranged at the previous category's size
+                   (clipped, measured headless; review of #1019). So the two hosts are siblings and only
+                   their content and visibility change. -->
+            <Panel Grid.Column="1">
+                <Panel.DataTemplates>
+                    
+                    <!-- General Settings Template -->
+                    <DataTemplate DataType="vm:GeneralSettingsViewModel">
+                        <StackPanel>
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="XML Books Directory" Classes="SettingLabel"/>
+                                    <DockPanel>
+                                        <Button Content="Browse..." 
+                                               Command="{Binding BrowseCommand}"
+                                               AutomationProperties.AutomationId="settings.general.browse-xml"
+                                               AutomationProperties.Name="Browse for the XML books directory"
+                                               DockPanel.Dock="Right" 
+                                               Margin="5,0,0,0"
+                                               Width="80"/>
+                                        <TextBox Text="{Binding XmlBooksDirectory}" 
+                                                 AutomationProperties.AutomationId="settings.general.xml-directory"
+                                                 AutomationProperties.Name="XML books directory"
+                                                IsReadOnly="True"/>
+                                    </DockPanel>
+                                    <TextBlock Text="Location of the Tipitaka XML book files" 
+                                              Classes="SettingDescription"/>
+                                    
+                                    <StackPanel Margin="0,15,0,0">
+                                        <TextBlock Text="Index Directory" Classes="SettingLabel"/>
                                         <DockPanel>
                                             <Button Content="Browse..." 
-                                                   Command="{Binding BrowseCommand}"
-                                                   AutomationProperties.AutomationId="settings.general.browse-xml"
-                                                   AutomationProperties.Name="Browse for the XML books directory"
+                                                   Command="{Binding BrowseIndexCommand}"
+                                                   AutomationProperties.AutomationId="settings.general.browse-index"
+                                                   AutomationProperties.Name="Browse for the index directory"
                                                    DockPanel.Dock="Right" 
                                                    Margin="5,0,0,0"
                                                    Width="80"/>
-                                            <TextBox Text="{Binding XmlBooksDirectory}" 
-                                                     AutomationProperties.AutomationId="settings.general.xml-directory"
-                                                     AutomationProperties.Name="XML books directory"
-                                                    IsReadOnly="True"/>
+                                            <TextBox Text="{Binding IndexDirectory}" 
+                                                     AutomationProperties.AutomationId="settings.general.index-directory"
+                                                     AutomationProperties.Name="Index directory"
+                                                    Watermark="Default location will be used if empty"/>
                                         </DockPanel>
-                                        <TextBlock Text="Location of the Tipitaka XML book files" 
+                                        <TextBlock Text="Location where search index files are stored" 
                                                   Classes="SettingDescription"/>
+                                    </StackPanel>
+                                    
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+                    
+                    <!-- Appearance Settings Template -->
+                    <DataTemplate DataType="vm:AppearanceSettingsViewModel">
+                        <StackPanel>
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="Pali Script Fonts" Classes="SettingLabel"/>
+                                    <!-- #42: the old description claimed this section covered books. It never
+                                         did - these are app CHROME fonts. Book text was rendered from the
+                                         stylesheets and could not be configured at all until #42. -->
+                                    <TextBlock Text="Configure fonts for each Pali script. UI fonts apply to the book tree, search results and the dictionary; book fonts apply to the text of the books themselves."
+                                              Classes="SettingDescription"/>
+                                    
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
                                         
-                                        <StackPanel Margin="0,15,0,0">
-                                            <TextBlock Text="Index Directory" Classes="SettingLabel"/>
-                                            <DockPanel>
-                                                <Button Content="Browse..." 
-                                                       Command="{Binding BrowseIndexCommand}"
-                                                       AutomationProperties.AutomationId="settings.general.browse-index"
-                                                       AutomationProperties.Name="Browse for the index directory"
-                                                       DockPanel.Dock="Right" 
-                                                       Margin="5,0,0,0"
-                                                       Width="80"/>
-                                                <TextBox Text="{Binding IndexDirectory}" 
-                                                         AutomationProperties.AutomationId="settings.general.index-directory"
-                                                         AutomationProperties.Name="Index directory"
-                                                        Watermark="Default location will be used if empty"/>
-                                            </DockPanel>
-                                            <TextBlock Text="Location where search index files are stored" 
-                                                      Classes="SettingDescription"/>
-                                        </StackPanel>
-                                        
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </DataTemplate>
-                        
-                        <!-- Appearance Settings Template -->
-                        <DataTemplate DataType="vm:AppearanceSettingsViewModel">
-                            <StackPanel>
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Pali Script Fonts" Classes="SettingLabel"/>
-                                        <!-- #42: the old description claimed this section covered books. It never
-                                             did - these are app CHROME fonts. Book text was rendered from the
-                                             stylesheets and could not be configured at all until #42. -->
-                                        <TextBlock Text="Configure fonts for each Pali script. UI fonts apply to the book tree, search results and the dictionary; book fonts apply to the text of the books themselves."
-                                                  Classes="SettingDescription"/>
-                                        
-                                        <Grid Margin="0,10,0,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="150"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            
-                                            <!-- Script List -->
-                                            <!-- No fixed Height: the Grid row sizes to the settings panel on
-                                                 the right, so the picker stretches to match it and shows as
-                                                 many of the 14 scripts as the panel is tall, instead of
-                                                 four in a 200px box with empty space beneath. MinHeight
-                                                 keeps it usable if the right-hand panel ever shrinks. -->
-                                            <ListBox Grid.Column="0"
-                                                    ItemsSource="{Binding ScriptFontSettings}"
-                                                    AutomationProperties.AutomationId="settings.appearance.scripts"
-                                                    AutomationProperties.Name="Pali scripts"
-                                                    SelectedItem="{Binding SelectedScript}"
-                                                    MinHeight="200"
-                                                    VerticalAlignment="Stretch">
-                                                <ListBox.ItemTemplate>
-                                                    <DataTemplate x:DataType="vm:ScriptFontSettingViewModel">
-                                                        <TextBlock Text="{Binding ScriptName}"/>
-                                                    </DataTemplate>
-                                                </ListBox.ItemTemplate>
-                                                <!-- Compact rows: the template's own padding stacked on top
-                                                     of the Fluent ListBoxItem default, making each script
-                                                     ~3 lines tall. Trimmed so all fourteen fit without
-                                                     scrolling at the default dialog size. -->
-                                                <ListBox.Styles>
-                                                    <Style Selector="ListBoxItem" x:DataType="vm:ScriptFontSettingViewModel">
-                                                        <Setter Property="Padding" Value="10,4"/>
-                                                        <Setter Property="MinHeight" Value="0"/>
-                                                        <!-- #862: as for the category list above. -->
-                                                        <Setter Property="AutomationProperties.Name" Value="{Binding ScriptName}"/>
-                                                    </Style>
-                                                </ListBox.Styles>
-                                            </ListBox>
-
-                                            <!-- Font Settings for Selected Script -->
-                                            <StackPanel Grid.Column="1" Margin="15,0,0,0">
-                                                <!-- No "Font settings for {script}" heading: with every script
-                                                     visible and highlighted in the list beside it, naming the
-                                                     selection again in the panel was redundant. -->
-                                                <TextBlock Text="Pali Fonts (UI)" FontWeight="SemiBold"
-                                                          Margin="0,0,0,6"/>
-                                                
-                                                <Grid>
-                                                    <Grid.RowDefinitions>
-                                                        <RowDefinition Height="Auto"/>
-                                                        <RowDefinition Height="Auto"/>
-                                                        <RowDefinition Height="Auto"/>
-                                                        <RowDefinition Height="Auto"/>
-                                                        <RowDefinition Height="Auto"/>
-                                                    </Grid.RowDefinitions>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="80"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    
-                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
-                                                              VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                                    <!-- The two font pickers must line up: this one sized to
-                                                         its selected item while the book one stretched, so
-                                                         they read as unrelated controls. Both stretch now. -->
-                                                    <DockPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,10">
-                                                        <ProgressBar IsIndeterminate="True"
-                                                                     IsVisible="{Binding SelectedScript.IsLoadingFonts}"
-                                                                     Width="100" Height="5"
-                                                                     VerticalAlignment="Center" Margin="10,0,0,0"
-                                                                     DockPanel.Dock="Right"/>
-                                                        <ComboBox ItemsSource="{Binding SelectedScript.AvailableFonts}"
-                                                                  AutomationProperties.AutomationId="settings.appearance.ui-font"
-                                                                  AutomationProperties.Name="Pali UI font"
-                                                                  SelectedItem="{Binding SelectedScript.SelectedFontFamily}"
-                                                                  IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"
-                                                                  HorizontalAlignment="Stretch"/>
-                                                    </DockPanel>
-
-                                                    <!-- #29: no installed font can draw this script. Said
-                                                         here because the picker still lists "System Default",
-                                                         so an otherwise-bare dropdown would look ordinary. -->
-                                                    <TextBlock Grid.Row="0" Grid.Column="1"
-                                                              IsVisible="{Binding SelectedScript.NoFontSupportsScript}"
-                                                              Text="No installed font can display this script. Install one to read texts in it."
-                                                              TextWrapping="Wrap"
-                                                              Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                                              VerticalAlignment="Bottom" Margin="0,36,0,4"/>
-
-                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:"
-                                                              VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                                    <NumericUpDown Grid.Row="1" Grid.Column="1" 
-                                                                  Value="{Binding SelectedScript.FontSize}"
-                                                                  AutomationProperties.AutomationId="settings.appearance.ui-font-size"
-                                                                  AutomationProperties.Name="Pali UI font size"
-                                                                  Minimum="8" Maximum="32" Increment="1"
-                                                                  Width="120" HorizontalAlignment="Left"
-                                                                  Margin="0,0,0,10"/>
-                                                    
-                                                    <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
-                                                              Text="Preview:" Margin="0,10,0,5"/>
-                                                    <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
-                                                           BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                                                           Background="{DynamicResource ControlFillColorDefaultBrush}" Padding="10" Height="60">
-                                                        <TextBlock Text="{Binding SelectedScript.PreviewText}"
-                                                                  FontFamily="{Binding SelectedScript.EffectiveFontFamilyObject}"
-                                                                  FontSize="{Binding SelectedScript.FontSize}"
-                                                                  VerticalAlignment="Center"/>
-                                                    </Border>
-
-                                                    <!-- System Default Font Information -->
-                                                    <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
-                                                              Margin="0,8,0,0"
-                                                              FontSize="12"
-                                                              IsVisible="{Binding SelectedScript.SystemDefaultFontName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                                        <Run Text="System Default font is "/>
-                                                        <Run Text="{Binding SelectedScript.SystemDefaultFontName}" FontWeight="Medium"/>
-                                                    </TextBlock>
-                                                </Grid>
-
-                                                <!-- #42: the BOOK face. Deliberately no size control - #574 gave
-                                                     every script the same stylesheet ladder, so per-script zoom
-                                                     (#572) is the only size, and it is judged against live text
-                                                     rather than typed here. The description carries the current
-                                                     zoom, which is also the only place in the app that reveals
-                                                     zoom is stored per script. -->
-                                                <TextBlock Text="Pali Fonts (Books)" FontWeight="SemiBold"
-                                                          Margin="0,18,0,6"/>
-
-                                                <Grid>
-                                                    <Grid.RowDefinitions>
-                                                        <RowDefinition Height="Auto"/>
-                                                        <RowDefinition Height="Auto"/>
-                                                    </Grid.RowDefinitions>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="80"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
-                                                              VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                                    <ComboBox Grid.Row="0" Grid.Column="1"
-                                                              ItemsSource="{Binding SelectedScript.AvailableBookFonts}"
-                                                              AutomationProperties.AutomationId="settings.appearance.book-font"
-                                                              AutomationProperties.Name="Pali book font"
-                                                              SelectedItem="{Binding SelectedScript.SelectedBookFontFamily}"
-                                                              IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"
-                                                              HorizontalAlignment="Stretch"
-                                                              Margin="0,0,0,8"/>
-
-                                                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                                              Text="{Binding SelectedScript.BookSizeDescription}"
-                                                              Classes="SettingDescription"
-                                                              TextWrapping="Wrap"/>
-                                                </Grid>
-                                            </StackPanel>
-                                        </Grid>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </DataTemplate>
-                        
-                        
-                        <!-- Advanced Settings Template -->
-                        <!-- Configuration Settings Template -->
-                        <DataTemplate DataType="vm:ConfigurationSettingsViewModel">
-                            <StackPanel>
-                                <Border Classes="SettingGroup" IsVisible="{Binding IsWindows}">
-                                    <StackPanel>
-                                        <TextBlock Text="Graphics" Classes="SettingLabel"/>
-                                        <TextBlock Text="Hardware acceleration for the reader view. If book pages occasionally go blank until you click or select text (seen with some GPUs and in virtual machines), turn this off to use software rendering."
-                                                  Classes="SettingDescription" TextWrapping="Wrap"/>
-                                        <CheckBox IsChecked="{Binding UseHardwareAcceleration}"
-                                                  AutomationProperties.AutomationId="settings.configuration.hardware-acceleration"
-                                                 Content="Use hardware acceleration (requires restart)"
-                                                 Margin="0,10,0,0"/>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Recent Books MRU (#44) -->
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Recent Books" Classes="SettingLabel"/>
-                                        <TextBlock Text="The File → Open Recent menu lists books you have recently opened. Set how many it remembers (0 turns the list off)."
-                                                  Classes="SettingDescription" TextWrapping="Wrap"/>
-                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Spacing="10">
-                                            <TextBlock Text="Books to remember:" VerticalAlignment="Center"/>
-                                            <NumericUpDown Value="{Binding MaxRecentBooks}"
-                                                           AutomationProperties.AutomationId="settings.configuration.recent-books-count"
-                                                           AutomationProperties.Name="Books to remember"
-                                                          Minimum="0" Maximum="50" Increment="1"
-                                                          FormatString="0" Width="120"/>
-                                            <Button Content="Clear List"
-                                                   Command="{Binding ClearRecentBooksCommand}"
-                                                   AutomationProperties.AutomationId="settings.configuration.clear-recent-books"
-                                                   VerticalAlignment="Center"
-                                                   ToolTip.Tip="Empty the recent-books list now"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Configuration" Classes="SettingLabel"/>
-                                        <TextBlock Text="Settings are stored in JSON format"
-                                                  Classes="SettingDescription"/>
-
-                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                            <TextBlock Text="Settings file: " VerticalAlignment="Center"/>
-                                            <TextBlock Text="{Binding SettingsFilePath}"
-                                                      FontFamily="Consolas,Courier New,monospace"
-                                                      VerticalAlignment="Center"/>
-                                        </StackPanel>
-
-                                        <Button Content="Open Settings Folder"
-                                               Command="{Binding OpenSettingsFileCommand}"
-                                               AutomationProperties.AutomationId="settings.configuration.open-settings-folder"
-                                               Margin="0,10,0,0"
-                                               HorizontalAlignment="Left"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </DataTemplate>
-
-                        <!-- XML Data Updates Settings Template -->
-                        <DataTemplate DataType="vm:XmlUpdateSettingsViewModel">
-                            <StackPanel>
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Tipitaka Updates" Classes="SettingLabel"/>
-                                        <TextBlock Text="Configure automatic updates for Tipitaka XML files from GitHub" 
-                                                  Classes="SettingDescription"/>
-                                        
-                                        <CheckBox IsChecked="{Binding EnableAutomaticUpdates}" 
-                                                  AutomationProperties.AutomationId="settings.xml-updates.enabled"
-                                                 Content="Enable automatic updates" 
-                                                 Margin="0,10,0,15"/>
-                                        
-                                        <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto">
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Repository Owner:"
-                                                      VerticalAlignment="Center" Margin="0,0,10,10"/>
-                                            <TextBox Grid.Row="0" Grid.Column="1"
-                                                    Text="{Binding XmlRepositoryOwner}"
-                                                    AutomationProperties.AutomationId="settings.xml-updates.repository-owner"
-                                                    AutomationProperties.Name="Repository owner"
-                                                    Watermark="e.g., VipassanaTech"
-                                                    Margin="0,0,0,10"/>
-
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Repository Name:"
-                                                      VerticalAlignment="Center" Margin="0,0,10,10"/>
-                                            <TextBox Grid.Row="1" Grid.Column="1"
-                                                    Text="{Binding XmlRepositoryName}"
-                                                    AutomationProperties.AutomationId="settings.xml-updates.repository-name"
-                                                    AutomationProperties.Name="Repository name"
-                                                    Watermark="e.g., tipitaka-xml"
-                                                    Margin="0,0,0,10"/>
-
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Repository Path:"
-                                                      VerticalAlignment="Center" Margin="0,0,10,10"/>
-                                            <TextBox Grid.Row="2" Grid.Column="1"
-                                                    Text="{Binding XmlRepositoryPath}"
-                                                    AutomationProperties.AutomationId="settings.xml-updates.repository-path"
-                                                    AutomationProperties.Name="Repository path"
-                                                    Watermark="e.g., deva master (leave empty for root)"
-                                                    Margin="0,0,0,10"/>
-
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Branch:"
-                                                      VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <TextBox Grid.Row="3" Grid.Column="1"
-                                                    Text="{Binding XmlRepositoryBranch}"
-                                                    AutomationProperties.AutomationId="settings.xml-updates.repository-branch"
-                                                    AutomationProperties.Name="Repository branch"
-                                                    Watermark="e.g., main"/>
-                                        </Grid>
-
-                                        <Button Content="Restore Defaults"
-                                               Command="{Binding RestoreDefaultsCommand}"
-                                               AutomationProperties.AutomationId="settings.xml-updates.restore-defaults"
-                                               Margin="0,15,0,0"
-                                               HorizontalAlignment="Left"
-                                               ToolTip.Tip="Reset the repository fields to their known-good defaults"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </DataTemplate>
-
-                        <!-- Dictionary Data Updates Template (#468) -->
-                        <DataTemplate DataType="vm:DpdUpdateSettingsViewModel">
-                            <StackPanel>
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Dictionary Updates" Classes="SettingLabel"/>
-                                        <TextBlock Text="Configure automatic updates for the downloadable dictionary data (DPD, DPPN) from GitHub. Installed dictionaries keep working with this off."
-                                                  Classes="SettingDescription"/>
-
-                                        <CheckBox IsChecked="{Binding EnableAutomaticUpdates}"
-                                                  AutomationProperties.AutomationId="settings.dictionary-updates.enabled"
-                                                 Content="Enable automatic updates"
-                                                 Margin="0,10,0,15"/>
-
-                                        <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto">
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Repository Owner:"
-                                                      VerticalAlignment="Center" Margin="0,0,10,10"/>
-                                            <TextBox Grid.Row="0" Grid.Column="1"
-                                                    Text="{Binding RepositoryOwner}"
-                                                    AutomationProperties.AutomationId="settings.dictionary-updates.repository-owner"
-                                                    AutomationProperties.Name="Repository owner"
-                                                    Watermark="e.g., fsnow"
-                                                    Margin="0,0,0,10"/>
-
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Repository Name:"
-                                                      VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <TextBox Grid.Row="1" Grid.Column="1"
-                                                    Text="{Binding RepositoryName}"
-                                                    AutomationProperties.AutomationId="settings.dictionary-updates.repository-name"
-                                                    AutomationProperties.Name="Repository name"
-                                                    Watermark="e.g., cst-dictionaries"/>
-                                        </Grid>
-
-                                        <Button Content="Restore Defaults"
-                                               Command="{Binding RestoreDefaultsCommand}"
-                                               AutomationProperties.AutomationId="settings.dictionary-updates.restore-defaults"
-                                               Margin="0,15,0,0"
-                                               HorizontalAlignment="Left"
-                                               ToolTip.Tip="Reset the repository fields to their known-good defaults"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </DataTemplate>
-
-                        <!-- Dictionary Template (#479): Sources (enable/order) + Updates, folded into one category -->
-                        <DataTemplate DataType="vm:DictionaryCategoryViewModel">
-                            <StackPanel>
-                                <!-- Sources group: which dictionaries show in the panel picker, and their order -->
-                                <Border Classes="SettingGroup">
-                                    <StackPanel DataContext="{Binding Sources}">
-                                        <TextBlock Text="Sources" Classes="SettingLabel"/>
-                                        <TextBlock Text="Choose which dictionaries appear in the dictionary panel and their order. The first enabled source is the default. Uncheck a source to hide it; use the arrows to reorder."
-                                                  Classes="SettingDescription"/>
-
-                                        <ItemsControl ItemsSource="{Binding Rows}" Margin="0,10,0,0"
-                                                      AutomationProperties.AutomationId="settings.dictionary.sources">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:DictionarySourceRowViewModel">
-                                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,3">
-                                                        <CheckBox Grid.Column="0"
-                                                                 IsChecked="{Binding Enabled}"
-                                                                 IsEnabled="{Binding CanDisable}"
-                                                                 Content="{Binding DisplayName}"
-                                                                 VerticalAlignment="Center"/>
-                                                        <Button Grid.Column="2" Content="&#x25B2;"
-                                                               Command="{Binding MoveUpCommand}"
-                                                               AutomationProperties.Name="{Binding DisplayName, StringFormat='Move {0} up'}"
-                                                               IsEnabled="{Binding CanMoveUp}"
-                                                               Padding="8,2" Margin="0,0,4,0"
-                                                               ToolTip.Tip="Move up"/>
-                                                        <Button Grid.Column="3" Content="&#x25BC;"
-                                                               Command="{Binding MoveDownCommand}"
-                                                               AutomationProperties.Name="{Binding DisplayName, StringFormat='Move {0} down'}"
-                                                               IsEnabled="{Binding CanMoveDown}"
-                                                               Padding="8,2"
-                                                               ToolTip.Tip="Move down"/>
-                                                    </Grid>
+                                        <!-- Script List -->
+                                        <!-- No fixed Height: the Grid row sizes to the settings panel on
+                                             the right, so the picker stretches to match it and shows as
+                                             many of the 14 scripts as the panel is tall, instead of
+                                             four in a 200px box with empty space beneath. MinHeight
+                                             keeps it usable if the right-hand panel ever shrinks. -->
+                                        <ListBox Grid.Column="0"
+                                                ItemsSource="{Binding ScriptFontSettings}"
+                                                AutomationProperties.AutomationId="settings.appearance.scripts"
+                                                AutomationProperties.Name="Pali scripts"
+                                                SelectedItem="{Binding SelectedScript}"
+                                                MinHeight="200"
+                                                VerticalAlignment="Stretch">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ScriptFontSettingViewModel">
+                                                    <TextBlock Text="{Binding ScriptName}"/>
                                                 </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
+                                            </ListBox.ItemTemplate>
+                                            <!-- Compact rows: the template's own padding stacked on top
+                                                 of the Fluent ListBoxItem default, making each script
+                                                 ~3 lines tall. Trimmed so all fourteen fit without
+                                                 scrolling at the default dialog size. -->
+                                            <ListBox.Styles>
+                                                <Style Selector="ListBoxItem" x:DataType="vm:ScriptFontSettingViewModel">
+                                                    <Setter Property="Padding" Value="10,4"/>
+                                                    <Setter Property="MinHeight" Value="0"/>
+                                                    <!-- #862: as for the category list above. -->
+                                                    <Setter Property="AutomationProperties.Name" Value="{Binding ScriptName}"/>
+                                                </Style>
+                                            </ListBox.Styles>
+                                        </ListBox>
 
-                                <!-- Updates group: reuse the DpdUpdateSettingsViewModel template as-is -->
-                                <ContentControl Content="{Binding Updates}"/>
-                            </StackPanel>
-                        </DataTemplate>
+                                        <!-- Font Settings for Selected Script -->
+                                        <StackPanel Grid.Column="1" Margin="15,0,0,0">
+                                            <!-- No "Font settings for {script}" heading: with every script
+                                                 visible and highlighted in the list beside it, naming the
+                                                 selection again in the panel was redundant. -->
+                                            <TextBlock Text="Pali Fonts (UI)" FontWeight="SemiBold"
+                                                      Margin="0,0,0,6"/>
+                                            
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="80"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
+                                                          VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <!-- The two font pickers must line up: this one sized to
+                                                     its selected item while the book one stretched, so
+                                                     they read as unrelated controls. Both stretch now. -->
+                                                <DockPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,10">
+                                                    <ProgressBar IsIndeterminate="True"
+                                                                 IsVisible="{Binding SelectedScript.IsLoadingFonts}"
+                                                                 Width="100" Height="5"
+                                                                 VerticalAlignment="Center" Margin="10,0,0,0"
+                                                                 DockPanel.Dock="Right"/>
+                                                    <ComboBox ItemsSource="{Binding SelectedScript.AvailableFonts}"
+                                                              AutomationProperties.AutomationId="settings.appearance.ui-font"
+                                                              AutomationProperties.Name="Pali UI font"
+                                                              SelectedItem="{Binding SelectedScript.SelectedFontFamily}"
+                                                              IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"
+                                                              HorizontalAlignment="Stretch"/>
+                                                </DockPanel>
 
-                        <!-- AI Settings Template (#186).
+                                                <!-- #29: no installed font can draw this script. Said
+                                                     here because the picker still lists "System Default",
+                                                     so an otherwise-bare dropdown would look ordinary. -->
+                                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                                          IsVisible="{Binding SelectedScript.NoFontSupportsScript}"
+                                                          Text="No installed font can display this script. Install one to read texts in it."
+                                                          TextWrapping="Wrap"
+                                                          Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                          VerticalAlignment="Bottom" Margin="0,36,0,4"/>
 
-                             Sub-tabs rather than one long scroll (#691): connections, a catalogue of ~25
-                             named providers, and per-connection model lists do not fit under the switches
-                             they belong to. The master switch stays on the first tab, adjacent to what it
-                             gates, rather than becoming a left-nav row of its own. -->
-                        <DataTemplate DataType="vm:AiSettingsViewModel">
-                            <TabControl SelectedIndex="{Binding SelectedTab}"
-                                        AutomationProperties.AutomationId="settings.ai.tabs">
-                              <!-- Each tab scrolls its own body, so the strip above it never scrolls away (#986).
-                                   The category list on the left already behaved this way. -->
-                              <TabItem Header="General" AutomationProperties.AutomationId="settings.ai.tab.general">
-                                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                                <StackPanel Margin="0,12,0,0">
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="AI Features" Classes="SettingLabel"/>
-                                        <CheckBox IsChecked="{Binding AiEnabled}"
-                                                  AutomationProperties.AutomationId="settings.ai.enabled"
-                                                 Content="Enable AI Features"
-                                                 Margin="0,10,0,0"/>
-                                        <TextBlock Text="When off, all AI features are disabled."
-                                                  Classes="SettingDescription"/>
-                                    </StackPanel>
-                                </Border>
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:"
+                                                          VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <NumericUpDown Grid.Row="1" Grid.Column="1" 
+                                                              Value="{Binding SelectedScript.FontSize}"
+                                                              AutomationProperties.AutomationId="settings.appearance.ui-font-size"
+                                                              AutomationProperties.Name="Pali UI font size"
+                                                              Minimum="8" Maximum="32" Increment="1"
+                                                              Width="120" HorizontalAlignment="Left"
+                                                              Margin="0,0,0,10"/>
+                                                
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                                                          Text="Preview:" Margin="0,10,0,5"/>
+                                                <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                                                       BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                                       Background="{DynamicResource ControlFillColorDefaultBrush}" Padding="10" Height="60">
+                                                    <TextBlock Text="{Binding SelectedScript.PreviewText}"
+                                                              FontFamily="{Binding SelectedScript.EffectiveFontFamilyObject}"
+                                                              FontSize="{Binding SelectedScript.FontSize}"
+                                                              VerticalAlignment="Center"/>
+                                                </Border>
 
-                                <!-- The in-app assistant — surface B (#585).
-                                     FIRST after the master switch, and above the agent surfaces: it is the
-                                     one most readers will use, and the two tabs beside it are its
-                                     configuration. Deliberately NO temperature control — current Claude
-                                     models reject sampling parameters with a 400. -->
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="AI Assistant" Classes="SettingLabel"/>
+                                                <!-- System Default Font Information -->
+                                                <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                                                          Margin="0,8,0,0"
+                                                          FontSize="12"
+                                                          IsVisible="{Binding SelectedScript.SystemDefaultFontName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                    <Run Text="System Default font is "/>
+                                                    <Run Text="{Binding SelectedScript.SystemDefaultFontName}" FontWeight="Medium"/>
+                                                </TextBlock>
+                                            </Grid>
 
-                                        <CheckBox IsChecked="{Binding ChatEnabled}"
-                                                  AutomationProperties.AutomationId="settings.ai.assistant-enabled"
-                                                 IsEnabled="{Binding SubPermissionsEnabled}"
-                                                 Content="Enable the assistant"
-                                                 Margin="0,10,0,0"/>
+                                            <!-- #42: the BOOK face. Deliberately no size control - #574 gave
+                                                 every script the same stylesheet ladder, so per-script zoom
+                                                 (#572) is the only size, and it is judged against live text
+                                                 rather than typed here. The description carries the current
+                                                 zoom, which is also the only place in the app that reveals
+                                                 zoom is stored per script. -->
+                                            <TextBlock Text="Pali Fonts (Books)" FontWeight="SemiBold"
+                                                      Margin="0,18,0,6"/>
 
-                                        <!-- The protocol, the address, the model list and the key all moved to
-                                             the Providers and Models tabs, where they belong to a connection
-                                             rather than to the app (#691/#692/#693). What is left here is what
-                                             is genuinely one-per-app. -->
-                                        <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
-                                        <AutoCompleteBox Text="{Binding AnswerLanguage}"
-                                                         AutomationProperties.AutomationId="settings.ai.answer-language"
-                                                         AutomationProperties.Name="Answer language"
-                                                        ItemsSource="{Binding AnswerLanguageSuggestions}"
-                                                        IsEnabled="{Binding AssistantFieldsEnabled}"
-                                                        FilterMode="StartsWith"
-                                                        Width="320" HorizontalAlignment="Left"/>
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="80"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
 
-                                        <!-- Automatic compaction (#998). [fsnow]: "95%, but make this a setting",
-                                             in this dialog. Off is an unticked box, not "0 %": the setting
-                                             stores 0 for off, and the percentage is kept for when it is ticked
-                                             again. A model that publishes no context window never triggers it;
-                                             the Assistant says so under its answers once there is something to
-                                             summarise, so this row does not. -->
-                                        <!-- Two lines, not one sentence: as one horizontal row it was 639px against
-                                             a card 604px wide at the default window size (measured with Inter,
-                                             review of #1015). -->
-                                        <CheckBox IsChecked="{Binding AutoCompactEnabled}"
-                                                  IsEnabled="{Binding AssistantFieldsEnabled}"
-                                                  Content="Summarise earlier turns automatically"
-                                                  Margin="0,14,0,0"
-                                                  AutomationProperties.AutomationId="settings.ai.auto-compact"/>
-                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="28,6,0,0">
-                                            <TextBlock Text="At" VerticalAlignment="Center"/>
-                                            <!-- Integer parsing: a typed fraction is rejected like any other
-                                                 invalid entry, instead of showing one number and saving another. -->
-                                            <NumericUpDown Value="{Binding AutoCompactPercent}"
-                                                           LostFocus="OnAutoCompactPercentLostFocus"
-                                                           Minimum="1" Maximum="100" Increment="1"
-                                                           FormatString="0" ParsingNumberStyle="Integer"
-                                                           Width="110"
-                                                           VerticalAlignment="Center"
-                                                           AutomationProperties.AutomationId="settings.ai.auto-compact-percent"
-                                                           AutomationProperties.Name="Summarise automatically at this percent of the model's context window">
-                                                <NumericUpDown.IsEnabled>
-                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
-                                                        <Binding Path="AssistantFieldsEnabled"/>
-                                                        <Binding Path="AutoCompactEnabled"/>
-                                                    </MultiBinding>
-                                                </NumericUpDown.IsEnabled>
-                                            </NumericUpDown>
-                                            <TextBlock Text="% of the model's context window" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
+                                                          VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <ComboBox Grid.Row="0" Grid.Column="1"
+                                                          ItemsSource="{Binding SelectedScript.AvailableBookFonts}"
+                                                          AutomationProperties.AutomationId="settings.appearance.book-font"
+                                                          AutomationProperties.Name="Pali book font"
+                                                          SelectedItem="{Binding SelectedScript.SelectedBookFontFamily}"
+                                                          IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"
+                                                          HorizontalAlignment="Stretch"
+                                                          Margin="0,0,0,8"/>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                                          Text="{Binding SelectedScript.BookSizeDescription}"
+                                                          Classes="SettingDescription"
+                                                          TextWrapping="Wrap"/>
+                                            </Grid>
                                         </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+                    
+                    
+                    <!-- Advanced Settings Template -->
+                    <!-- Configuration Settings Template -->
+                    <DataTemplate DataType="vm:ConfigurationSettingsViewModel">
+                        <StackPanel>
+                            <Border Classes="SettingGroup" IsVisible="{Binding IsWindows}">
+                                <StackPanel>
+                                    <TextBlock Text="Graphics" Classes="SettingLabel"/>
+                                    <TextBlock Text="Hardware acceleration for the reader view. If book pages occasionally go blank until you click or select text (seen with some GPUs and in virtual machines), turn this off to use software rendering."
+                                              Classes="SettingDescription" TextWrapping="Wrap"/>
+                                    <CheckBox IsChecked="{Binding UseHardwareAcceleration}"
+                                              AutomationProperties.AutomationId="settings.configuration.hardware-acceleration"
+                                             Content="Use hardware acceleration (requires restart)"
+                                             Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Recent Books MRU (#44) -->
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="Recent Books" Classes="SettingLabel"/>
+                                    <TextBlock Text="The File → Open Recent menu lists books you have recently opened. Set how many it remembers (0 turns the list off)."
+                                              Classes="SettingDescription" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Spacing="10">
+                                        <TextBlock Text="Books to remember:" VerticalAlignment="Center"/>
+                                        <NumericUpDown Value="{Binding MaxRecentBooks}"
+                                                       AutomationProperties.AutomationId="settings.configuration.recent-books-count"
+                                                       AutomationProperties.Name="Books to remember"
+                                                      Minimum="0" Maximum="50" Increment="1"
+                                                      FormatString="0" Width="120"/>
+                                        <Button Content="Clear List"
+                                               Command="{Binding ClearRecentBooksCommand}"
+                                               AutomationProperties.AutomationId="settings.configuration.clear-recent-books"
+                                               VerticalAlignment="Center"
+                                               ToolTip.Tip="Empty the recent-books list now"/>
                                     </StackPanel>
-                                </Border>
+                                </StackPanel>
+                            </Border>
 
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Access for AI Clients" Classes="SettingLabel"/>
-                                        <!-- EACH SWITCH OWNS ITS SAMPLE. The two surfaces are alternatives - REST for a coding
-                                             agent, MCP for a chat client - and the sample that serves each sat below both,
-                                             leaving the reader to work out which belonged to what they had just enabled. -->
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="Configuration" Classes="SettingLabel"/>
+                                    <TextBlock Text="Settings are stored in JSON format"
+                                              Classes="SettingDescription"/>
 
-                                        <!-- REST surface (/v1): for code agents. -->
-                                        <CheckBox IsChecked="{Binding LocalApiEnabled}"
-                                                  AutomationProperties.AutomationId="settings.ai.local-api-enabled"
-                                                 IsEnabled="{Binding SubPermissionsEnabled}"
-                                                 Content="Run the local API server (Claude Code &amp; tool-calling agents)"
-                                                 Margin="0,10,0,0"/>
-
-                                        <Expander Header="Sample agent prompt" Margin="24,4,0,0"
-                                                  AutomationProperties.AutomationId="settings.ai.sample-prompt">
-                                            <StackPanel>
-                                                <TextBox Text="{Binding LocalApiSamplePrompt, Mode=OneWay}"
-                                                         AutomationProperties.AutomationId="settings.ai.sample-prompt-text"
-                                                         AutomationProperties.Name="Sample agent prompt"
-                                                        IsReadOnly="True"
-                                                        AcceptsReturn="True"
-                                                        TextWrapping="NoWrap"
-                                                        FontFamily="Consolas,Menlo,Courier New,monospace"
-                                                        MaxHeight="220"
-                                                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                                        ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-                                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                                    <Button Content="Copy sample prompt"
-                                                            AutomationProperties.AutomationId="settings.ai.copy-sample-prompt"
-                                                            Click="OnCopySamplePrompt"
-                                                            IsEnabled="{Binding SubPermissionsEnabled}"
-                                                            HorizontalAlignment="Left"/>
-                                                    <TextBlock Name="CopySampleConfirm" Text="Copied ✓"
-                                                              Foreground="{DynamicResource DockApplicationAccentBrushLow}"
-                                                              VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Expander>
-
-                                        <!-- MCP surface (/mcp): for chat clients, reached via the app's mcp-bridge relay. #280 -->
-                                        <CheckBox IsChecked="{Binding McpEnabled}"
-                                                  AutomationProperties.AutomationId="settings.ai.mcp-enabled"
-                                                 IsEnabled="{Binding SubPermissionsEnabled}"
-                                                 Content="Enable MCP access (Claude Desktop &amp; other chat clients)"
-                                                 Margin="0,10,0,0"/>
-
-                                        <!-- Copy sits at the bottom of the expander, matching the prompt above: the button
-                                             follows the thing it copies rather than preceding a collapsed panel. Clipboard is
-                                             done in code-behind since the view model has no TopLevel. -->
-                                        <Expander Header="Sample MCP configuration" Margin="24,4,0,0"
-                                                  AutomationProperties.AutomationId="settings.ai.sample-mcp">
-                                            <StackPanel>
-                                                <TextBox Text="{Binding McpClientConfigJson, Mode=OneWay}"
-                                                         AutomationProperties.AutomationId="settings.ai.sample-mcp-text"
-                                                         AutomationProperties.Name="Sample MCP configuration"
-                                                        IsReadOnly="True"
-                                                        AcceptsReturn="True"
-                                                        TextWrapping="NoWrap"
-                                                        FontFamily="Consolas,Menlo,Courier New,monospace"
-                                                        MaxHeight="220"
-                                                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                                        ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-                                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                                    <Button Content="Copy MCP configuration"
-                                                            AutomationProperties.AutomationId="settings.ai.copy-mcp-config"
-                                                            Click="OnCopyMcpConfig"
-                                                            IsEnabled="{Binding SubPermissionsEnabled}"
-                                                            HorizontalAlignment="Left"/>
-                                                    <TextBlock Name="CopyMcpConfirm" Text="Copied ✓"
-                                                              Foreground="{DynamicResource DockApplicationAccentBrushLow}"
-                                                              VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Expander>
-
-                                        <!-- Cross-cutting capability: navigate/highlight is offered over BOTH surfaces, so this
-                                             is enabled whenever either one is on (RemoteControlEnabled). #440 -->
-                                        <CheckBox IsChecked="{Binding AllowRemoteControl}"
-                                                  AutomationProperties.AutomationId="settings.ai.allow-remote-control"
-                                                 IsEnabled="{Binding RemoteControlEnabled}"
-                                                 Content="Allow agents to drive the reader (navigate and highlight)"
-                                                 Margin="0,10,0,0"/>
-
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <TextBlock Text="Settings file: " VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SettingsFilePath}"
+                                                  FontFamily="Consolas,Courier New,monospace"
+                                                  VerticalAlignment="Center"/>
                                     </StackPanel>
-                                </Border>
+
+                                    <Button Content="Open Settings Folder"
+                                           Command="{Binding OpenSettingsFileCommand}"
+                                           AutomationProperties.AutomationId="settings.configuration.open-settings-folder"
+                                           Margin="0,10,0,0"
+                                           HorizontalAlignment="Left"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+
+                    <!-- XML Data Updates Settings Template -->
+                    <DataTemplate DataType="vm:XmlUpdateSettingsViewModel">
+                        <StackPanel>
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="Tipitaka Updates" Classes="SettingLabel"/>
+                                    <TextBlock Text="Configure automatic updates for Tipitaka XML files from GitHub" 
+                                              Classes="SettingDescription"/>
+                                    
+                                    <CheckBox IsChecked="{Binding EnableAutomaticUpdates}" 
+                                              AutomationProperties.AutomationId="settings.xml-updates.enabled"
+                                             Content="Enable automatic updates" 
+                                             Margin="0,10,0,15"/>
+                                    
+                                    <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Repository Owner:"
+                                                  VerticalAlignment="Center" Margin="0,0,10,10"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1"
+                                                Text="{Binding XmlRepositoryOwner}"
+                                                AutomationProperties.AutomationId="settings.xml-updates.repository-owner"
+                                                AutomationProperties.Name="Repository owner"
+                                                Watermark="e.g., VipassanaTech"
+                                                Margin="0,0,0,10"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Repository Name:"
+                                                  VerticalAlignment="Center" Margin="0,0,10,10"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                Text="{Binding XmlRepositoryName}"
+                                                AutomationProperties.AutomationId="settings.xml-updates.repository-name"
+                                                AutomationProperties.Name="Repository name"
+                                                Watermark="e.g., tipitaka-xml"
+                                                Margin="0,0,0,10"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Repository Path:"
+                                                  VerticalAlignment="Center" Margin="0,0,10,10"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1"
+                                                Text="{Binding XmlRepositoryPath}"
+                                                AutomationProperties.AutomationId="settings.xml-updates.repository-path"
+                                                AutomationProperties.Name="Repository path"
+                                                Watermark="e.g., deva master (leave empty for root)"
+                                                Margin="0,0,0,10"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Branch:"
+                                                  VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1"
+                                                Text="{Binding XmlRepositoryBranch}"
+                                                AutomationProperties.AutomationId="settings.xml-updates.repository-branch"
+                                                AutomationProperties.Name="Repository branch"
+                                                Watermark="e.g., main"/>
+                                    </Grid>
+
+                                    <Button Content="Restore Defaults"
+                                           Command="{Binding RestoreDefaultsCommand}"
+                                           AutomationProperties.AutomationId="settings.xml-updates.restore-defaults"
+                                           Margin="0,15,0,0"
+                                           HorizontalAlignment="Left"
+                                           ToolTip.Tip="Reset the repository fields to their known-good defaults"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+
+                    <!-- Dictionary Data Updates Template (#468) -->
+                    <DataTemplate DataType="vm:DpdUpdateSettingsViewModel">
+                        <StackPanel>
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="Dictionary Updates" Classes="SettingLabel"/>
+                                    <TextBlock Text="Configure automatic updates for the downloadable dictionary data (DPD, DPPN) from GitHub. Installed dictionaries keep working with this off."
+                                              Classes="SettingDescription"/>
+
+                                    <CheckBox IsChecked="{Binding EnableAutomaticUpdates}"
+                                              AutomationProperties.AutomationId="settings.dictionary-updates.enabled"
+                                             Content="Enable automatic updates"
+                                             Margin="0,10,0,15"/>
+
+                                    <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Repository Owner:"
+                                                  VerticalAlignment="Center" Margin="0,0,10,10"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1"
+                                                Text="{Binding RepositoryOwner}"
+                                                AutomationProperties.AutomationId="settings.dictionary-updates.repository-owner"
+                                                AutomationProperties.Name="Repository owner"
+                                                Watermark="e.g., fsnow"
+                                                Margin="0,0,0,10"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Repository Name:"
+                                                  VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                Text="{Binding RepositoryName}"
+                                                AutomationProperties.AutomationId="settings.dictionary-updates.repository-name"
+                                                AutomationProperties.Name="Repository name"
+                                                Watermark="e.g., cst-dictionaries"/>
+                                    </Grid>
+
+                                    <Button Content="Restore Defaults"
+                                           Command="{Binding RestoreDefaultsCommand}"
+                                           AutomationProperties.AutomationId="settings.dictionary-updates.restore-defaults"
+                                           Margin="0,15,0,0"
+                                           HorizontalAlignment="Left"
+                                           ToolTip.Tip="Reset the repository fields to their known-good defaults"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+
+                    <!-- Dictionary Template (#479): Sources (enable/order) + Updates, folded into one category -->
+                    <DataTemplate DataType="vm:DictionaryCategoryViewModel">
+                        <StackPanel>
+                            <!-- Sources group: which dictionaries show in the panel picker, and their order -->
+                            <Border Classes="SettingGroup">
+                                <StackPanel DataContext="{Binding Sources}">
+                                    <TextBlock Text="Sources" Classes="SettingLabel"/>
+                                    <TextBlock Text="Choose which dictionaries appear in the dictionary panel and their order. The first enabled source is the default. Uncheck a source to hide it; use the arrows to reorder."
+                                              Classes="SettingDescription"/>
+
+                                    <ItemsControl ItemsSource="{Binding Rows}" Margin="0,10,0,0"
+                                                  AutomationProperties.AutomationId="settings.dictionary.sources">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:DictionarySourceRowViewModel">
+                                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,3">
+                                                    <CheckBox Grid.Column="0"
+                                                             IsChecked="{Binding Enabled}"
+                                                             IsEnabled="{Binding CanDisable}"
+                                                             Content="{Binding DisplayName}"
+                                                             VerticalAlignment="Center"/>
+                                                    <Button Grid.Column="2" Content="&#x25B2;"
+                                                           Command="{Binding MoveUpCommand}"
+                                                           AutomationProperties.Name="{Binding DisplayName, StringFormat='Move {0} up'}"
+                                                           IsEnabled="{Binding CanMoveUp}"
+                                                           Padding="8,2" Margin="0,0,4,0"
+                                                           ToolTip.Tip="Move up"/>
+                                                    <Button Grid.Column="3" Content="&#x25BC;"
+                                                           Command="{Binding MoveDownCommand}"
+                                                           AutomationProperties.Name="{Binding DisplayName, StringFormat='Move {0} down'}"
+                                                           IsEnabled="{Binding CanMoveDown}"
+                                                           Padding="8,2"
+                                                           ToolTip.Tip="Move down"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Updates group: reuse the DpdUpdateSettingsViewModel template as-is -->
+                            <ContentControl Content="{Binding Updates}"/>
+                        </StackPanel>
+                    </DataTemplate>
+
+                    <!-- AI Settings Template (#186).
+
+                         Sub-tabs rather than one long scroll (#691): connections, a catalogue of ~25
+                         named providers, and per-connection model lists do not fit under the switches
+                         they belong to. The master switch stays on the first tab, adjacent to what it
+                         gates, rather than becoming a left-nav row of its own. -->
+                    <DataTemplate DataType="vm:AiSettingsViewModel">
+                        <TabControl SelectedIndex="{Binding SelectedTab}"
+                                    AutomationProperties.AutomationId="settings.ai.tabs">
+                          <!-- Each tab scrolls its own body, so the strip above it never scrolls away (#986).
+                               The category list on the left already behaved this way. -->
+                          <TabItem Header="General" AutomationProperties.AutomationId="settings.ai.tab.general">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Margin="0,12,0,0">
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="AI Features" Classes="SettingLabel"/>
+                                    <CheckBox IsChecked="{Binding AiEnabled}"
+                                              AutomationProperties.AutomationId="settings.ai.enabled"
+                                             Content="Enable AI Features"
+                                             Margin="0,10,0,0"/>
+                                    <TextBlock Text="When off, all AI features are disabled."
+                                              Classes="SettingDescription"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- The in-app assistant — surface B (#585).
+                                 FIRST after the master switch, and above the agent surfaces: it is the
+                                 one most readers will use, and the two tabs beside it are its
+                                 configuration. Deliberately NO temperature control — current Claude
+                                 models reject sampling parameters with a 400. -->
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="AI Assistant" Classes="SettingLabel"/>
+
+                                    <CheckBox IsChecked="{Binding ChatEnabled}"
+                                              AutomationProperties.AutomationId="settings.ai.assistant-enabled"
+                                             IsEnabled="{Binding SubPermissionsEnabled}"
+                                             Content="Enable the assistant"
+                                             Margin="0,10,0,0"/>
+
+                                    <!-- The protocol, the address, the model list and the key all moved to
+                                         the Providers and Models tabs, where they belong to a connection
+                                         rather than to the app (#691/#692/#693). What is left here is what
+                                         is genuinely one-per-app. -->
+                                    <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
+                                    <AutoCompleteBox Text="{Binding AnswerLanguage}"
+                                                     AutomationProperties.AutomationId="settings.ai.answer-language"
+                                                     AutomationProperties.Name="Answer language"
+                                                    ItemsSource="{Binding AnswerLanguageSuggestions}"
+                                                    IsEnabled="{Binding AssistantFieldsEnabled}"
+                                                    FilterMode="StartsWith"
+                                                    Width="320" HorizontalAlignment="Left"/>
+
+                                    <!-- Automatic compaction (#998). [fsnow]: "95%, but make this a setting",
+                                         in this dialog. Off is an unticked box, not "0 %": the setting
+                                         stores 0 for off, and the percentage is kept for when it is ticked
+                                         again. A model that publishes no context window never triggers it;
+                                         the Assistant says so under its answers once there is something to
+                                         summarise, so this row does not. -->
+                                    <!-- Two lines, not one sentence: as one horizontal row it was 639px against
+                                         a card 604px wide at the default window size (measured with Inter,
+                                         review of #1015). -->
+                                    <CheckBox IsChecked="{Binding AutoCompactEnabled}"
+                                              IsEnabled="{Binding AssistantFieldsEnabled}"
+                                              Content="Summarise earlier turns automatically"
+                                              Margin="0,14,0,0"
+                                              AutomationProperties.AutomationId="settings.ai.auto-compact"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="28,6,0,0">
+                                        <TextBlock Text="At" VerticalAlignment="Center"/>
+                                        <!-- Integer parsing: a typed fraction is rejected like any other
+                                             invalid entry, instead of showing one number and saving another. -->
+                                        <NumericUpDown Value="{Binding AutoCompactPercent}"
+                                                       LostFocus="OnAutoCompactPercentLostFocus"
+                                                       Minimum="1" Maximum="100" Increment="1"
+                                                       FormatString="0" ParsingNumberStyle="Integer"
+                                                       Width="110"
+                                                       VerticalAlignment="Center"
+                                                       AutomationProperties.AutomationId="settings.ai.auto-compact-percent"
+                                                       AutomationProperties.Name="Summarise automatically at this percent of the model's context window">
+                                            <NumericUpDown.IsEnabled>
+                                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                    <Binding Path="AssistantFieldsEnabled"/>
+                                                    <Binding Path="AutoCompactEnabled"/>
+                                                </MultiBinding>
+                                            </NumericUpDown.IsEnabled>
+                                        </NumericUpDown>
+                                        <TextBlock Text="% of the model's context window" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="Access for AI Clients" Classes="SettingLabel"/>
+                                    <!-- EACH SWITCH OWNS ITS SAMPLE. The two surfaces are alternatives - REST for a coding
+                                         agent, MCP for a chat client - and the sample that serves each sat below both,
+                                         leaving the reader to work out which belonged to what they had just enabled. -->
+
+                                    <!-- REST surface (/v1): for code agents. -->
+                                    <CheckBox IsChecked="{Binding LocalApiEnabled}"
+                                              AutomationProperties.AutomationId="settings.ai.local-api-enabled"
+                                             IsEnabled="{Binding SubPermissionsEnabled}"
+                                             Content="Run the local API server (Claude Code &amp; tool-calling agents)"
+                                             Margin="0,10,0,0"/>
+
+                                    <Expander Header="Sample agent prompt" Margin="24,4,0,0"
+                                              AutomationProperties.AutomationId="settings.ai.sample-prompt">
+                                        <StackPanel>
+                                            <TextBox Text="{Binding LocalApiSamplePrompt, Mode=OneWay}"
+                                                     AutomationProperties.AutomationId="settings.ai.sample-prompt-text"
+                                                     AutomationProperties.Name="Sample agent prompt"
+                                                    IsReadOnly="True"
+                                                    AcceptsReturn="True"
+                                                    TextWrapping="NoWrap"
+                                                    FontFamily="Consolas,Menlo,Courier New,monospace"
+                                                    MaxHeight="220"
+                                                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                    ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                <Button Content="Copy sample prompt"
+                                                        AutomationProperties.AutomationId="settings.ai.copy-sample-prompt"
+                                                        Click="OnCopySamplePrompt"
+                                                        IsEnabled="{Binding SubPermissionsEnabled}"
+                                                        HorizontalAlignment="Left"/>
+                                                <TextBlock Name="CopySampleConfirm" Text="Copied ✓"
+                                                          Foreground="{DynamicResource DockApplicationAccentBrushLow}"
+                                                          VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Expander>
+
+                                    <!-- MCP surface (/mcp): for chat clients, reached via the app's mcp-bridge relay. #280 -->
+                                    <CheckBox IsChecked="{Binding McpEnabled}"
+                                              AutomationProperties.AutomationId="settings.ai.mcp-enabled"
+                                             IsEnabled="{Binding SubPermissionsEnabled}"
+                                             Content="Enable MCP access (Claude Desktop &amp; other chat clients)"
+                                             Margin="0,10,0,0"/>
+
+                                    <!-- Copy sits at the bottom of the expander, matching the prompt above: the button
+                                         follows the thing it copies rather than preceding a collapsed panel. Clipboard is
+                                         done in code-behind since the view model has no TopLevel. -->
+                                    <Expander Header="Sample MCP configuration" Margin="24,4,0,0"
+                                              AutomationProperties.AutomationId="settings.ai.sample-mcp">
+                                        <StackPanel>
+                                            <TextBox Text="{Binding McpClientConfigJson, Mode=OneWay}"
+                                                     AutomationProperties.AutomationId="settings.ai.sample-mcp-text"
+                                                     AutomationProperties.Name="Sample MCP configuration"
+                                                    IsReadOnly="True"
+                                                    AcceptsReturn="True"
+                                                    TextWrapping="NoWrap"
+                                                    FontFamily="Consolas,Menlo,Courier New,monospace"
+                                                    MaxHeight="220"
+                                                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                    ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                <Button Content="Copy MCP configuration"
+                                                        AutomationProperties.AutomationId="settings.ai.copy-mcp-config"
+                                                        Click="OnCopyMcpConfig"
+                                                        IsEnabled="{Binding SubPermissionsEnabled}"
+                                                        HorizontalAlignment="Left"/>
+                                                <TextBlock Name="CopyMcpConfirm" Text="Copied ✓"
+                                                          Foreground="{DynamicResource DockApplicationAccentBrushLow}"
+                                                          VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Expander>
+
+                                    <!-- Cross-cutting capability: navigate/highlight is offered over BOTH surfaces, so this
+                                         is enabled whenever either one is on (RemoteControlEnabled). #440 -->
+                                    <CheckBox IsChecked="{Binding AllowRemoteControl}"
+                                              AutomationProperties.AutomationId="settings.ai.allow-remote-control"
+                                             IsEnabled="{Binding RemoteControlEnabled}"
+                                             Content="Allow agents to drive the reader (navigate and highlight)"
+                                             Margin="0,10,0,0"/>
 
                                 </StackPanel>
-                                </ScrollViewer>
-                              </TabItem>
+                            </Border>
 
-                              <TabItem Header="Providers" IsVisible="{Binding ShowConnectionTabs}"
-                                       AutomationProperties.AutomationId="settings.ai.tab.providers">
-                                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                                  <views:AiProvidersView DataContext="{Binding Connections}"
-                                                         Margin="0,12,0,0"/>
-                                </ScrollViewer>
-                              </TabItem>
-
-                              <TabItem Header="Models" IsVisible="{Binding ShowConnectionTabs}"
-                                       AutomationProperties.AutomationId="settings.ai.tab.models">
-                                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                                  <views:AiModelsView DataContext="{Binding Models}"
-                                                      Margin="0,12,0,0"/>
-                                </ScrollViewer>
-                              </TabItem>
-                            </TabControl>
-                        </DataTemplate>
-
-                        <!-- Developer Settings Template -->
-                        <DataTemplate DataType="vm:DeveloperSettingsViewModel">
-                            <StackPanel>
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Logging" Classes="SettingLabel"/>
-                                        <TextBlock Text="Configure application logging for debugging and troubleshooting" 
-                                                  Classes="SettingDescription"/>
-                                        
-                                        <StackPanel Margin="0,10,0,15">
-                                            <TextBlock Text="Log Level" Classes="SettingLabel"/>
-                                            <ComboBox ItemsSource="{Binding LogLevels}" 
-                                                      AutomationProperties.AutomationId="settings.developer.log-level"
-                                                      AutomationProperties.Name="Log level"
-                                                     SelectedItem="{Binding LogLevel}"
-                                                     Width="200" HorizontalAlignment="Left"/>
-                                            <TextBlock Text="Controls how much detail is written to log files" 
-                                                      Classes="SettingDescription"/>
-                                        </StackPanel>
-                                        
-                                        <Button Content="Open Logs Folder" 
-                                               Command="{Binding OpenLogsCommand}"
-                                               AutomationProperties.AutomationId="settings.developer.open-logs-folder"
-                                               Width="150" HorizontalAlignment="Left"/>
-                                        <TextBlock Text="Opens the folder containing application log files" 
-                                                  Classes="SettingDescription"/>
-                                        
-                                    </StackPanel>
-                                </Border>
                             </StackPanel>
-                        </DataTemplate>
-                        
-                    </ContentControl.DataTemplates>
-                </ContentControl>
-            </ScrollViewer>
+                            </ScrollViewer>
+                          </TabItem>
+
+                          <TabItem Header="Providers" IsVisible="{Binding ShowConnectionTabs}"
+                                   AutomationProperties.AutomationId="settings.ai.tab.providers">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                              <views:AiProvidersView DataContext="{Binding Connections}"
+                                                     Margin="0,12,0,0"/>
+                            </ScrollViewer>
+                          </TabItem>
+
+                          <TabItem Header="Models" IsVisible="{Binding ShowConnectionTabs}"
+                                   AutomationProperties.AutomationId="settings.ai.tab.models">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                              <views:AiModelsView DataContext="{Binding Models}"
+                                                  Margin="0,12,0,0"/>
+                            </ScrollViewer>
+                          </TabItem>
+                        </TabControl>
+                    </DataTemplate>
+
+                    <!-- Developer Settings Template -->
+                    <DataTemplate DataType="vm:DeveloperSettingsViewModel">
+                        <StackPanel>
+                            <Border Classes="SettingGroup">
+                                <StackPanel>
+                                    <TextBlock Text="Logging" Classes="SettingLabel"/>
+                                    <TextBlock Text="Configure application logging for debugging and troubleshooting" 
+                                              Classes="SettingDescription"/>
+                                    
+                                    <StackPanel Margin="0,10,0,15">
+                                        <TextBlock Text="Log Level" Classes="SettingLabel"/>
+                                        <ComboBox ItemsSource="{Binding LogLevels}" 
+                                                  AutomationProperties.AutomationId="settings.developer.log-level"
+                                                  AutomationProperties.Name="Log level"
+                                                 SelectedItem="{Binding LogLevel}"
+                                                 Width="200" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="Controls how much detail is written to log files" 
+                                                  Classes="SettingDescription"/>
+                                    </StackPanel>
+                                    
+                                    <Button Content="Open Logs Folder" 
+                                           Command="{Binding OpenLogsCommand}"
+                                           AutomationProperties.AutomationId="settings.developer.open-logs-folder"
+                                           Width="150" HorizontalAlignment="Left"/>
+                                    <TextBlock Text="Opens the folder containing application log files" 
+                                              Classes="SettingDescription"/>
+                                    
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+                    
+                </Panel.DataTemplates>
+
+                <ScrollViewer x:Name="SettingsScroll"
+                              IsVisible="{Binding !HasTabbedContent}"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                    <!-- Cap content to the scroll viewport width so long wrapping text (e.g. setting
+                         descriptions) wraps at the visible edge. The viewer measures content with
+                         unbounded width, so without this cap a panel sizes to its content's natural
+                         (unwrapped) width and overflows off the right of the window. The 20px padding
+                         lives on this ContentControl (inside its MaxWidth box), NOT on the ScrollViewer:
+                         the viewport width does not subtract the ScrollViewer's own padding, so padding
+                         there would push the capped content right and re-introduce the clip. -->
+                    <ContentControl x:Name="ScrolledHost"
+                                    Content="{Binding ScrolledContent}"
+                                    VerticalAlignment="Top"
+                                    HorizontalAlignment="Left"
+                                    Padding="20"
+                                    MaxWidth="{Binding #SettingsScroll.Viewport.Width}"/>
+                </ScrollViewer>
+
+                <!-- Not in a scroll viewer, so the panel's own width and height bound it: text wraps at
+                     the visible edge without a MaxWidth, and each tab's viewer gets a finite height. -->
+                <ContentControl x:Name="TabbedHost"
+                                Content="{Binding TabbedContent}"
+                                IsVisible="{Binding HasTabbedContent}"
+                                VerticalAlignment="Top"
+                                HorizontalAlignment="Left"
+                                Padding="20"/>
+            </Panel>
         </Grid>
     </Grid>
 </Window>

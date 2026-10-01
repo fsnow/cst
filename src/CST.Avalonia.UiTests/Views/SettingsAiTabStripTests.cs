@@ -1,8 +1,8 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -18,77 +18,128 @@ namespace CST.Avalonia.UiTests.Views;
 /// Settings → AI: the General / Providers / Models strip stays in view while a tab's body scrolls. (#986)
 ///
 /// <para>[fsnow]: "you can't scroll down and do a category switch — because the General/Provider/Model headings
-/// scroll out of view." The whole right-hand pane used to be one scroll viewer with the tab control inside it, so
-/// the strip scrolled away with the content. Now the window's viewer does not scroll the AI category
-/// (<see cref="SettingsViewModel.ContentScrollBarVisibility"/>), which bounds the tab control's height, and each
-/// tab scrolls its own body.</para>
+/// scroll out of view." AI is shown in <c>TabbedHost</c>, which does not scroll; each tab scrolls its own body.
+/// Every other category stays in <c>SettingsScroll</c>.</para>
 ///
-/// <para>The full <see cref="SettingsViewModel"/> needs app services, so the window's viewer is set here the way
-/// that binding sets it, and the AI content is placed directly.</para>
+/// <para><b>Switched the way the view model switches.</b> Selecting a category changes both hosts' content and
+/// visibility before one layout pass. The first version of this fix toggled the scroll viewer's own scrolling
+/// instead, and in that pass Avalonia left the content arranged at the previous category's size: the bottom of
+/// the General tab could not be reached (review of #1019). A test that set things up in a different order
+/// passed against that broken layout, so these compare each host's arranged size with its desired size, and
+/// check that the last control on the page can actually be scrolled into view.</para>
+///
+/// <para>The full <see cref="SettingsViewModel"/> needs app services, so the two hosts are set here as its
+/// <see cref="SettingsViewModel.ScrolledContent"/> / <see cref="SettingsViewModel.TabbedContent"/> /
+/// <see cref="SettingsViewModel.HasTabbedContent"/> set them.</para>
 /// </summary>
 public class SettingsAiTabStripTests
 {
     [AvaloniaFact]
-    public void Scrolling_a_tab_leaves_the_tab_strip_where_it_was()
+    public void Switching_to_AI_lays_it_out_at_its_own_size_and_the_strip_stays_while_General_scrolls()
     {
-        var (window, outer, tabs, body) = ShowAi(ScrollBarVisibility.Disabled);
+        var w = Open();
         try
         {
+            ShowScrolled(w, TallCategory());
+            ShowAi(w);
+
+            AssertArrangedAtDesiredSize(w.Tabbed);
+
+            var tabs = w.Tabbed.GetVisualDescendants().OfType<TabControl>().Single();
+            Assert.True(tabs.Bounds.Height > 0, "The tab control was laid out with no height.");
+
+            // The General tab's own viewer, by structure: the tab's content IS the viewer. Taking the first viewer
+            // found would pick up an unrelated one (a text box's) if this one were removed.
+            var body = Assert.IsType<ScrollViewer>(tabs.Items.OfType<TabItem>().First().Content);
             Assert.True(body.Extent.Height > body.Viewport.Height,
                 "Precondition: the General tab is taller than the window, so there is something to scroll.");
-            Assert.True(outer.Extent.Height <= outer.Viewport.Height + 0.5,
-                "The window's own viewer still has the AI category to scroll, so the strip will scroll with it.");
 
             var strip = tabs.GetVisualDescendants().OfType<TabItem>().First();
-            var before = strip.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            var stripY = strip.TranslatePoint(new Point(0, 0), w.Window)!.Value.Y;
 
-            body.Offset = new Vector(0, 200);
-            Pump(window);
+            body.Offset = new Vector(0, body.Extent.Height);
+            Pump(w.Window);
 
-            Assert.True(body.Offset.Y > 0, "The tab's own viewer did not scroll.");
-            Assert.Equal(before, strip.TranslatePoint(new Point(0, 0), window)!.Value.Y);
+            Assert.Equal(stripY, strip.TranslatePoint(new Point(0, 0), w.Window)!.Value.Y);
+
+            // The last control on the page must be inside the visible part of the tab's viewer at its end.
+            var last = body.GetVisualDescendants().OfType<CheckBox>().Last(c => c.IsEffectivelyVisible);
+            var lastBottom = last.TranslatePoint(new Point(0, last.Bounds.Height), w.Window)!.Value.Y;
+            var bodyBottom = body.TranslatePoint(new Point(0, body.Bounds.Height), w.Window)!.Value.Y;
+            Assert.True(lastBottom <= bodyBottom + 0.5,
+                $"The last control ends at y={lastBottom} but the tab's visible area ends at y={bodyBottom}: " +
+                "the bottom of the page cannot be reached.");
         }
         finally
         {
-            window.Close();
+            w.Window.Close();
         }
     }
 
-    // The contrast: with the window's viewer scrolling the category, as it did before, the whole tab control is
-    // in its extent - the arrangement the strip scrolled away in.
     [AvaloniaFact]
-    public void With_the_window_viewer_scrolling_the_tab_control_scrolls_inside_it()
+    public void Switching_back_from_AI_lays_the_other_category_out_at_its_own_size()
     {
-        var (window, outer, _, _) = ShowAi(ScrollBarVisibility.Auto);
+        var w = Open();
         try
         {
-            Assert.True(outer.Extent.Height > outer.Viewport.Height);
+            ShowAi(w);
+            ShowScrolled(w, TallCategory());
+
+            AssertArrangedAtDesiredSize(w.Scrolled);
+            Assert.True(w.Scroll.Extent.Height > w.Scroll.Viewport.Height,
+                "The other category no longer scrolls in the window's viewer.");
         }
         finally
         {
-            window.Close();
+            w.Window.Close();
         }
     }
 
-    private static (Window Window, ScrollViewer Outer, TabControl Tabs, ScrollViewer Body) ShowAi(ScrollBarVisibility outerMode)
+    private sealed record Hosts(Window Window, ScrollViewer Scroll, ContentControl Scrolled, ContentControl Tabbed);
+
+    private static Hosts Open()
+    {
+        var window = new SettingsWindow { Width = 900, Height = 600 };
+        window.Show();
+        Pump(window);
+        return new Hosts(window,
+            window.FindControl<ScrollViewer>("SettingsScroll")!,
+            window.FindControl<ContentControl>("ScrolledHost")!,
+            window.FindControl<ContentControl>("TabbedHost")!);
+    }
+
+    // As SettingsViewModel does on selecting a category: both hosts change before one layout pass.
+    private static void ShowAi(Hosts w)
     {
         var settings = new FakeSettings();
         settings.Settings.Ai.Enabled = true;
         settings.Settings.Ai.Chat.Enabled = true;
 
-        var window = new SettingsWindow { Width = 900, Height = 420 };
-        window.Show();
-        Pump(window);
+        w.Scrolled.Content = null;
+        w.Scroll.IsVisible = false;
+        w.Tabbed.Content = new AiSettingsViewModel(settings);
+        w.Tabbed.IsVisible = true;
+        Pump(w.Window);
+    }
 
-        var outer = window.FindControl<ScrollViewer>("SettingsScroll")!;
-        outer.VerticalScrollBarVisibility = outerMode;
-        var host = outer.GetVisualDescendants().OfType<ContentControl>().First(c => c.DataTemplates.Count > 3);
-        host.Content = new AiSettingsViewModel(settings);
-        Pump(window);
+    private static void ShowScrolled(Hosts w, Control category)
+    {
+        w.Tabbed.Content = null;
+        w.Tabbed.IsVisible = false;
+        w.Scrolled.Content = category;
+        w.Scroll.IsVisible = true;
+        Pump(w.Window);
+    }
 
-        var tabs = host.GetVisualDescendants().OfType<TabControl>().First();
-        var body = tabs.GetVisualDescendants().OfType<ScrollViewer>().First();
-        return (window, outer, tabs, body);
+    // Wider and taller than the window, like Pali Script Fonts: the case that was clipped after leaving AI.
+    private static Control TallCategory() => new Border { Width = 2000, Height = 1500 };
+
+    private static void AssertArrangedAtDesiredSize(Control host)
+    {
+        Assert.True(Math.Abs(host.Bounds.Width - host.DesiredSize.Width) < 0.5
+                    && Math.Abs(host.Bounds.Height - host.DesiredSize.Height) < 0.5,
+            $"{host.Name} is arranged at {host.Bounds.Size} but wants {host.DesiredSize}: it kept an earlier " +
+            "category's size, and part of the page is clipped.");
     }
 
     private static void Pump(Window window)

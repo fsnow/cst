@@ -7,7 +7,7 @@
 
     <!-- The Models tab (#692, #674).
 
-         One flat list of group headers and model rows, scrolled by the settings page's own scroll viewer.
+         One flat list of group headers and model rows, scrolled by the Models tab's own scroll viewer (#986).
          It was a height-capped ListBox, which virtualized but put a second scrolling region inside the
          first: two scrollbars, and a wheel whose effect depended on where the pointer happened to be.
 
