@@ -83,7 +83,8 @@ namespace CST.Avalonia.Views
         /// <para><b>Closing after Cancel: back where the reader was.</b> Nothing was added, so nothing moved to
         /// the top. This used to go to the top as well, which also brought the General / Providers / Models
         /// strip back into reach; the strip no longer scrolls away (#986), so that reason is gone and the
-        /// reader keeps their place in the catalogue. [suggestion]</para>
+        /// reader keeps their place in the catalogue. <b>[fsnow]</b>, asked whether Cancel should return the
+        /// reader to where they were: <i>"yes, this"</i> (2026-10-01).</para>
         /// </summary>
         private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
         {
