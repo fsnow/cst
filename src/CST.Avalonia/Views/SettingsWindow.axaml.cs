@@ -22,6 +22,7 @@ namespace CST.Avalonia.Views
         public SettingsWindow()
         {
             InitializeComponent();
+            ScrollPositionsAcrossActivation.Attach(this);
         }
 
         /// <summary>
