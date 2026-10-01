@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 
 namespace CST.Avalonia.Views;
@@ -10,15 +9,20 @@ namespace CST.Avalonia.Views;
 /// <summary>
 /// Keeps a window's scroll positions when the reader switches to another application and back. (#972)
 ///
-/// <para>[observed] Re-activating a window restores focus to its last-focused control, and
-/// <c>ScrollViewer.BringIntoViewOnFocusChange</c> (true by default) scrolls that control into view. Scrolling with
-/// the wheel never moves focus, so a reader who clicked the Providers search box and then wheeled down the list
-/// came back to find the list scrolled up to the box. [fsnow] reproduced it that way.</para>
+/// <para>[observed] Deactivation clears the window's focus; re-activation restores it to the last-focused control,
+/// and <c>ScrollViewer.BringIntoViewOnFocusChange</c> (true by default) scrolls that control into view. Scrolling
+/// with the wheel never moves focus, so a reader who clicked the Providers search box and then wheeled down the
+/// list came back to find the list scrolled up to the box. [fsnow] reproduced it that way.</para>
+///
+/// <para><b>Bracketing the jump, and only the jump.</b> Avalonia 11.3.6's <c>WindowBase.HandleActivated</c> raises
+/// <c>Activated</c>, THEN restores focus (whose bring-into-view is synchronous), THEN sets <c>IsActive</c>. So the
+/// offsets are noted in <c>Activated</c> and put back when <c>IsActive</c> turns true: nothing else happens in
+/// between. A scroll made while the window was inactive (a trackpad over a background window) is kept, and so is
+/// the scroll from the click that re-activates it, which arrives after. An earlier version noted the offsets on
+/// <c>Deactivated</c> and restored them in a posted job, and undid both (review of #1022).</para>
 ///
 /// <para><b>Restored, not disabled.</b> Turning BringIntoViewOnFocusChange off would also stop Tab from scrolling
-/// to a control below the visible area. Instead the offsets are noted when the window loses activation and put
-/// back after it regains it - posted at Background priority, so they land after the focus restore and its scroll.
-/// Only a viewer whose offset actually moved is touched.</para>
+/// to a control below the visible area.</para>
 /// </summary>
 public sealed class ScrollPositionsAcrossActivation
 {
@@ -27,8 +31,11 @@ public sealed class ScrollPositionsAcrossActivation
     public static void Attach(Window window)
     {
         var keeper = new ScrollPositionsAcrossActivation();
-        window.Deactivated += (_, _) => keeper.Save(window);
-        window.Activated += (_, _) => Dispatcher.UIThread.Post(keeper.Restore, DispatcherPriority.Background);
+        window.Activated += (_, _) => keeper.Save(window);
+        window.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowBase.IsActiveProperty && e.GetNewValue<bool>()) keeper.Restore();
+        };
     }
 
     public void Save(Visual root)
