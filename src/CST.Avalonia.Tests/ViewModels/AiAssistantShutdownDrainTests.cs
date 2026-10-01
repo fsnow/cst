@@ -440,4 +440,41 @@ public class AiAssistantShutdownDrainTests
         vm.StopCommand.Execute().Subscribe();
         await pending;
     }
+
+    /// <summary>A resolver that answers normally until its Nth call, then throws. Resolve is called once at
+    /// construction, once before the turn is sent, and once more in <c>AskAsync</c>'s <c>finally</c> — the third
+    /// is the one that matters here.</summary>
+    private sealed class ResolverThatThrowsOnCall : IChatProviderResolver
+    {
+        private readonly int _throwOn;
+        private int _calls;
+
+        internal ResolverThatThrowsOnCall(int throwOn) => _throwOn = throwOn;
+
+        public ChatProviderResolution? Resolve(out string? problem)
+        {
+            problem = null;
+            if (++_calls == _throwOn) throw new InvalidOperationException("the resolver failed");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A throw from the readiness re-check in <c>AskAsync</c>'s <c>finally</c> must not leak the turn's work count:
+    /// a leaked count makes every later Quit wait out the whole bound for work that finished long ago. (review)
+    /// </summary>
+    [Fact]
+    public async Task A_failure_after_the_turn_does_not_leave_the_drain_waiting()
+    {
+        var store = new FakeStore();
+        var stateService = new Moq.Mock<IApplicationStateService>();
+        stateService.SetupGet(x => x.Current).Returns(new ApplicationState());
+        var vm = new AiAssistantViewModel(
+            Answering(Said("An answer.")), new StubReaderState(), new ResolverThatThrowsOnCall(3), null,
+            null, null, store, stateService.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => vm.AskAsync(AiTask.Explain));
+
+        Assert.True(await vm.DrainAsync(Short));
+    }
 }
