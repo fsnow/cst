@@ -124,6 +124,14 @@ All 14 scripts are validated by round-trip conversion (Deva → IPE → Script �
 (~0.8%) on vowel-hiatus and consonant + аа patterns — an inherent limitation of the current
 Cyrillic transliteration scheme, not a converter bug.
 
+This tool names the script at every step, so the read-back always goes through the script's own
+converter. `AutoDetectRoundTripTests` in `CST.Avalonia.Tests` reads these same two word lists and runs
+the read-back through `Any2Ipe` instead, which picks a converter per character from its Unicode block —
+the path search and the dictionary use. That catches a converter writing a character outside its own
+script's block, which a script-explicit round trip cannot: #1025 (Gurmukhi va written as the Gujarati
+letter U+0AB5) passed here and failed 330 of 2,364 words there. Cyrillic is excluded there for the
+reason above.
+
 ## Tools
 
 The project includes four testing modes:

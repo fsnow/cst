@@ -48,5 +48,42 @@ namespace CST.Conversion
 
             return script;
         }
+
+        // U+0AB5 is the Gujarati letter va. Builds before #1025 wrote it for Gurmukhi va too, so it turns up
+        // inside Gurmukhi words in text copied or stored from them.
+        private const char GujaratiVa = '\u0AB5';
+
+        /// <summary>
+        /// Classifies <c>s[i]</c> for run-splitting, as <see cref="GetScript(char)"/> does, except that a
+        /// Gujarati va (U+0AB5) standing in a Gurmukhi word is classed as Gurmukhi. Builds before #1025
+        /// wrote U+0AB5 for Gurmukhi va; classed by its block, it split the Gurmukhi run and left the vowel
+        /// sign or virama after it in a run with no consonant (<c>vAreti</c> read back as <c>vaAreti</c>).
+        ///
+        /// <para>The character after it decides: a Gurmukhi character means Gurmukhi, a Gujarati one means
+        /// Gujarati, so genuine Gujarati text is unaffected. With neither (end of text, a space, Latin) it
+        /// joins the run before it. Zero-width joiners are skipped when looking ahead. Both converters read
+        /// U+0AB5 as va, so the choice only decides which run it is converted with.</para>
+        /// </summary>
+        public static Script GetScript(string s, int i, Script lastScript)
+        {
+            char c = s[i];
+            Script script = GetScript(c);
+            if (c != GujaratiVa)
+                return script;
+
+            for (int j = i + 1; j < s.Length; j++)
+            {
+                Script next = GetScript(s[j]);
+                if (next == Script.Unknown)
+                    continue;
+                if (next == Script.Gurmukhi)
+                    return Script.Gurmukhi;
+                if (next == Script.Gujarati)
+                    return Script.Gujarati;
+                break;
+            }
+
+            return lastScript == Script.Gurmukhi ? Script.Gurmukhi : script;
+        }
     }
 }

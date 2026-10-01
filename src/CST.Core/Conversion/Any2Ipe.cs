@@ -12,9 +12,10 @@ namespace CST.Conversion
             var run = new StringBuilder();
             Script lastScript = Script.Latin;
 
-            foreach (char c in str.ToCharArray())
+            for (int i = 0; i < str.Length; i++)
             {
-                Script cScript = ScriptDetector.GetScript(c);
+                char c = str[i];
+                Script cScript = ScriptDetector.GetScript(str, i, lastScript); // context-aware for U+0AB5 (#1025)
                 if (cScript == lastScript || cScript == Script.Unknown)
                     run.Append(c);
                 else
