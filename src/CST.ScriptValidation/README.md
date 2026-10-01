@@ -125,12 +125,19 @@ All 14 scripts are validated by round-trip conversion (Deva → IPE → Script �
 Cyrillic transliteration scheme, not a converter bug.
 
 This tool names the script at every step, so the read-back always goes through the script's own
-converter. `AutoDetectRoundTripTests` in `CST.Avalonia.Tests` reads these same two word lists and runs
-the read-back through `Any2Ipe` instead, which picks a converter per character from its Unicode block —
-the path search and the dictionary use. That catches a converter writing a character outside its own
-script's block, which a script-explicit round trip cannot: #1025 (Gurmukhi va written as the Gujarati
-letter U+0AB5) passed here and failed 330 of 2,364 words there. Cyrillic is excluded there for the
-reason above.
+converter. `AutoDetectRoundTripTests` in `CST.Avalonia.Tests` reads these same two word lists and checks
+two things this tool cannot, for every display script except Cyrillic (excluded for the reason above):
+
+- **Auto-detect round trip.** The read-back goes through `Any2Ipe`, the path search and the dictionary
+  use. `Any2Ipe` splits text into runs by each character's Unicode block (`ScriptDetector`; the one
+  exception is U+0AB5, classed by context since #1025) and converts each run with that script's
+  converter. #1025 (Gurmukhi va written as the Gujarati letter U+0AB5) passed this tool and failed
+  330 of 2,364 words there.
+- **Output stays in its own block.** Every character a script's conversion writes must belong to
+  that script's Unicode block, apart from an explicit allow-list (ASCII punctuation, ZWJ/ZWNJ, the
+  dandas, and the non-Pāli Devanagari letters that several converters pass through). This is the
+  property #1025 broke. The round trip alone no longer guards it, because `Guru2Deva` still reads
+  U+0AB5 so older Gurmukhi text reads back.
 
 ## Tools
 

@@ -57,6 +57,66 @@ public class AutoDetectRoundTripTests
             + string.Join("\n", misses.Take(40)));
     }
 
+    // Characters any script's output may carry outside its own block: ASCII that is not a letter (the word
+    // lists hold a few compounds joined with '+' or '='), the zero-width joiners (Devanagari and Sinhala
+    // write ZWJ/ZWNJ in conjuncts; ScriptDetector keeps them in the surrounding run), and the Devanagari
+    // danda and double danda, which every converter passes through as sentence punctuation.
+    private static bool IsShared(char ch) =>
+        (ch < 0x80 && !char.IsAsciiLetter(ch))
+        || ch == '\u200C' || ch == '\u200D'
+        || ch == '\u0964' || ch == '\u0965';
+
+    // [observed] 2026-10-01: these converters have no mapping for the Devanagari letters that are not Pali -
+    // vocalic r (U+090B), independent ai/au (U+0910, U+0914) and the ai/au vowel signs (U+0948, U+094C) -
+    // so they pass them through as Devanagari. The ScriptValidation word lists hold them in 41 words. They still round-trip,
+    // because Any2Ipe converts the Devanagari run, but the output does cross blocks. Listed here per script
+    // so the leak stays visible and nothing else is let through; whether to map them is the maintainer's call.
+    private static readonly char[] NonPaliDevanagari = { '\u090B', '\u0910', '\u0914', '\u0948', '\u094C' };
+
+    private static readonly Dictionary<Script, char[]> KnownPassThrough = new()
+    {
+        [Script.Gujarati] = NonPaliDevanagari,
+        [Script.Gurmukhi] = new[] { '\u090B' },
+        [Script.Khmer] = NonPaliDevanagari,
+        [Script.Latin] = NonPaliDevanagari,
+        [Script.Myanmar] = NonPaliDevanagari,
+        [Script.Sinhala] = NonPaliDevanagari,
+        [Script.Telugu] = NonPaliDevanagari,
+        [Script.Thai] = NonPaliDevanagari,
+        [Script.Tibetan] = NonPaliDevanagari,
+    };
+
+    /// <summary>
+    /// Every character a script's display conversion writes must be one <see cref="ScriptDetector"/> assigns
+    /// to that script (for Latin: one in no other script's block), or be in the explicit allow-lists above.
+    /// This is the property #1025 broke - Gurmukhi output carried U+0AB5 from the Gujarati block - asserted
+    /// directly. The round trip above cannot guard it on its own: Guru2Deva still reads U+0AB5 for old text,
+    /// so writing it again would round-trip cleanly.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Scripts))]
+    public void EveryTestWord_OutputStaysInItsOwnScriptBlock(Script script)
+    {
+        var allowed = KnownPassThrough.TryGetValue(script, out var extra) ? extra : Array.Empty<char>();
+        var offenders = new SortedDictionary<char, string>();
+        foreach (var deva in Words.Value)
+        {
+            var ipe = ScriptConverter.Convert(deva, Script.Devanagari, Script.Ipe);
+            var shown = ScriptConverter.Convert(ipe, Script.Ipe, script);
+            foreach (var ch in shown)
+            {
+                if (ScriptDetector.GetScript(ch) == script || IsShared(ch) || allowed.Contains(ch))
+                    continue;
+                if (!offenders.ContainsKey(ch))
+                    offenders[ch] = $"{Latn(ipe)} -> {Escape(shown)}";
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            $"{script}: output contains characters outside the {script} block:\n"
+            + string.Join("\n", offenders.Select(o => $"U+{(int)o.Key:X4} ({ScriptDetector.GetScript(o.Key)}) e.g. {o.Value}")));
+    }
+
     private static IReadOnlyList<string> LoadWords()
     {
         var dir = FindScriptValidationDir();

@@ -1,9 +1,14 @@
 namespace CST.Conversion
 {
     /// <summary>
-    /// Classifies a single character to its <see cref="Script"/> for run-splitting during script
+    /// Classifies characters to their <see cref="Script"/> for run-splitting during script
     /// auto-detection. Shared by <see cref="Any2Ipe"/> and <see cref="Any2Deva"/> so the two detection
     /// tables cannot drift (they previously had to be fixed in tandem — e.g. ZWJ/ZWNJ handling).
+    ///
+    /// <para><see cref="GetScript(char)"/> classifies one character by its Unicode block.
+    /// <see cref="GetScript(string, int, Script)"/>, which the run-splitters call, does the same for every
+    /// character but one: U+0AB5, the Gujarati va, is classed by the letters around it, because builds before
+    /// #1025 wrote it for Gurmukhi va and Gurmukhi text from them still carries it.</para>
     /// </summary>
     public static class ScriptDetector
     {
