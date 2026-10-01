@@ -2,7 +2,9 @@ using System;
 using System.ComponentModel;
 using System.Reactive;
 using System.Reactive.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -69,24 +71,43 @@ namespace CST.Avalonia.Views
         }
 
         /// <summary>
-        /// Puts the top of the tab back in view whenever the sheet opens or closes.
+        /// Where the tab is scrolled when the sheet opens and closes.
         ///
-        /// <para><b>Closing:</b> saving would otherwise leave the pane scrolled to wherever the reader was
-        /// when they reached the catalogue — the bottom — while the connection they just added is a row at
-        /// the very top. The add then reads as having done nothing, which is the confusion that made every
-        /// add open a sheet in the first place.</para>
+        /// <para><b>Opening: the top.</b> The sheet replaces the list inside the same scroll viewer, which keeps
+        /// the offset it had. Reaching Custom endpoint means scrolling to the bottom of ~166 providers, so the
+        /// form would arrive scrolled past its own first field.</para>
         ///
-        /// <para><b>Opening:</b> the sheet replaces the list inside the same scroll viewer, which keeps the
-        /// offset it had. Reaching Custom endpoint means scrolling to the bottom of ~166 providers, so the
-        /// form arrives scrolled past its own first field — the reader is looking at the Save button of a
-        /// form they have not seen the top of. Both directions are the same fix: a screen the reader has not
-        /// seen before starts at its beginning.</para>
+        /// <para><b>Closing after a save: the top.</b> The connection just added is a row at the very top;
+        /// left where the reader was in the catalogue, the add reads as having done nothing.</para>
+        ///
+        /// <para><b>Closing after Cancel: back where the reader was.</b> Nothing was added, so nothing moved to
+        /// the top. This used to go to the top as well, which also brought the General / Providers / Models
+        /// strip back into reach; the strip no longer scrolls away (#986), so that reason is gone and the
+        /// reader keeps their place in the catalogue. [suggestion]</para>
         /// </summary>
         private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName != nameof(AiConnectionsViewModel.IsListing)) return;
-            if (this.FindAncestorOfType<ScrollViewer>() is { } scroll) scroll.Offset = default;
+            if (this.FindAncestorOfType<ScrollViewer>() is not { } scroll || _bound is null) return;
+
+            if (!_bound.IsListing)
+            {
+                _offsetBeforeSheet = scroll.Offset;
+                scroll.Offset = default;
+            }
+            else if (_bound.LastEditorSaved)
+            {
+                scroll.Offset = default;
+            }
+            else
+            {
+                // The list is rebuilt into the viewer on the next layout pass; restore once it has an extent.
+                var back = _offsetBeforeSheet;
+                Dispatcher.UIThread.Post(() => scroll.Offset = back, DispatcherPriority.Loaded);
+            }
         }
+
+        private Vector _offsetBeforeSheet;
 
         /// <summary>
         /// Focuses the API key box as the editor sheet appears.

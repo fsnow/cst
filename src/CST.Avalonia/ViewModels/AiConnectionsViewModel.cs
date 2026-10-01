@@ -526,8 +526,15 @@ namespace CST.Avalonia.ViewModels
             return true;
         }
 
+        /// <summary>
+        /// How the last editor sheet closed: true for a save, false for Cancel. Set before <see cref="IsListing"/>
+        /// changes, so the view can tell the two apart when it decides where to scroll (#986).
+        /// </summary>
+        public bool LastEditorSaved { get; private set; }
+
         private void CloseEditor(bool saved)
         {
+            LastEditorSaved = saved;
             Editor = null;
             if (saved) Rebind();
         }

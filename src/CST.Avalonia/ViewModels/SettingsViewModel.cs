@@ -7,6 +7,7 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -111,8 +112,21 @@ namespace CST.Avalonia.ViewModels
         public SettingsCategoryViewModel? SelectedCategory
         {
             get => _selectedCategory;
-            set => this.RaiseAndSetIfChanged(ref _selectedCategory, value);
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _selectedCategory, value);
+                this.RaisePropertyChanged(nameof(ContentScrollBarVisibility));
+            }
         }
+
+        /// <summary>
+        /// Whether the window's own scroll viewer scrolls the selected category. Not for AI: its tabs scroll
+        /// their own bodies so the General / Providers / Models strip stays in view (#986). With the outer
+        /// viewer's vertical scrolling disabled, the tab control is given the viewport's height instead of an
+        /// unbounded one, which is what lets each tab's own viewer scroll.
+        /// </summary>
+        public ScrollBarVisibility ContentScrollBarVisibility =>
+            SelectedCategory?.Content is AiSettingsViewModel ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
 
         public bool HasUnsavedChanges
         {

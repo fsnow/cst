@@ -123,9 +123,12 @@
             <!-- Settings Content -->
             <!-- Explicit scroll config + top-aligned content so a tab taller than the window scrolls
                  instead of being clipped by the window frame (#100). -->
+            <!-- Except for AI, whose tabs scroll their own bodies so the tab strip stays put (#986):
+                 ContentScrollBarVisibility is Disabled there, which hands the tab control the
+                 viewport's height rather than an unbounded one. -->
             <ScrollViewer x:Name="SettingsScroll" Grid.Column="1"
                           HorizontalScrollBarVisibility="Disabled"
-                          VerticalScrollBarVisibility="Auto">
+                          VerticalScrollBarVisibility="{Binding ContentScrollBarVisibility}">
                 <!-- Cap content to the scroll viewport width so long wrapping text (e.g. setting
                      descriptions) wraps at the visible edge. The viewer measures content with
                      unbounded width, so without this cap a panel sizes to its content's natural
@@ -580,7 +583,10 @@
                         <DataTemplate DataType="vm:AiSettingsViewModel">
                             <TabControl SelectedIndex="{Binding SelectedTab}"
                                         AutomationProperties.AutomationId="settings.ai.tabs">
+                              <!-- Each tab scrolls its own body, so the strip above it never scrolls away (#986).
+                                   The category list on the left already behaved this way. -->
                               <TabItem Header="General" AutomationProperties.AutomationId="settings.ai.tab.general">
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                                 <StackPanel Margin="0,12,0,0">
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
@@ -748,18 +754,23 @@
                                 </Border>
 
                                 </StackPanel>
+                                </ScrollViewer>
                               </TabItem>
 
                               <TabItem Header="Providers" IsVisible="{Binding ShowConnectionTabs}"
                                        AutomationProperties.AutomationId="settings.ai.tab.providers">
-                                <views:AiProvidersView DataContext="{Binding Connections}"
-                                                       Margin="0,12,0,0"/>
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                                  <views:AiProvidersView DataContext="{Binding Connections}"
+                                                         Margin="0,12,0,0"/>
+                                </ScrollViewer>
                               </TabItem>
 
                               <TabItem Header="Models" IsVisible="{Binding ShowConnectionTabs}"
                                        AutomationProperties.AutomationId="settings.ai.tab.models">
-                                <views:AiModelsView DataContext="{Binding Models}"
-                                                    Margin="0,12,0,0"/>
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                                  <views:AiModelsView DataContext="{Binding Models}"
+                                                      Margin="0,12,0,0"/>
+                                </ScrollViewer>
                               </TabItem>
                             </TabControl>
                         </DataTemplate>

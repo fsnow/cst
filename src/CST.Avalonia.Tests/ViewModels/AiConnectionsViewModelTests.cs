@@ -156,6 +156,30 @@ public class AiConnectionsViewModelTests
         new(name, ChatProviderKind.OpenAiCompatible, url,
             new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>());
 
+    /// <summary>
+    /// The view needs to know how the sheet closed (#986): after a save it scrolls to the top, where the new
+    /// connection is; after Cancel it puts the reader back where they were in the catalogue. The flag must be set
+    /// by the time <see cref="AiConnectionsViewModel.IsListing"/> is raised, because that is when the view reads it.
+    /// </summary>
+    [Fact]
+    public void The_view_can_tell_a_saved_sheet_from_a_cancelled_one_when_the_list_returns()
+    {
+        var (vm, _) = Make();
+        bool? seen = null;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AiConnectionsViewModel.IsListing) && vm.IsListing) seen = vm.LastEditorSaved;
+        };
+
+        vm.AddPreset("openrouter");
+        vm.Editor!.CancelCommand.Execute().Subscribe();
+        Assert.False(seen);
+
+        seen = null;
+        AddThroughSheet(vm, "openrouter");
+        Assert.True(seen);
+    }
+
     // ---- the two sections ------------------------------------------------------------------------------
 
     /// <summary>
