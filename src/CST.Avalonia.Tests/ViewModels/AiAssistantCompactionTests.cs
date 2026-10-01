@@ -30,7 +30,7 @@ public class AiAssistantCompactionTests
     /// Answers every turn, numbered so a test can tell them apart; summarises on <see cref="CompactAsync"/>; and
     /// can hold a turn or a summary open at a known point, so "while busy" is a state a test can be in.
     /// </summary>
-    private sealed class CompactingOrchestrator : IAiChatOrchestrator
+    internal sealed class CompactingOrchestrator : IAiChatOrchestrator
     {
         private int _answered;
 

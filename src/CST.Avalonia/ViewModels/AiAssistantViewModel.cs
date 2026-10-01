@@ -531,6 +531,7 @@ public class AiAssistantViewModel : ReactiveTool
         // ticked for the rest of the session, and its cancellation source was disposed while its stream was
         // still using it.
         IsBusy = true;
+        BeginWork();
         try
         {
             await RunAsync(task, questionOverride);
@@ -540,6 +541,7 @@ public class AiAssistantViewModel : ReactiveTool
             IsBusy = false;
             // A turn just told us what the resolver thinks; keep the standing line in step with it.
             RefreshReadiness();
+            EndWork();
         }
     }
 
@@ -582,6 +584,12 @@ public class AiAssistantViewModel : ReactiveTool
             Status = Describe(reader.Problem);
             return;
         }
+
+        // Quit has begun — before the click, or while the reader's position was being read. Nothing has been sent
+        // and no turn exists yet, so the question stays in the box and nothing is recorded: a turn started now
+        // would be lost exactly as #1018 described. Checked here, after the last await before StartTurn, so it
+        // covers both cases.
+        if (_draining) return;
 
         // An override comes from Retry, which must repeat the turn's OWN question rather than whatever is in
         // the box — the box now holds unsent drafts, and those are precious.
@@ -728,11 +736,12 @@ public class AiAssistantViewModel : ReactiveTool
     /// </summary>
     internal async Task CompactAsync(string? instructions = null)
     {
-        if (!CanCompact || _orchestrator is null) return;
+        if (!CanCompact || _orchestrator is null || _draining) return;
 
         IsBusy = true;
         IsCompacting = true;
         Status = "";
+        BeginWork();
 
         _turnCancellation?.Dispose();
         _turnCancellation = new CancellationTokenSource();
@@ -800,6 +809,7 @@ public class AiAssistantViewModel : ReactiveTool
             IsCompacting = false;
             IsBusy = false;
             RaiseCompactionChanged();
+            EndWork();
         }
     }
 
@@ -1006,6 +1016,106 @@ public class AiAssistantViewModel : ReactiveTool
     {
         _turnCancellation?.Cancel();
         _orchestrator?.Stop();
+    }
+
+    // ---- Shutdown drain (#1018) -------------------------------------------------------------------
+
+    /// <summary>
+    /// How long Quit waits for <see cref="DrainAsync"/>. [suggestion] Two seconds: the path it waits for is a
+    /// cancelled stream unwinding and one session file written (serialize, temp, replace — plus the store's own
+    /// 100 ms replace retry on Windows), which is milliseconds, so the bound is only ever reached by something
+    /// stuck — a provider that does not honour cancellation, or a disk that does not answer. For that case two
+    /// seconds is short enough that Quit still reads as Quit, and well inside the 5-second bounds the rest of
+    /// shutdown already uses (<c>ApplicationStateService.Dispose</c>, the MCP bridge).
+    /// </summary>
+    internal static readonly TimeSpan ShutdownDrainBound = TimeSpan.FromSeconds(2);
+
+    private readonly object _workGate = new();
+    private int _work;
+    private TaskCompletionSource? _idle;
+
+    /// <summary>Set by <see cref="DrainAsync"/>, and never cleared: once Quit has begun, no new turn or compaction
+    /// starts. Read and written on the UI thread.</summary>
+    private bool _draining;
+
+    /// <summary>
+    /// Counts the operations a drain waits for — a turn (from the click to its save), a compaction, a rename, a
+    /// delete, a switch. Each one's last write is something Quit should not cut off: the turn's save, the summary,
+    /// the new name, or the delete's word on <c>ActiveAssistantSessionId</c>. Their trailing list refreshes are
+    /// outside the count; they only re-read files.
+    /// </summary>
+    private void BeginWork()
+    {
+        lock (_workGate) _work++;
+    }
+
+    private void EndWork()
+    {
+        TaskCompletionSource? idle = null;
+        lock (_workGate)
+        {
+            if (--_work == 0)
+            {
+                idle = _idle;
+                _idle = null;
+            }
+        }
+        idle?.TrySetResult();
+    }
+
+    /// <summary>
+    /// Settle the conversation before the app quits: stop the turn in flight the way <see cref="StopCommand"/>
+    /// does, and wait — at most <paramref name="bound"/> — for its save and for any compaction, rename, delete or
+    /// switch already running. Answers whether everything finished inside the bound. Never throws. (#1018)
+    ///
+    /// <para><b>The same path as Stop, deliberately.</b> A stopped turn is already saved with the text that had
+    /// arrived and the "Stopped." line, by the <c>finally</c> in <c>RunAsync</c>; Quit used to exit before that
+    /// <c>finally</c> ran. Calling <see cref="Stop"/> rather than a quit-specific cancel means a turn cut off by
+    /// Quit is recorded exactly as one the reader stopped, and reopens the same way.</para>
+    ///
+    /// <para><b>Why this must finish before the state save.</b> A conversation's first turn creates the session
+    /// and writes its id into <c>ActiveAssistantSessionId</c> when it ends. Ended after the final state save, the
+    /// file exists but the next launch does not know to reopen it. Awaited first, the id is in application state
+    /// before <c>ForceSaveAsync</c> serializes it. <c>App.DrainAssistantThenSaveStateAsync</c> holds that order.</para>
+    ///
+    /// <para><b>On timeout</b> the drain logs and gives up; Quit goes on. Whatever was still pending is lost as it
+    /// would have been before #1018 — never corrupted: the store writes a temp file and replaces, so a write the
+    /// process exits in the middle of leaves the previous file whole.</para>
+    ///
+    /// <para><b>No store, no drain.</b> A panel that cannot save has nothing to keep, so nothing is cancelled.
+    /// Once called, no new turn or compaction starts (<see cref="_draining"/>).</para>
+    /// </summary>
+    public async Task<bool> DrainAsync(TimeSpan bound)
+    {
+        if (_store is null) return true;
+
+        try
+        {
+            _draining = true;
+
+            Task idle;
+            lock (_workGate)
+            {
+                if (_work == 0) return true;
+                idle = (_idle ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+            }
+
+            // Stop is harmless when what is running is a rename or a delete: the token it cancels belongs to no
+            // turn, and the orchestrator has nothing in flight to stop.
+            _logger.Information("SHUTDOWN: stopping the assistant so the conversation is saved");
+            Stop();
+
+            if (await Task.WhenAny(idle, Task.Delay(bound)) == idle) return true;
+
+            _logger.Warning(
+                "SHUTDOWN: the assistant did not settle within {Bound}; quitting without waiting further", bound);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "SHUTDOWN: could not drain the assistant");
+            return false;
+        }
     }
 
     private AiTurnViewModel StartTurn(
@@ -1532,6 +1642,7 @@ public class AiAssistantViewModel : ReactiveTool
         UpdateRowAvailability();
 
         var locked = false;
+        BeginWork();
         try
         {
             // Behind any rename or delete already running, so the file read here is the one they left — a switch
@@ -1575,6 +1686,7 @@ public class AiAssistantViewModel : ReactiveTool
             _switchingTo = null;
             IsBusy = false;
             done.TrySetResult();
+            EndWork();
         }
 
         await RefreshSessionsAsync();
@@ -1634,6 +1746,7 @@ public class AiAssistantViewModel : ReactiveTool
 
         var written = false;
         var locked = false;
+        BeginWork();
         try
         {
             if (string.Equals(_switchingTo, id, StringComparison.Ordinal)) await _switchDone;
@@ -1707,6 +1820,7 @@ public class AiAssistantViewModel : ReactiveTool
         finally
         {
             if (locked) _sessionOps.Release();
+            EndWork();
         }
 
         await RefreshSessionsAsync();
@@ -1783,64 +1897,74 @@ public class AiAssistantViewModel : ReactiveTool
         var pointedAt = heldSession is null
                         && string.Equals(_appState?.Current.ActiveAssistantSessionId, id, StringComparison.Ordinal);
 
-        if (heldSession is not null)
-        {
-            LetGoOfSession();
-        }
-        else if (pointedAt)
-        {
-            _appState!.Current.ActiveAssistantSessionId = null;
-            _appState.MarkDirty();
-        }
-
-        bool gone;
-        var locked = false;
+        // Counted from before the let-go to after any put-back below, so a drain at Quit waits for the delete's
+        // last word on ActiveAssistantSessionId, not just for the file. (#1018)
+        BeginWork();
         try
         {
-            // After the let-go above, never before it: see the remarks. Behind any rename or switch in flight, so a
-            // rename's read-then-write cannot straddle this delete and write the file back. See _sessionOps.
-            await _sessionOps.WaitAsync();
-            locked = true;
+            if (heldSession is not null)
+            {
+                LetGoOfSession();
+            }
+            else if (pointedAt)
+            {
+                _appState!.Current.ActiveAssistantSessionId = null;
+                _appState.MarkDirty();
+            }
 
-            // Not an announced load: a file that turns out unreadable here is gone from the list either way, and
-            // telling the reader about it in the middle of deleting it would be noise. It is logged. A file that
-            // could not be OPENED just now is still there, so that is a delete that failed.
-            gone = await _store.DeleteAsync(id);
+            bool gone;
+            var locked = false;
+            try
+            {
+                // After the let-go above, never before it: see the remarks. Behind any rename or switch in flight, so a
+                // rename's read-then-write cannot straddle this delete and write the file back. See _sessionOps.
+                await _sessionOps.WaitAsync();
+                locked = true;
+
+                // Not an announced load: a file that turns out unreadable here is gone from the list either way, and
+                // telling the reader about it in the middle of deleting it would be noise. It is logged. A file that
+                // could not be OPENED just now is still there, so that is a delete that failed.
+                gone = await _store.DeleteAsync(id);
+                if (!gone)
+                {
+                    var (still, report) = await LoadWatchedAsync(id, announce: false, CancellationToken.None);
+                    gone = still is null && report?.Transient != true;
+                }
+            }
+            catch (Exception ex)
+            {
+                // The store promises not to throw; this is the second net, as everywhere else in the panel.
+                _logger.Error(ex, "Could not delete the assistant session {Id}", id);
+                gone = false;
+            }
+            finally
+            {
+                if (locked) _sessionOps.Release();
+            }
+
             if (!gone)
             {
-                var (still, report) = await LoadWatchedAsync(id, announce: false, CancellationToken.None);
-                gone = still is null && report?.Transient != true;
+                if ((heldSession is not null || pointedAt)
+                    && _session is null && !IsBusy
+                    && string.IsNullOrEmpty(_appState?.Current.ActiveAssistantSessionId))
+                {
+                    if (heldSession is not null)
+                    {
+                        if (Turns.Count == 0) ShowSession(heldSession, heldTurns!);
+                    }
+                    else if (_appState is not null)
+                    {
+                        _appState.Current.ActiveAssistantSessionId = id;
+                        _appState.MarkDirty();
+                    }
+                }
+
+                Status = "That conversation could not be deleted.";
             }
-        }
-        catch (Exception ex)
-        {
-            // The store promises not to throw; this is the second net, as everywhere else in the panel.
-            _logger.Error(ex, "Could not delete the assistant session {Id}", id);
-            gone = false;
         }
         finally
         {
-            if (locked) _sessionOps.Release();
-        }
-
-        if (!gone)
-        {
-            if ((heldSession is not null || pointedAt)
-                && _session is null && !IsBusy
-                && string.IsNullOrEmpty(_appState?.Current.ActiveAssistantSessionId))
-            {
-                if (heldSession is not null)
-                {
-                    if (Turns.Count == 0) ShowSession(heldSession, heldTurns!);
-                }
-                else if (_appState is not null)
-                {
-                    _appState.Current.ActiveAssistantSessionId = id;
-                    _appState.MarkDirty();
-                }
-            }
-
-            Status = "That conversation could not be deleted.";
+            EndWork();
         }
 
         await RefreshSessionsAsync();

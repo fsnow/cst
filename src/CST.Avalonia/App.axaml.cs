@@ -92,6 +92,14 @@ public partial class App : Application
     // its menu bar) and re-run the save against a disposed ServiceProvider. 0 = not started, 1 = cleanup
     // running, 2 = cleanup done (let shutdown proceed).
     private int _shutdownState;
+
+    /// <summary>
+    /// The Assistant panel, once the container has built it — recorded by its registration rather than asked of the
+    /// container, because asking builds it. Null while the Assistant has never been shown: there is then nothing to
+    /// drain at Quit, and constructing the panel just to find that out is what this avoids. (#1018)
+    /// </summary>
+    private AiAssistantViewModel? _assistantPanel;
+
     private bool _hasRestoredInitialBooks = false;
 
     // Menu items for updating checkmarks across all windows
@@ -422,7 +430,14 @@ public partial class App : Application
                 var cleanupFailed = false;
                 try
                 {
-                    await SaveApplicationStateAsync();
+                    // The Assistant first, so a turn cut off by Quit is saved — and a first turn's session id is in
+                    // application state — before the state save writes it. (#1018)
+                    var panel = _assistantPanel;
+                    await DrainAssistantThenSaveStateAsync(
+                        panel is null
+                            ? () => Task.CompletedTask
+                            : () => panel.DrainAsync(AiAssistantViewModel.ShutdownDrainBound),
+                        SaveApplicationStateAsync);
 
                     // Dispose ServiceProvider to trigger disposal of all singleton services
                     ServiceProvider?.Dispose();
@@ -1052,6 +1067,34 @@ public partial class App : Application
         await initializeOpenBook();
     }
     
+    /// <summary>
+    /// The first two steps of Quit, in order: settle the Assistant, then save application state. Pulled out of the
+    /// <c>ShutdownRequested</c> handler, as <see cref="SettleStateLoadAsync"/> was out of the launch, so the ORDER can
+    /// be tested without building <c>App</c>. (#1018; tested by <c>AppShutdownDrainTests</c>)
+    ///
+    /// <para><b>The drain goes first.</b> A conversation's first turn writes <c>ActiveAssistantSessionId</c> when it
+    /// ends; ended after the state save, the session file exists and the next launch does not know to reopen it.
+    /// When the panel was never built — the Assistant is off, or was never shown — the caller hands in a drain that
+    /// does nothing.</para>
+    ///
+    /// <para><b>A drain that throws cannot cost the state save.</b> The panel's drain already catches its own
+    /// failures; this is the second net, because what is behind it — the window layout, the open books — matters to
+    /// every reader, and the Assistant to some.</para>
+    /// </summary>
+    internal static async Task DrainAssistantThenSaveStateAsync(Func<Task> drainAssistant, Func<Task> saveState)
+    {
+        try
+        {
+            await drainAssistant();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "SHUTDOWN: the assistant drain failed; saving state anyway");
+        }
+
+        await saveState();
+    }
+
     private async Task InitializeFromLoadedState(ApplicationState state)
     {
         // #91: capture the saved active left-tool id NOW, before the window is shown/interactive, so a user
@@ -1727,7 +1770,8 @@ public partial class App : Application
         services.AddSingleton<DictionaryViewModel>();
         // The assistant panel (#586). Singleton like the other tools: it is one dockable, and a turn in
         // flight must survive the panel being hidden and shown again.
-        services.AddSingleton<AiAssistantViewModel>(sp => new AiAssistantViewModel(
+        // Recorded as it is built, so Quit can drain the panel without building it (#1018).
+        services.AddSingleton<AiAssistantViewModel>(sp => _assistantPanel = new AiAssistantViewModel(
             sp.GetService<Services.Ai.IAiChatOrchestrator>(),
             sp.GetService<Services.Ai.IReaderStateService>(),
             sp.GetService<Services.Ai.IChatProviderResolver>(),

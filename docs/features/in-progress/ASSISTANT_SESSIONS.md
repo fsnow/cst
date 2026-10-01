@@ -3,8 +3,8 @@
 > **What exists:** the Assistant holds a conversation — earlier turns are replayed to the model (#991) — and
 > every conversation is kept on disk, one file each, and reopened at launch (#849); the + starts a new one
 > (#850); a session list switches, renames and deletes them (#997); older turns can be summarised by hand or
-> automatically (#998). **Still open:** take me back (P5, §3.5, waiting on #1014 for the selection) and a
-> shutdown drain for the turn in flight at Quit (§3.2).
+> automatically (#998); an answer still arriving at Quit is stopped and saved first (#1018). **Still open:** take
+> me back (P5, §3.5, waiting on #1014 for the selection).
 >
 > Provenance is marked throughout: **[fsnow]** is the maintainer's decision, **[suggestion]** is an agent's and
 > advisory, **[observed]** is a fact from code or a named source. Unmarked text is context.
@@ -132,15 +132,27 @@ one file each (`AppConstants.DataDirectory` is the single source of truth for th
 rename, and on compaction — never per streamed delta. A crash mid-turn loses only the turn in flight, which is
 the Claude Code guarantee. Atomic write (temp + `File.Replace`), the pattern `ApplicationStateService` uses.
 
-**Still open: there is no shutdown drain.** [observed] 2026-09-13, re-checked 2026-09-23: the store is not
-`IDisposable` and `SaveApplicationStateAsync` does not consult it, so (a) a turn still streaming when the reader
-quits never reaches the `finally` that saves it — Stop keeps a partial answer, Quit does not — and (b) a
-session's *first* turn ending inside the shutdown state save can be written after `ForceSaveAsync`, so the file
-exists but `ActiveAssistantSessionId` never reaches disk. The same window is open for a crash within
-`ApplicationStateService`'s 60-second save timer. (b) costs nothing but the automatic reopen: a session file
-that is not the active one is listed like any other, and the reader reopens it from the session list — pinned by
-`AiAssistantSessionListTests.A_conversation_nothing_points_at_is_listed_and_can_be_reopened`. (a) still loses
-the turn in flight; the fix is a drain hook, not yet built.
+**Quit drains the panel first (#1018).** [observed] Before the final state save, the shutdown sequence calls
+`AiAssistantViewModel.DrainAsync`, through `App.DrainAssistantThenSaveStateAsync`, which holds the order. The
+drain does what the Stop control does — the turn in flight is cancelled and its `finally` saves it with the text
+that had arrived and "Stopped.", so Quit and Stop leave the same record — and then waits for that save, and for
+any compaction, rename, delete or switch already running, before the state save writes
+`ActiveAssistantSessionId`. So a conversation whose *first* turn was cut off by Quit is named in application state
+before it is written. After the drain no turn or compaction starts. It is a no-op when the panel was never built
+(the container is not asked for it: `App` records the panel when its registration builds it) and when the panel has
+no store. Tested by `AiAssistantShutdownDrainTests` and `AppShutdownDrainTests`.
+
+[suggestion] **The wait is bounded at 2 seconds** (`AiAssistantViewModel.ShutdownDrainBound`): a cancelled stream
+and one file write take milliseconds, so the bound is only reached by a provider that ignores cancellation or a disk
+that does not answer, and two seconds keeps Quit feeling like Quit. On timeout the drain logs a warning and Quit goes
+on; what was still pending is lost as before #1018, never corrupted — the temp-and-replace write leaves the previous
+file whole.
+
+**Still open: a crash.** A crash, as opposed to a Quit, runs no drain: the turn in flight is lost, and a first turn
+that ended within `ApplicationStateService`'s 60-second save timer can leave a session file that
+`ActiveAssistantSessionId` does not name. That costs only the automatic reopen: a session file that is not the
+active one is listed like any other, and the reader reopens it from the session list — pinned by
+`AiAssistantSessionListTests.A_conversation_nothing_points_at_is_listed_and_can_be_reopened`.
 
 **What a stored turn holds** — everything the panel shows, so a restored turn renders identically:
 
@@ -383,7 +395,7 @@ UI phases are done by a Claude session on Kestrel, where the maintainer can prev
 |---|---|---|---|---|
 | **P0** | #850 | The **+** (new conversation) control; remove `ClearCommand`/`Clear()` — **done** (§3.3) | ✗ (one button) | — |
 | **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.History`, estimate over the whole request — **done** (§3.1) | ✅ | — |
-| **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch — **done** (§3.2), except the shutdown drain | ✅ except the launch wiring | P1 |
+| **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch, the shutdown drain (#1018) — **done** (§3.2) | ✅ except the launch wiring | P1 |
 | **P3** | #997 | Session list, switch, rename, delete (new and auto-name landed with P2) — **done** (§3.3): backend on the panel view model, UI in the panel's top row | ✅ | P2 |
 | **P4** | #998 | Compaction: template, summariser, record, manual action, auto trigger from `ContextLength`, compact-and-retry — **done** (§3.4): backend, plus the Compact control and the marker row in the panel | ✅ | P1, P3 |
 | **P5** | #849 | Take me back: open + go-to + position restore, as a turn action; re-selection when #1014 lands | ✗ (dock + WebView) | P2, #1014 |
@@ -397,7 +409,11 @@ UI phases are done by a Claude session on Kestrel, where the maintainer can prev
   round-trip of every field; a truncated file is moved aside and reported, not thrown; a file that cannot be
   opened (no permission, or held exclusively) is left in place and reported as transient; save is atomic (no
   `.tmp` promoted over good data); restore builds `Turns` identical to the live ones. A golden session file is
-  checked in, so a format change is a visible diff.
+  checked in, so a format change is a visible diff. The shutdown drain (#1018): `AiAssistantShutdownDrainTests`
+  (a streaming turn saved stopped with what had arrived; the drain waits for a save, rename, delete, switch or
+  compaction in flight, and gives up at its bound on a hung save or a provider that ignores Stop; nothing starts
+  after it; a no-op with nothing running or no store) and `AppShutdownDrainTests` (drain before the state save, a
+  throwing drain not costing it, and a first turn named in state before it).
 - **P3** — `AiAssistantSessionListTests` and `AiAssistantSessionOverlapTests`: auto-name rules; switch blocked
   while busy; delete removes the file and clears the active id; rename, delete and switch against each other; a
   failed rename not applied later; a row's Delete agreeing with the refusal; a restore once, whichever caller is
