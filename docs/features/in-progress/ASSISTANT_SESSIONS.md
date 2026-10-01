@@ -133,18 +133,30 @@ rename, and on compaction — never per streamed delta. A crash mid-turn loses o
 the Claude Code guarantee. Atomic write (temp + `File.Replace`), the pattern `ApplicationStateService` uses.
 
 **Quit drains the panel first (#1018).** [observed] Before the final state save, the shutdown sequence calls
-`AiAssistantViewModel.DrainAsync`, through `App.DrainAssistantThenSaveStateAsync`, which holds the order. The
-drain does what the Stop control does — the turn in flight is cancelled and its `finally` saves it with the text
-that had arrived and "Stopped.", so Quit and Stop leave the same record — and then waits for that save, and for
-any compaction, rename, delete or switch already running, before the state save writes
-`ActiveAssistantSessionId`. So a conversation whose *first* turn was cut off by Quit is named in application state
+`AiAssistantViewModel.DrainAsync`, through `App.DrainAssistantThenSaveStateAsync`, which holds the order. A turn
+in flight is stopped the way the Stop control stops it — cancelled, and its `finally` saves it with the text that
+had arrived and "Stopped.", so Quit and Stop leave the same record — and the drain waits for that save. A manual
+compaction (Compact) still being written is **not** stopped but waited for, and a rename, delete or switch already
+running is waited for too, all before the state save writes `ActiveAssistantSessionId`. So a conversation whose *first* turn was cut off by Quit is named in application state
 before it is written. After the drain no turn or compaction starts. It is a no-op when the panel was never built
 (the container is not asked for it: `App` records the panel when its registration builds it) and when the panel has
 no store. Tested by `AiAssistantShutdownDrainTests` and `AppShutdownDrainTests`.
 
+**[fsnow] on a summary still being written at Quit.** Asked "When you quit while a summary (Compact) is still
+being written, should Quit wait for it, or stop it?", he chose *"Wait for it (within the 2 s limit)"*. The option
+he was shown said Quit lets a running summary finish if it can within the time limit, so the paid call is not
+thrown away; past the limit it is lost as today; and a streaming answer is still stopped and saved as it stands.
+[observed] So the drain cancels only a turn (`Stop()` is called only while a turn is on screen as running), and a
+manual compaction that outlasts the bound is given up on, not cancelled.
+
+The **automatic** summary inside a turn (the turn's Compacting phase, #998) is unchanged by #1018 and was not
+covered by that decision: it is part of the turn, so it is stopped with the turn, and a `Compacted` event that had
+already arrived is saved with the turn.
+
 [suggestion] **The wait is bounded at 2 seconds** (`AiAssistantViewModel.ShutdownDrainBound`): a cancelled stream
-and one file write take milliseconds, so the bound is only reached by a provider that ignores cancellation or a disk
-that does not answer, and two seconds keeps Quit feeling like Quit. On timeout the drain logs a warning and Quit goes
+and one file write take milliseconds, so for a turn the bound is only reached by a provider that ignores
+cancellation or a disk that does not answer, and two seconds keeps Quit feeling like Quit. A manual summary is a
+model call and can easily take longer; the decision above keeps it to the same bound. On timeout the drain logs a warning and Quit goes
 on; what was still pending is lost as before #1018, never corrupted — the temp-and-replace write leaves the previous
 file whole.
 
@@ -410,9 +422,10 @@ UI phases are done by a Claude session on Kestrel, where the maintainer can prev
   opened (no permission, or held exclusively) is left in place and reported as transient; save is atomic (no
   `.tmp` promoted over good data); restore builds `Turns` identical to the live ones. A golden session file is
   checked in, so a format change is a visible diff. The shutdown drain (#1018): `AiAssistantShutdownDrainTests`
-  (a streaming turn saved stopped with what had arrived; the drain waits for a save, rename, delete, switch or
-  compaction in flight, and gives up at its bound on a hung save or a provider that ignores Stop; nothing starts
-  after it; a no-op with nothing running or no store) and `AppShutdownDrainTests` (drain before the state save, a
+  (a streaming turn saved stopped with what had arrived; the drain waits for a save, rename, delete or switch in
+  flight, and gives up at its bound on a hung save or a provider that ignores Stop; a manual compaction waited for
+  and saved, or given up on past the bound but not stopped; an automatic summary stopped with its turn; nothing
+  starts after it; a no-op with nothing running or no store) and `AppShutdownDrainTests` (drain before the state save, a
   throwing drain not costing it, and a first turn named in state before it).
 - **P3** — `AiAssistantSessionListTests` and `AiAssistantSessionOverlapTests`: auto-name rules; switch blocked
   while busy; delete removes the file and clears the active id; rename, delete and switch against each other; a

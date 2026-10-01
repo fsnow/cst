@@ -540,8 +540,16 @@ public class AiAssistantViewModel : ReactiveTool
         {
             IsBusy = false;
             // A turn just told us what the resolver thinks; keep the standing line in step with it.
-            RefreshReadiness();
-            EndWork();
+            try
+            {
+                RefreshReadiness();
+            }
+            finally
+            {
+                // In its own finally: a resolver that threw here would otherwise leave the count up, and every later
+                // Quit would wait out the whole bound.
+                EndWork();
+            }
         }
     }
 
@@ -1021,12 +1029,14 @@ public class AiAssistantViewModel : ReactiveTool
     // ---- Shutdown drain (#1018) -------------------------------------------------------------------
 
     /// <summary>
-    /// How long Quit waits for <see cref="DrainAsync"/>. [suggestion] Two seconds: the path it waits for is a
+    /// How long Quit waits for <see cref="DrainAsync"/>. [suggestion] Two seconds: the usual path it waits for is a
     /// cancelled stream unwinding and one session file written (serialize, temp, replace — plus the store's own
     /// 100 ms replace retry on Windows), which is milliseconds, so the bound is only ever reached by something
     /// stuck — a provider that does not honour cancellation, or a disk that does not answer. For that case two
     /// seconds is short enough that Quit still reads as Quit, and well inside the 5-second bounds the rest of
-    /// shutdown already uses (<c>ApplicationStateService.Dispose</c>, the MCP bridge).
+    /// shutdown already uses (<c>ApplicationStateService.Dispose</c>, the MCP bridge). A manual compaction, which is
+    /// waited for rather than stopped, is a model call and can easily take longer; <b>[fsnow]</b> chose to wait for it
+    /// <i>"within the 2 s limit"</i>, so this one bound covers it too.
     /// </summary>
     internal static readonly TimeSpan ShutdownDrainBound = TimeSpan.FromSeconds(2);
 
@@ -1065,8 +1075,14 @@ public class AiAssistantViewModel : ReactiveTool
 
     /// <summary>
     /// Settle the conversation before the app quits: stop the turn in flight the way <see cref="StopCommand"/>
-    /// does, and wait — at most <paramref name="bound"/> — for its save and for any compaction, rename, delete or
-    /// switch already running. Answers whether everything finished inside the bound. Never throws. (#1018)
+    /// does, and wait — at most <paramref name="bound"/> — for its save and for any manual compaction, rename, delete
+    /// or switch already running. Answers whether everything finished inside the bound. Never throws. (#1018)
+    ///
+    /// <para><b>A manual compaction is waited for, not stopped.</b> <b>[fsnow]</b>, asked "When you quit while a
+    /// summary (Compact) is still being written, should Quit wait for it, or stop it?", chose <i>"Wait for it (within
+    /// the 2 s limit)"</i>: the summary is a paid call, so it is kept if it finishes inside the bound and lost, as
+    /// before, if it does not. The automatic summary inside a turn is not covered by that decision and is stopped
+    /// with its turn, unchanged.</para>
     ///
     /// <para><b>The same path as Stop, deliberately.</b> A stopped turn is already saved with the text that had
     /// arrived and the "Stopped." line, by the <c>finally</c> in <c>RunAsync</c>; Quit used to exit before that
@@ -1100,10 +1116,19 @@ public class AiAssistantViewModel : ReactiveTool
                 idle = (_idle ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
             }
 
-            // Stop is harmless when what is running is a rename or a delete: the token it cancels belongs to no
-            // turn, and the orchestrator has nothing in flight to stop.
-            _logger.Information("SHUTDOWN: stopping the assistant so the conversation is saved");
-            Stop();
+            // Only a TURN is stopped — _current is set from StartTurn to EndTurn, and only for a turn. A manual
+            // compaction (_current null) is waited for, not cancelled: [fsnow], asked whether Quit should wait for a
+            // summary still being written or stop it, chose "Wait for it (within the 2 s limit)". Stop() cancels the
+            // orchestrator's own source too, so calling it during a compaction would stop the summary.
+            //
+            // The automatic summary inside a turn (the Compacting phase) is part of that turn and is stopped with it,
+            // as before #1018; a Compacted event that has already arrived is saved with the turn. His decision did not
+            // cover that case.
+            if (_current is not null)
+            {
+                _logger.Information("SHUTDOWN: stopping the assistant turn in flight so it is saved");
+                Stop();
+            }
 
             if (await Task.WhenAny(idle, Task.Delay(bound)) == idle) return true;
 

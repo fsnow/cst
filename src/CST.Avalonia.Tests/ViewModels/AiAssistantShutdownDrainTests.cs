@@ -293,26 +293,99 @@ public class AiAssistantShutdownDrainTests
         await switching;
     }
 
-    /// <summary>A compaction the model is still writing is stopped the way Stop stops it — nothing changed, nothing
-    /// half-recorded — and the drain returns once it has unwound.</summary>
+    /// <summary>
+    /// A manual compaction the model is still writing is WAITED FOR, not stopped, and the summary is saved.
+    /// <b>[fsnow]</b>, asked whether Quit should wait for a summary still being written or stop it: <i>"Wait for it
+    /// (within the 2 s limit)"</i> — the summary is a paid call.
+    /// </summary>
     [Fact]
-    public async Task A_compaction_in_flight_is_stopped_and_the_drain_settles()
+    public async Task A_manual_compaction_in_flight_is_waited_for_and_saved()
     {
         var orchestrator = new AiAssistantCompactionTests.CompactingOrchestrator();
         var (vm, store, _, _) = Panel(orchestrator);
         for (var i = 0; i < AiCompaction.KeepVerbatim + 1; i++) await vm.AskAsync(AiTask.Explain);
-        var savesBefore = store.Saves.Count;
+        var id = store.LastSaved!.Id;
 
-        orchestrator.HoldSummary = new TaskCompletionSource();   // released only by the token
+        var summary = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        orchestrator.HoldSummary = summary;
         var compact = vm.CompactAsync();
         Assert.True(vm.IsCompacting);
 
-        Assert.True(await vm.DrainAsync(Generous));
+        var drain = vm.DrainAsync(Generous);
+        await Task.Delay(50);
+        Assert.False(drain.IsCompleted);
+        Assert.True(vm.IsCompacting);   // not cancelled
+
+        summary.SetResult();
+        Assert.True(await drain);
         await compact;
 
-        Assert.False(vm.IsCompacting);
-        Assert.Equal("Summarising was stopped. Nothing was changed.", vm.Status);
-        Assert.Equal(savesBefore, store.Saves.Count);
+        Assert.Single(store.OnDisk(id)!.Compactions);
+        Assert.NotEqual("Summarising was stopped. Nothing was changed.", vm.Status);
+    }
+
+    /// <summary>The contrast: a summary that outlasts the bound is not cancelled either — the drain gives up and Quit
+    /// goes on, and the summary is lost as on any timeout.</summary>
+    [Fact]
+    public async Task A_manual_compaction_that_outlasts_the_bound_is_given_up_on_not_stopped()
+    {
+        var orchestrator = new AiAssistantCompactionTests.CompactingOrchestrator();
+        var (vm, store, _, _) = Panel(orchestrator);
+        for (var i = 0; i < AiCompaction.KeepVerbatim + 1; i++) await vm.AskAsync(AiTask.Explain);
+        var id = store.LastSaved!.Id;
+
+        var summary = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        orchestrator.HoldSummary = summary;
+        var compact = vm.CompactAsync();
+
+        Assert.False(await vm.DrainAsync(Short));
+        Assert.True(vm.IsCompacting);
+        Assert.Empty(store.OnDisk(id)!.Compactions);
+
+        summary.SetResult();
+        await compact;
+    }
+
+    /// <summary>
+    /// The automatic summary inside a turn is unchanged by #1018 and was not covered by the decision above: it is
+    /// part of the turn, so it is stopped with the turn, and the turn is saved as stopped.
+    /// </summary>
+    [Fact]
+    public async Task An_automatic_summary_inside_a_turn_is_stopped_with_the_turn()
+    {
+        var orchestrator = new SummarisingOrchestrator();
+        var (vm, store, _, _) = Panel(orchestrator);
+
+        var pending = vm.AskAsync(AiTask.Explain);
+        await orchestrator.Summarising.Task;
+        Assert.True(vm.IsCompacting);
+
+        Assert.True(await vm.DrainAsync(Generous));
+        await pending;
+
+        var record = Assert.Single(store.LastSaved!.Turns);
+        Assert.Equal("Stopped.", record.Status);
+        Assert.Empty(store.LastSaved.Compactions);
+    }
+
+    /// <summary>Starts a turn's automatic summary and waits on the caller's token, as a summary call would.</summary>
+    private sealed class SummarisingOrchestrator : IAiChatOrchestrator
+    {
+        internal TaskCompletionSource Summarising { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async IAsyncEnumerable<AiTurnEvent> RunAsync(
+            AiTurnRequest request, [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            yield return AiTurnEvent.ForCompacting();
+            Summarising.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+            yield return AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0));
+        }
+
+        public void Stop()
+        {
+        }
     }
 
     /// <summary>Nor does a compaction start after the drain: a summary written then would be lost.</summary>
