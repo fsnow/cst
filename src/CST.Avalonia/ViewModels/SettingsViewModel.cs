@@ -111,8 +111,26 @@ namespace CST.Avalonia.ViewModels
         public SettingsCategoryViewModel? SelectedCategory
         {
             get => _selectedCategory;
-            set => this.RaiseAndSetIfChanged(ref _selectedCategory, value);
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _selectedCategory, value);
+                this.RaisePropertyChanged(nameof(ScrolledContent));
+                this.RaisePropertyChanged(nameof(TabbedContent));
+                this.RaisePropertyChanged(nameof(HasTabbedContent));
+            }
         }
+
+        /// <summary>
+        /// The selected category, split by how the window hosts it (#986). AI goes to a host that does not
+        /// scroll, because its tabs scroll their own bodies so the General / Providers / Models strip stays in
+        /// view; every other category goes to the window's scroll viewer. Exactly one of the two is non-null.
+        /// </summary>
+        public object? ScrolledContent => HasTabbedContent ? null : SelectedCategory?.Content;
+
+        /// <inheritdoc cref="ScrolledContent"/>
+        public object? TabbedContent => HasTabbedContent ? SelectedCategory?.Content : null;
+
+        public bool HasTabbedContent => SelectedCategory?.Content is AiSettingsViewModel;
 
         public bool HasUnsavedChanges
         {
