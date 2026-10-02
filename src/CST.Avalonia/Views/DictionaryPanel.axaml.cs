@@ -86,6 +86,8 @@ public partial class DictionaryPanel : UserControl
         _meaningWebView ??= this.FindControl<WebView>("MeaningWebView");
         if (_meaningWebView != null)
         {
+            Controls.CstWebView.DisableBuiltinContextMenusOnWindows(_meaningWebView);
+
             // Intercept navigations. The content is rendered via LoadHtml (an internal URL that never
             // reaches BeforeNavigate), so ANYTHING that does reach here is a link the user (or a future
             // asset's <a>/meta-refresh) tried to follow. Handle our own cst-see: cross-references, and

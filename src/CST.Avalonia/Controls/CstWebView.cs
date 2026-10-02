@@ -38,6 +38,20 @@ public class CstWebView : WebView
     /// </summary>
     public event Action? BrowserGotFocus;
 
+    public CstWebView()
+    {
+        DisableBuiltinContextMenusOnWindows(this);
+    }
+
+    /// <summary>
+    /// On Windows, CEF's built-in right-click menu opens as an empty box with no item text (#1001, seen in
+    /// books and the dictionary alike), so it is switched off there. macOS keeps its menu.
+    /// </summary>
+    public static void DisableBuiltinContextMenusOnWindows(WebView webView)
+    {
+        if (OperatingSystem.IsWindows()) webView.DisableBuiltinContextMenus = true;
+    }
+
     protected override void OnGotFocus()
     {
         var handler = BrowserGotFocus;

@@ -37,6 +37,20 @@ public static class DictionaryHtmlRenderer
         Func<string, string> linkDisplay,
         string fontFamily,
         double fontSizePt)
+        => Render(meaningHtml, linkDisplay, fontFamily, fontSizePt, paintBackground: OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// <paramref name="paintBackground"/>: give the page an opaque background instead of leaving it
+    /// transparent. Windows only (#1001): there CEF paints white behind a transparent page rather than letting
+    /// the Avalonia border show through, so in dark mode the #e0e0e0 text landed on white. macOS keeps the
+    /// transparent page it has always had.
+    /// </summary>
+    public static string Render(
+        string? meaningHtml,
+        Func<string, string> linkDisplay,
+        string fontFamily,
+        double fontSizePt,
+        bool paintBackground)
     {
         // The fragment is rendered as-is (with <see> turned into links). We do NOT split on the flat-file
         // merge sentinel <hr/>: it also occurs as real content in some HTML sources (e.g. DPPN entries), and
@@ -48,6 +62,14 @@ public static class DictionaryHtmlRenderer
         // px smaller than the app's font setting implies; pt keeps the meaning in scale with the reader,
         // without a zoom hack (the book pipeline uses none either). (#466)
         var size = fontSizePt.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Appended after the base rules so it overrides their 'background: transparent'. Dark is #2b2b2b,
+        // the Words list directly above the pane (sampled on Windows 10 dark mode).
+        var background = paintBackground
+            ? """
+              html, body { background: #ffffff; }
+              @media (prefers-color-scheme: dark) { html, body { background: #2b2b2b; } }
+              """
+            : "";
 
         // CSP: nothing loads (default-src 'none'); only inline styles are allowed, no scripts, no network.
         return $$"""
@@ -74,6 +96,7 @@ public static class DictionaryHtmlRenderer
                 a.see { color: #6db3f2; }
                 hr { border-top-color: #444; }
               }
+            {{background}}
             </style>
             </head>
             <body>{{body}}</body>
