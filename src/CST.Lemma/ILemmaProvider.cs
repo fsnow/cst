@@ -33,4 +33,13 @@ public interface ILemmaProvider : IDisposable
 
     /// <summary>Report-grade detail (etymology/example/frequency/root) for one lemma; null if the id is unknown. Enriched fields are null on a non-report asset.</summary>
     LemmaDetail? GetDetail(long lemmaId);
+
+    /// <summary>Roots (dhātu) by key, each with the headwords built on it (#1002). <paramref name="key"/> is a
+    /// root key as stored, root sign included (<c>√var</c>, <c>√var 1</c>); <paramref name="match"/> says how it
+    /// matches. Ordered by <paramref name="sortKey"/> of the root key (ordinal) when one is given, else by the
+    /// key's code points; at most <paramref name="maxRoots"/>, each listing at most
+    /// <paramref name="maxLemmasPerRoot"/> headwords in headword-id order. Null when unavailable or the asset has
+    /// no root table; empty when nothing matches.</summary>
+    IReadOnlyList<RootEntry>? FindRoots(string key, RootMatch match, int maxRoots, int maxLemmasPerRoot,
+        Func<string, string>? sortKey = null);
 }
