@@ -265,13 +265,12 @@ Cyrillic has an inherent encoding ambiguity for certain patterns:
 
 Both produce identical Cyrillic output, making round-trip conversion impossible for these patterns. This is a limitation of the Cyrillic orthography design, not a code bug.
 
-See `reports/BUG_ANALYSIS.md` for detailed technical analysis.
+See [CYRILLIC_ENCODING_LIMITATION.md](../../docs/implementation/CYRILLIC_ENCODING_LIMITATION.md) for the full analysis.
 
 ## Reports
 
-The `reports/` directory contains detailed analysis:
-- `BUG_ANALYSIS.md` - Root cause analysis of known issues
-- `ScriptValidation-Coverage-Analysis.md` - Test coverage statistics
+- `reports/vowel-hiatus-candidate-errors.md` - Corpus vowel-hiatus candidates for VRI review
+- `markdown/ScriptValidation-Coverage-Analysis.md` - Test coverage statistics
 
 ## Command Line Reference
 
@@ -364,7 +363,6 @@ When fixing conversion bugs:
 3. **Trace the conversion** - Use debugger or add console output to converter
 4. **Fix the conversion logic** - Update the relevant converter class
 5. **Verify the fix** - Run validation to ensure no regressions
-6. **Update documentation** - Add notes to BUG_ANALYSIS.md if needed
 
 ## See Also
 

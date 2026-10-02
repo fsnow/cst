@@ -104,9 +104,3 @@ These patterns are **relatively rare** in Pali texts. The vast majority of Cyril
 - **Source files**:
   - `/Users/fsnow/github/fsnow/cst/src/CST.Core/Conversion/Deva2Cyrl.cs`
   - `/Users/fsnow/github/fsnow/cst/src/CST.Core/Conversion/Cyrl2Deva.cs`
-
-- **Test reports**:
-  - `/Users/fsnow/github/fsnow/cst/src/CST.ScriptValidation/reports/report-छ-दनवधबन-धनव-पर-म-सआ-2025-10-21-111722.md`
-
-- **Analysis**:
-  - `/Users/fsnow/github/fsnow/cst/src/CST.ScriptValidation/reports/BUG_ANALYSIS.md`
