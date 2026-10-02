@@ -139,6 +139,16 @@ marking each step **Pass / Fail / N/A** and jotting anything odd in **Notes**.
 - [ ] Closing the main window exits cleanly (no lingering `CST.Avalonia` / `Xilium.CefGlue.BrowserProcess` in Task Manager).  ⊞
 - [ ] Uninstall (Add/Remove Programs) removes the app; user data under `%APPDATA%\CSTReader` behavior is as expected.  ⊞
 
+## 15. Appearance: light & dark mode  ⊞
+
+The app has no theme setting — it follows the OS — so dark mode is only ever tested by switching the OS before launch. **Merlin cannot run this section**: unactivated Windows greys out Personalization. Use Kingfisher or Placid (see RELEASE_PROCESS, "Neither Windows VM answers every question"). Do the whole section once in light and once in dark.
+
+- [ ] Chrome (dock tabs, tool panes, menu bar, Settings, status bar): nothing dark-on-dark or light-on-light.
+- [ ] A book page: legible, and in dark mode white text on black.
+- [ ] **Dictionary → select a word → Meaning pane**: its background matches the panel and the text is legible.  ⊞ *(#1001 — on Windows the pane was white with near-white text in dark mode)*
+- [ ] The Welcome page follows the theme.
+- [ ] **Right-click** in a book, in the Dictionary's Meaning pane, and on the Welcome page.  ⊞ *(#1001 — Windows showed an empty pop-up box; as of the fix, nothing should appear on Windows)*
+
 ---
 
 ## Windows-specific risk map (the seams most likely to differ from macOS)
@@ -155,6 +165,7 @@ marking each step **Pass / Fail / N/A** and jotting anything odd in **Notes**.
 10. **Install/uninstall + process cleanup** — §1, §14.
 11. **SmartScreen / unsigned installer** friction — §1.
 12. **Multi-monitor / DPI changes** — §2, §13.
+13. **Dark mode and right-click in CEF panes** (#1001) — §15. Not testable on Merlin.
 
 ---
 
@@ -176,6 +187,7 @@ marking each step **Pass / Fail / N/A** and jotting anything odd in **Notes**.
 | 12 Updates | | | |
 | 13 State persistence | | | |
 | 14 Shutdown & uninstall | | | |
+| 15 Appearance (light/dark) | | | |
 
 **Blocker(s):** ______________________________________________
 
