@@ -12,9 +12,10 @@ namespace CST.Conversion
             var run = new StringBuilder();
             Script lastScript = Script.Latin;
 
-            foreach (char c in str.ToCharArray())
+            for (int i = 0; i < str.Length; i++)
             {
-                Script cScript = GetScript(c);
+                char c = str[i];
+                Script cScript = ScriptDetector.GetScript(str, i, lastScript); // context-aware for U+0AB5 (#1025)
                 // Zero-width joiners (Unknown) belong to the surrounding run; they must not split it,
                 // or a script's contextual conjunct handling breaks at the boundary. Mirrors Any2Ipe.
                 if (cScript == lastScript || cScript == Script.Unknown)

@@ -75,7 +75,7 @@ namespace CST.Conversion
             deva2Guru['\u0930'] = '\u0A30'; // ra
             deva2Guru['\u0932'] = '\u0A32'; // la
             deva2Guru['\u0933'] = '\u0A33'; // l underdot a
-            deva2Guru['\u0935'] = '\u0AB5'; // va
+            deva2Guru['\u0935'] = '\u0A35'; // va - Gurmukhi's own letter (#1025)
             deva2Guru['\u0936'] = '\u0A36'; // sha (palatal)
             deva2Guru['\u0938'] = '\u0A38'; // sa
             deva2Guru['\u0939'] = '\u0A39'; // ha

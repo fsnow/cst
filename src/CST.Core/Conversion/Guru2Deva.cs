@@ -9,7 +9,7 @@ namespace CST.Conversion
         private static IDictionary<char, object> guru2Deva;
 
         // Fast reverse-lookup table for the optimized Convert(): map[c] = Deva char, '\0' = pass through. (#86)
-        private const int MapLen = 0x0B00; // covers the Gurmukhi block + the borrowed Gujarati va (U+0AB5)
+        private const int MapLen = 0x0B00; // covers the Gurmukhi block + U+0AB5, the Gujarati va still read as va (#1025)
         private static readonly char[] map = new char[MapLen];
 
         static Guru2Deva()
@@ -73,7 +73,11 @@ namespace CST.Conversion
             guru2Deva['\u0A30'] = '\u0930'; // ra
             guru2Deva['\u0A32'] = '\u0932'; // la
             guru2Deva['\u0A33'] = '\u0933'; // l underdot a
-            guru2Deva['\u0AB5'] = '\u0935'; // va
+            guru2Deva['\u0A35'] = '\u0935'; // va (#1025)
+            // U+0AB5 is the GUJARATI letter va. Builds before #1025 wrote it for Gurmukhi va, so Gurmukhi
+            // text copied or stored from them carries it; read it as va too. ScriptDetector keeps it in the
+            // Gurmukhi run it sits in, so Any2Ipe/Any2Deva send it here rather than to Gujr2Deva.
+            guru2Deva['\u0AB5'] = '\u0935'; // va, as written by builds before #1025
             guru2Deva['\u0A36'] = '\u0936'; // sha (palatal)
             guru2Deva['\u0A38'] = '\u0938'; // sa
             guru2Deva['\u0A39'] = '\u0939'; // ha

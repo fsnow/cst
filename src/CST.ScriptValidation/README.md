@@ -124,6 +124,21 @@ All 14 scripts are validated by round-trip conversion (Deva → IPE → Script �
 (~0.8%) on vowel-hiatus and consonant + аа patterns — an inherent limitation of the current
 Cyrillic transliteration scheme, not a converter bug.
 
+This tool names the script at every step, so the read-back always goes through the script's own
+converter. `AutoDetectRoundTripTests` in `CST.Avalonia.Tests` reads these same two word lists and checks
+two things this tool cannot, for every display script except Cyrillic (excluded for the reason above):
+
+- **Auto-detect round trip.** The read-back goes through `Any2Ipe`, the path search and the dictionary
+  use. `Any2Ipe` splits text into runs by each character's Unicode block (`ScriptDetector`; the one
+  exception is U+0AB5, classed by context since #1025) and converts each run with that script's
+  converter. #1025 (Gurmukhi va written as the Gujarati letter U+0AB5) passed this tool and failed
+  330 of 2,364 words there.
+- **Output stays in its own block.** Every character a script's conversion writes must belong to
+  that script's Unicode block, apart from an explicit allow-list (ASCII punctuation, ZWJ/ZWNJ, the
+  dandas, and the non-Pāli Devanagari letters that several converters pass through). This is the
+  property #1025 broke. The round trip alone no longer guards it, because `Guru2Deva` still reads
+  U+0AB5 so older Gurmukhi text reads back.
+
 ## Tools
 
 The project includes four testing modes:
@@ -250,13 +265,12 @@ Cyrillic has an inherent encoding ambiguity for certain patterns:
 
 Both produce identical Cyrillic output, making round-trip conversion impossible for these patterns. This is a limitation of the Cyrillic orthography design, not a code bug.
 
-See `reports/BUG_ANALYSIS.md` for detailed technical analysis.
+See [CYRILLIC_ENCODING_LIMITATION.md](../../docs/implementation/CYRILLIC_ENCODING_LIMITATION.md) for the full analysis.
 
 ## Reports
 
-The `reports/` directory contains detailed analysis:
-- `BUG_ANALYSIS.md` - Root cause analysis of known issues
-- `ScriptValidation-Coverage-Analysis.md` - Test coverage statistics
+- `reports/vowel-hiatus-candidate-errors.md` - Corpus vowel-hiatus candidates for VRI review
+- `markdown/ScriptValidation-Coverage-Analysis.md` - Test coverage statistics
 
 ## Command Line Reference
 
@@ -349,7 +363,6 @@ When fixing conversion bugs:
 3. **Trace the conversion** - Use debugger or add console output to converter
 4. **Fix the conversion logic** - Update the relevant converter class
 5. **Verify the fix** - Run validation to ensure no regressions
-6. **Update documentation** - Add notes to BUG_ANALYSIS.md if needed
 
 ## See Also
 
