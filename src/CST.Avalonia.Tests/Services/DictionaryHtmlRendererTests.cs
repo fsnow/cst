@@ -74,4 +74,33 @@ public class DictionaryHtmlRendererTests
         Assert.DoesNotContain("Weird\"Font", html);   // the raw quote must be encoded
         Assert.Contains("Weird&quot;Font", html);
     }
+
+    [Fact]
+    public void Render_WithoutPaintBackground_LeavesThePageTransparent()
+    {
+        // macOS: the Avalonia border behind the WebView shows through; nothing may paint over it. (#1001)
+        var html = DictionaryHtmlRenderer.Render("x", Id, "Arial", 11, paintBackground: false);
+        Assert.Contains("background: transparent", html);
+        Assert.DoesNotContain("#2b2b2b", html);
+        Assert.DoesNotContain("#ffffff", html);
+    }
+
+    [Fact]
+    public void Render_WithPaintBackground_PaintsLightAndDarkBackgrounds()
+    {
+        // Windows: CEF shows white behind a transparent page, so dark-mode text was white on white. (#1001)
+        var html = DictionaryHtmlRenderer.Render("x", Id, "Arial", 11, paintBackground: true);
+        Assert.Contains("html, body { background: #ffffff; }", html);
+        Assert.Contains("@media (prefers-color-scheme: dark) { html, body { background: #2b2b2b; } }", html);
+        // The opaque rule must come after the base 'transparent' rule to win the cascade.
+        Assert.True(html.IndexOf("#2b2b2b", StringComparison.Ordinal)
+                    > html.IndexOf("background: transparent", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Render_DefaultOverload_PaintsBackgroundOnlyOnWindows()
+    {
+        var html = DictionaryHtmlRenderer.Render("x", Id, "Arial", 11);
+        Assert.Equal(OperatingSystem.IsWindows(), html.Contains("#2b2b2b"));
+    }
 }
