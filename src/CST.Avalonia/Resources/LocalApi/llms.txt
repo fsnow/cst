@@ -305,6 +305,15 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   homograph lemmas). A DPD entry's `lemmaId` chains to `/v1/lemma-report/{lemmaId}` (full dossier: etymology,
   root, paradigm, frequency) or `/v1/forms/{lemmaId}` (attested paradigm with counts) - the dictionary meaning
   is deliberately COMPACT and the report is where the depth lives. `lemmaId` is null for the flat dictionaries.
+  A DPD word entry whose headword has a root carries a `<div class="dpd-root">root <see>√var 1</see> · …</div>`
+  line. ROOTS: a `dpd` query that starts with the root sign `√` (U+221A) looks up DPD's roots instead of word
+  forms: `√var 1` (with its homonym number) is exactly that root; `√var` is that root and its numbered homonyms
+  (`√var 1`, `√var 2`); a partial key such as `√va` gets every root starting with it; a lone `√` returns
+  nothing. Each root entry has the root key as `headword`, `lemmaId:null`, and a `meaningHtml` with its meaning,
+  `group` and `sign`, Sanskrit root, Dhātupāṭha, and one link per headword built on it (at most 1000; "first N
+  of M headwords" when capped). Every `<see>…</see>` holds a Latin target you can pass back as `query`: a root key
+  returns that root, and a numbered headword (`accita 2.1`) returns only that headword - drop the number to get
+  every homonym of the word.
 <!--/dpd-->
 <!--/doc:dictionary-->
 <!--doc:scripts-->

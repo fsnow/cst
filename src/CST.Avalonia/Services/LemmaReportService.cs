@@ -266,16 +266,7 @@ public sealed class LemmaReportService : ILemmaReportService
             ? (parts[0], parts[1]) : (null, null);
     }
 
-    // "paññāya 1" → "paññāya"; also DPD's DOTTED sub-numbering "dhamma 1.01" → "dhamma" (mirrors the
-    // provider). A trailing token of only digits and dots is a homonym marker; anything else is kept.
-    private static string StripHomonym(string lemma)
-    {
-        int sp = lemma.LastIndexOf(' ');
-        if (sp <= 0 || sp + 1 >= lemma.Length) return lemma;
-        for (int i = sp + 1; i < lemma.Length; i++)
-            if (!char.IsDigit(lemma[i]) && lemma[i] != '.') return lemma;
-        return lemma[..sp];
-    }
+    private static string StripHomonym(string lemma) => LemmaHeadword.StripHomonym(lemma);
 
     // Broad pos → family grouping (pos alone can't separate causative/passive from finite verbs — DPD tags
     // both as 'pr' — so this is a coarse-but-defensible three-way split).

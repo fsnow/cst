@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using CST.Lemma;
 
 namespace CST.Avalonia.Services;
@@ -69,6 +71,9 @@ public sealed class ReopenableLemmaProvider : ILemmaProvider
     public FormDeconstruction? Deconstruct(string form) => Current.Deconstruct(form);
     public LemmaCandidate? GetLemma(long lemmaId) => Current.GetLemma(lemmaId);
     public LemmaDetail? GetDetail(long lemmaId) => Current.GetDetail(lemmaId);
+    public IReadOnlyList<RootEntry>? FindRoots(string key, RootMatch match, int maxRoots, int maxLemmasPerRoot,
+        Func<string, string>? sortKey = null)
+        => Current.FindRoots(key, match, maxRoots, maxLemmasPerRoot, sortKey);
 
     public void Dispose()
     {

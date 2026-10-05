@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -13,6 +12,7 @@ using CST.Avalonia.Services;
 using CST.Avalonia.Services.Dictionaries;
 using CST.Avalonia.ViewModels.Dock;
 using CST.Conversion;
+using CST.Lemma;
 using CST.Tools;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
@@ -472,22 +472,10 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     /// <para>And the miss was not merely transient: the new selection is written straight back to state, so
     /// a failed match REPLACED the remembered one for good.</para>
     ///
-    /// <para>Folding by numeric value rather than by codepoint range, so this holds for any script whose
-    /// digits the converters learn to emit later.</para>
+    /// <para>The fold is <see cref="PaliDigits.ToAscii"/>, shared with DPD's root and homonym lookups.</para>
     /// </summary>
-    private static string MatchKey(string headword)
-    {
-        var folded = string.Create(headword.Length, headword, static (span, source) =>
-        {
-            for (int i = 0; i < source.Length; i++)
-            {
-                int digit = CharUnicodeInfo.GetDecimalDigitValue(source[i]);
-                span[i] = digit >= 0 ? (char)('0' + digit) : source[i];
-            }
-        });
-
-        return Any2Ipe.Convert(folded.ToLowerInvariant());
-    }
+    private static string MatchKey(string headword) =>
+        Any2Ipe.Convert(PaliDigits.ToAscii(headword).ToLowerInvariant());
 
     private void UpdateMeaning()
     {
@@ -507,17 +495,51 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         catch { return word; }
     }
 
-    // Follow a <see> link: remember where we are, then look the referenced word up.
+    // Follow a <see> link: remember where we are, then look the referenced word up - and when the link names
+    // one homonym ("accita 2.1"), select that entry rather than whichever the lookup lists first. (#1002)
     private void NavigateToWord(string target)
     {
         if (string.IsNullOrWhiteSpace(target)) return;
+        var (query, select) = SplitLinkTarget(target);
+        var display = PaliToDisplay(query);
+
+        // Already showing that query: no lookup will run, so select directly.
+        if (select != null && string.Equals(display, SearchText, StringComparison.Ordinal))
+        {
+            SelectedWord = ChooseSelection(select, Words);
+            return;
+        }
+
         if (!string.IsNullOrEmpty(SearchText))
         {
             _backStack.Push(SearchText);
             _forwardStack.Clear();
             UpdateHistoryState();
         }
-        SearchText = PaliToDisplay(target);
+
+        // The #935 one-shot selection, armed for exactly this query before SearchText schedules its lookup.
+        _pendingSelectedHeadword = select;
+        _pendingSelectedFor = select == null ? null : display;
+        SearchText = display;
+    }
+
+    /// <summary>
+    /// What a <c>&lt;see&gt;</c> target looks up, and which entry of the result it names. (#1002)
+    ///
+    /// <para>A target ending in a homonym number ("accita 2.1", as DPD's root entries link their headwords)
+    /// is looked up WITHOUT the number - the lookup resolves word forms, so this lists every homonym, as a
+    /// typed word would - and the numbered headword becomes the entry to select. Following "accita 2.1"
+    /// used to open "accita 1.1" first, a different word with a different root.</para>
+    ///
+    /// <para>A root key ("√var 1") is looked up as it is: DPD reads a numbered root query as an exact match,
+    /// so there is nothing to select among. A target with no number selects the first entry, as before.</para>
+    /// </summary>
+    internal static (string Query, string? Select) SplitLinkTarget(string target)
+    {
+        var t = target.Trim();
+        if (t.Length > 0 && t[0] == DpdDictionarySource.RootSign) return (t, null);
+        var stripped = LemmaHeadword.StripHomonym(t);
+        return stripped.Length == t.Length ? (t, null) : (stripped, t);
     }
 
     private void GoBack()

@@ -58,10 +58,33 @@ public sealed record DpdLemmaMeta(
     string Author,
     string Homepage);
 
-/// <summary>Root (dhātu) detail for the report's etymology band (present only in report-grade assets).</summary>
+/// <summary>Root (dhātu) detail for the report's etymology band and the dictionary's root entries (present only
+/// in report-grade assets). <see cref="RootKey"/> carries DPD's root sign and homonym number (<c>√var 1</c>);
+/// <see cref="RootSign"/> is DPD's conjugation sign for the root (<c>a</c>, <c>e, aya</c>), not the √ symbol.
+/// The Dhātupāṭha and meaning fields may contain DPD's <c>&lt;b&gt;</c> emphasis. (#1002)</summary>
 public sealed record RootDetail(
     string RootKey, string? RootMeaning, long? RootGroup,
-    string? SanskritRoot, string? SanskritRootMeaning, string? DhatupathaPali, string? DhatupathaEnglish);
+    string? SanskritRoot, string? SanskritRootMeaning, string? DhatupathaPali, string? DhatupathaEnglish,
+    string? RootSign = null);
+
+/// <summary>How <see cref="ILemmaProvider.FindRoots"/> matches a root key. (#1002)</summary>
+public enum RootMatch
+{
+    /// <summary>The root whose key equals the query (<c>√var 1</c>).</summary>
+    Exact,
+    /// <summary>The root whose key equals the query, or its numbered homonyms (<c>√var</c> → <c>√var 1</c>,
+    /// <c>√var 2</c>), and no longer key (<c>√man</c> does not find <c>√mant</c>).</summary>
+    Homonyms,
+    /// <summary>Every root whose key starts with the query (<c>√va</c>).</summary>
+    Prefix,
+}
+
+/// <summary>
+/// One root and the DPD headwords built on it (<c>lemma.root_key</c>), in headword-id order. <see cref="Lemmas"/>
+/// is capped by the caller; <see cref="LemmaCount"/> is the uncapped total, so a caller can say the list is
+/// partial. (#1002)
+/// </summary>
+public sealed record RootEntry(RootDetail Root, IReadOnlyList<LemmaCandidate> Lemmas, int LemmaCount);
 
 /// <summary>
 /// Report-grade detail for one lemma (etymology, example, frequency, root) — the extra per-lemma columns a
