@@ -2655,6 +2655,28 @@ public partial class BookDisplayView : UserControl
         var pendingToken = _viewModel.TakePendingPositionToken();
         var pendingAnchor = _viewModel.TakePendingAnchorNavigation();
 
+        // #434 reading-position token: where the reader actually was. It wins over a saved search hit, and over
+        // the coarse string anchor (it interpolates to the exact position). [fsnow], testing beta 8, on a book
+        // opened from search results and read on past its hit: "my position is not restoring correctly". The
+        // hit used to win - #36 assumed restoring the hit would restore the position, which holds only until the
+        // reader scrolls away from it. The hit is still restored as the "N of M" counter and the red highlight,
+        // without scrolling (below). ScrollToPositionToken is cache-free (live querySelector), so it works here
+        // even before the deferred cache rebuild (Fable §2).
+        if (pendingToken != null)
+        {
+            _logger.Information("Restoring reading position from #434 token (above={Above}, below={Below}, frac={Frac})",
+                pendingToken.Above, pendingToken.Below, pendingToken.Fraction);
+            ScrollToPositionToken(pendingToken);
+
+            // As in the anchor branch: the token owns the scroll position, so re-mark the CURRENT hit (red)
+            // WITHOUT scrolling to keep the highlight matching the "N of M" counter after a reload.
+            var markHit = pendingHit is int h && h >= 1 ? h : _viewModel.CurrentHitIndex;
+            if (_viewModel.HasSearchHighlights && markHit > 0)
+                SyncCurrentHitStyle(markHit);
+            return;
+        }
+
+        // A saved hit with no saved reading position (a state file from before #434): go to the hit.
         if (pendingHit is int savedHit && savedHit >= 1)
         {
             // Inject IMMEDIATELY: cstSearchHighlights exists (the JS bridge was set up earlier in
@@ -2666,22 +2688,6 @@ public partial class BookDisplayView : UserControl
             var target = total > 0 ? Math.Min(savedHit, total) : savedHit;
             _logger.Information("Restoring scroll to saved search hit {Hit}", target);
             NavigateToHighlight(target);
-            return;
-        }
-
-        // #434 reading-position token — preferred over the coarse string anchor (it interpolates to the exact
-        // reading position). Search-hit restore still wins (Fable §6 / #36). ScrollToPositionToken is cache-free
-        // (live querySelector), so it works here even before the deferred cache rebuild (Fable §2).
-        if (pendingToken != null)
-        {
-            _logger.Information("Restoring reading position from #434 token (above={Above}, below={Below}, frac={Frac})",
-                pendingToken.Above, pendingToken.Below, pendingToken.Fraction);
-            ScrollToPositionToken(pendingToken);
-
-            // As in the anchor branch: the token owns the scroll position, so re-mark the CURRENT hit (red)
-            // WITHOUT scrolling to keep the highlight matching the "N of M" counter after a reload.
-            if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
-                SyncCurrentHitStyle(_viewModel.CurrentHitIndex);
             return;
         }
 

@@ -149,6 +149,12 @@ namespace CST.Avalonia.ViewModels
             _searchPositions = searchPositions;  // NEW: Store positions for two-color highlighting
             _initialAnchor = initialAnchor;
             _initialPositionToken = initialPositionToken;
+            // Until the reader looks at this book, its restored position IS where they are. The last-captured
+            // pair is filled only by the view's scroll tracking, which runs while the book is on screen, so a
+            // restored tab the reader never brought forward saved null at quit and lost its place: [fsnow],
+            // testing beta 8, of a book reopened at dn1_1 earlier that day: "What about the DN1 issue ?"
+            _lastCapturedAnchor = initialAnchor;
+            _lastPositionToken = initialPositionToken;
             _initialCurrentHitIndex = initialCurrentHitIndex;
             _docId = docId;
             // Seed the per-tab script to the target the factory will use, so its post-construction
@@ -959,11 +965,16 @@ namespace CST.Avalonia.ViewModels
                 // complete) that silently no-opped when the browser wasn't initialized yet, leaving
                 // the book at the top on slow loads. (BOOK-7)
                 //
-                // A search-restored book has BOTH a saved scroll anchor and a saved hit index; prefer
-                // the exact hit over the anchor, which only lands at the paragraph start and can leave
-                // the highlighted term off-screen in a long paragraph. (#36)
+                // A search-restored book has a saved hit index as well as a saved position. The exact reading
+                // position (#434 token) wins: it is where the reader was, and they may have read on past the hit.
+                // [fsnow], testing beta 8: "my position is not restoring correctly" - the hit used to win here,
+                // and the position was never even queued. The hit index is still restored (below), for the
+                // "N of M" counter and the current hit's highlight; BookDisplayView.ExecutePendingRestoration
+                // marks it without scrolling. Over the coarse string ANCHOR the hit still wins (#36): the anchor
+                // lands at the paragraph start and can leave the highlighted term off-screen.
                 bool restoreSearchHit = _searchTerms?.Any() == true && _initialCurrentHitIndex.HasValue;
-                if (_initialPositionToken != null && !restoreSearchHit)
+                bool anchorQueued = false;
+                if (_initialPositionToken != null)
                 {
                     // #434 cross-run restore: prefer the exact reading-position token over the coarse anchor.
                     lock (_anchorGate) _pendingPositionToken = _initialPositionToken;
@@ -973,9 +984,11 @@ namespace CST.Avalonia.ViewModels
                 else if (!string.IsNullOrEmpty(_initialAnchor) && !restoreSearchHit)
                 {
                     lock (_anchorGate) _pendingAnchorNavigation = _initialAnchor;
+                    anchorQueued = true;
                     _logger.Debug("Queued initial anchor navigation: {Anchor}", _initialAnchor);
                 }
-                else if (_searchTerms?.Any() == true)
+
+                if (_searchTerms?.Any() == true && !anchorQueued)
                 {
                     _logger.Debug("Setting up search navigation: {TermCount} terms", _searchTerms.Count);
                     await Dispatcher.UIThread.InvokeAsync(() =>
