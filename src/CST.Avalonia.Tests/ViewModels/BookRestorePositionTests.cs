@@ -81,4 +81,42 @@ public class BookRestorePositionTests
         Assert.Equal("dn1_1", vm.LastCapturedAnchor);
         Assert.Same(token, vm.LastPositionToken);
     }
+
+    // ---- What the view does with it ------------------------------------------------------------------
+
+    [Fact]
+    public void A_queued_position_wins_over_a_queued_hit_and_anchor()
+    {
+        Assert.Equal(CST.Avalonia.Views.BookDisplayView.PendingRestore.Position,
+            CST.Avalonia.Views.BookDisplayView.PlanPendingRestore(hasPendingPosition: true, pendingHit: 1, hasPendingAnchor: true));
+    }
+
+    [Fact]
+    public void Without_a_position_a_queued_hit_wins_over_the_anchor()
+    {
+        Assert.Equal(CST.Avalonia.Views.BookDisplayView.PendingRestore.Hit,
+            CST.Avalonia.Views.BookDisplayView.PlanPendingRestore(false, 2, true));
+        Assert.Equal(CST.Avalonia.Views.BookDisplayView.PendingRestore.Anchor,
+            CST.Avalonia.Views.BookDisplayView.PlanPendingRestore(false, null, true));
+        Assert.Equal(CST.Avalonia.Views.BookDisplayView.PendingRestore.None,
+            CST.Avalonia.Views.BookDisplayView.PlanPendingRestore(false, 0, false));
+    }
+
+    // [fsnow], asked whether switching back to a search book's tab should keep the reader's position or return to
+    // the current hit: "keep your position".
+    [Fact]
+    public void Switching_back_to_a_search_book_keeps_the_readers_position()
+    {
+        Assert.Equal(CST.Avalonia.Views.BookDisplayView.ReattachRestore.Position,
+            CST.Avalonia.Views.BookDisplayView.PlanReattachRestore(hasLastPosition: true, hasSearchHighlights: true, currentHitIndex: 1));
+    }
+
+    [Fact]
+    public void A_search_book_with_no_position_yet_lands_on_its_hit()
+    {
+        Assert.Equal(CST.Avalonia.Views.BookDisplayView.ReattachRestore.CurrentHit,
+            CST.Avalonia.Views.BookDisplayView.PlanReattachRestore(false, true, 1));
+        Assert.Equal(CST.Avalonia.Views.BookDisplayView.ReattachRestore.None,
+            CST.Avalonia.Views.BookDisplayView.PlanReattachRestore(false, false, 0));
+    }
 }

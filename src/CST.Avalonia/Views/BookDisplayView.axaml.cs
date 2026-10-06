@@ -2577,8 +2577,8 @@ public partial class BookDisplayView : UserControl
     // actually ready. Called from OnNavigationCompleted (fresh load and reloads, e.g. script change)
     // and from the attach handler when a recycled tab reattaches with a live browser. Precedence:
     // saved reading position (#434 token; the current hit is marked, not scrolled to) > saved hit >
-    // saved anchor > re-anchor to the current hit after a reload of a search book > the rolling
-    // position on a plain book's reattach (#31) - mirroring InitializeAsync's PlanInitialRestore.
+    // saved anchor > with nothing queued, the book's last position, else a search book's current hit
+    // (PlanReattachRestore) - mirroring InitializeAsync's PlanInitialRestore.
     // Replaces three racing fixed-delay attempts (1000/500/300 ms) that silently no-opped when the
     // browser wasn't ready, leaving the book at the top on slow loads. (BOOK-7)
     /// <summary>
@@ -2655,6 +2655,7 @@ public partial class BookDisplayView : UserControl
         var pendingHit = _viewModel.TakePendingHitNavigation();
         var pendingToken = _viewModel.TakePendingPositionToken();
         var pendingAnchor = _viewModel.TakePendingAnchorNavigation();
+        var pending = PlanPendingRestore(pendingToken != null, pendingHit, !string.IsNullOrEmpty(pendingAnchor));
 
         // #434 reading-position token: where the reader actually was. It wins over a saved search hit, and over
         // the coarse string anchor (it interpolates to the exact position). [fsnow], testing beta 8: "my position
@@ -2663,7 +2664,7 @@ public partial class BookDisplayView : UserControl
         // reader scrolls away from it. The hit is still restored as the "N of M" counter and the red highlight,
         // without scrolling (below). ScrollToPositionToken is cache-free (live querySelector), so it works here
         // even before the deferred cache rebuild (Fable §2).
-        if (pendingToken != null)
+        if (pending == PendingRestore.Position && pendingToken != null)
         {
             _logger.Information("Restoring reading position from #434 token (above={Above}, below={Below}, frac={Frac})",
                 pendingToken.Above, pendingToken.Below, pendingToken.Fraction);
@@ -2678,7 +2679,7 @@ public partial class BookDisplayView : UserControl
         }
 
         // A saved hit with no saved reading position (a state file from before #434): go to the hit.
-        if (pendingHit is int savedHit && savedHit >= 1)
+        if (pending == PendingRestore.Hit && pendingHit is int savedHit)
         {
             // Inject IMMEDIATELY: cstSearchHighlights exists (the JS bridge was set up earlier in
             // this same callback) but its hits aren't collected yet, so the script queues the intent
@@ -2692,7 +2693,7 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        if (!string.IsNullOrEmpty(pendingAnchor))
+        if (pending == PendingRestore.Anchor && pendingAnchor != null)
         {
             _logger.Information("Restoring scroll to saved anchor {Anchor}", pendingAnchor);
             ScrollToPageAnchor(pendingAnchor);
@@ -2709,24 +2710,54 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        // No queued intent: a (re)load of a search book still lands on the current hit once the
-        // highlights initialize (e.g. a fresh search-result open, tab reattach) — injected
-        // immediately, queued by the JS if hits aren't collected yet (no flash). (BOOK-7)
-        if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
+        // No queued intent: a tab coming back, or a reload with nothing captured. Keep the reader's place - the
+        // book's own last position (#31), on a search book too, with its current hit marked rather than scrolled
+        // to. [fsnow], asked whether switching back to a search book's tab should keep the reader's position or
+        // return to the current hit: "keep your position" (2026-10-06). A search book with no position yet (a
+        // fresh open from search results, before its first scroll capture) still lands on its hit. The VIEW
+        // MODEL's token, not this view's rolling field: ControlRecycling can rebind this view to another book.
+        var lastToken = _viewModel.LastPositionToken;
+        switch (PlanReattachRestore(lastToken != null, _viewModel.HasSearchHighlights, _viewModel.CurrentHitIndex))
         {
-            _logger.Debug("Navigating to current search hit: {HitIndex}", _viewModel.CurrentHitIndex);
-            NavigateToHighlight(_viewModel.CurrentHitIndex);
+            case ReattachRestore.Position:
+                _logger.Debug("Restoring last reading position (#31): above={Above}, below={Below}, frac={Frac}",
+                    lastToken!.Above, lastToken.Below, lastToken.Fraction);
+                ScrollToPositionToken(lastToken);
+                if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
+                    SyncCurrentHitStyle(_viewModel.CurrentHitIndex);
+                break;
+            case ReattachRestore.CurrentHit:
+                _logger.Debug("Navigating to current search hit: {HitIndex}", _viewModel.CurrentHitIndex);
+                NavigateToHighlight(_viewModel.CurrentHitIndex);
+                break;
         }
-        // #31: a NON-search book reattaching a recycled tab has no hit/anchor/token intent, but CEF can reset
-        // the live browser's scroll on reattach — so restore the rolling-captured reading position. Lowest
-        // precedence: a search book goes to its current hit instead (above); cache-free, so it's safe before
-        // the deferred cache rebuild.
-        else if (_lastPositionToken != null)
-        {
-            _logger.Debug("Restoring rolling reading-position token on reattach (#31): above={Above}, below={Below}, frac={Frac}",
-                _lastPositionToken.Above, _lastPositionToken.Below, _lastPositionToken.Fraction);
-            ScrollToPositionToken(_lastPositionToken);
-        }
+    }
+
+    internal enum PendingRestore { None, Position, Hit, Anchor }
+
+    /// <summary>
+    /// Which queued restore intent wins: the saved reading position (where the reader was), then a saved search
+    /// hit, then the coarse paragraph anchor. (#36, #434, #1032)
+    /// </summary>
+    internal static PendingRestore PlanPendingRestore(bool hasPendingPosition, int? pendingHit, bool hasPendingAnchor)
+    {
+        if (hasPendingPosition) return PendingRestore.Position;
+        if (pendingHit is int hit && hit >= 1) return PendingRestore.Hit;
+        if (hasPendingAnchor) return PendingRestore.Anchor;
+        return PendingRestore.None;
+    }
+
+    internal enum ReattachRestore { None, Position, CurrentHit }
+
+    /// <summary>
+    /// With no queued restore intent: the reader's last position if the book has one, otherwise a search book's
+    /// current hit, otherwise nothing. (#31, #1032)
+    /// </summary>
+    internal static ReattachRestore PlanReattachRestore(bool hasLastPosition, bool hasSearchHighlights, int currentHitIndex)
+    {
+        if (hasLastPosition) return ReattachRestore.Position;
+        if (hasSearchHighlights && currentHitIndex > 0) return ReattachRestore.CurrentHit;
+        return ReattachRestore.None;
     }
 
 
