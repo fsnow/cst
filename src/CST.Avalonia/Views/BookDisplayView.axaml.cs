@@ -2576,8 +2576,9 @@ public partial class BookDisplayView : UserControl
     // Execute any queued restoration (saved anchor / saved search hit) now that the document is
     // actually ready. Called from OnNavigationCompleted (fresh load and reloads, e.g. script change)
     // and from the attach handler when a recycled tab reattaches with a live browser. Precedence:
-    // saved hit > saved anchor > re-anchor to the current hit after a reload of a search book —
-    // mirroring InitializeAsync's #36 preference for the exact hit over its paragraph anchor.
+    // saved reading position (#434 token; the current hit is marked, not scrolled to) > saved hit >
+    // saved anchor > re-anchor to the current hit after a reload of a search book > the rolling
+    // position on a plain book's reattach (#31) - mirroring InitializeAsync's PlanInitialRestore.
     // Replaces three racing fixed-delay attempts (1000/500/300 ms) that silently no-opped when the
     // browser wasn't ready, leaving the book at the top on slow loads. (BOOK-7)
     /// <summary>
@@ -2656,8 +2657,8 @@ public partial class BookDisplayView : UserControl
         var pendingAnchor = _viewModel.TakePendingAnchorNavigation();
 
         // #434 reading-position token: where the reader actually was. It wins over a saved search hit, and over
-        // the coarse string anchor (it interpolates to the exact position). [fsnow], testing beta 8, on a book
-        // opened from search results and read on past its hit: "my position is not restoring correctly". The
+        // the coarse string anchor (it interpolates to the exact position). [fsnow], testing beta 8: "my position
+        // is not restoring correctly in book 185" ([observed] opened from search results, saved past its hit). The
         // hit used to win - #36 assumed restoring the hit would restore the position, which holds only until the
         // reader scrolls away from it. The hit is still restored as the "N of M" counter and the red highlight,
         // without scrolling (below). ScrollToPositionToken is cache-free (live querySelector), so it works here
@@ -2718,7 +2719,8 @@ public partial class BookDisplayView : UserControl
         }
         // #31: a NON-search book reattaching a recycled tab has no hit/anchor/token intent, but CEF can reset
         // the live browser's scroll on reattach — so restore the rolling-captured reading position. Lowest
-        // precedence (search-hit wins, Fable §6); cache-free, so it's safe before the deferred cache rebuild.
+        // precedence: a search book goes to its current hit instead (above); cache-free, so it's safe before
+        // the deferred cache rebuild.
         else if (_lastPositionToken != null)
         {
             _logger.Debug("Restoring rolling reading-position token on reattach (#31): above={Above}, below={Below}, frac={Frac}",

@@ -7,9 +7,10 @@ namespace CST.Avalonia.Tests.ViewModels;
 /// <summary>
 /// Where a restored book opens, and what it saves before the reader looks at it. (#1032)
 ///
-/// <para><b>[fsnow]</b>, testing beta 8: a book opened from search results and read on past its hit reopened at the
-/// hit - <i>"my position is not restoring correctly"</i>; and a restored tab never brought forward lost its place at
-/// the next quit - <i>"What about the DN1 issue ?"</i></para>
+/// <para><b>[fsnow]</b>, testing beta 8: <i>"my position is not restoring correctly in book 185"</i> and <i>"What about
+/// the DN1 issue ?"</i>. [observed] Book 185 was opened from search results and saved well past its hit, and
+/// reopened at the hit; the DN1 book was a restored tab he had not brought forward, which lost its place at the
+/// next quit.</para>
 /// </summary>
 public class BookRestorePositionTests
 {

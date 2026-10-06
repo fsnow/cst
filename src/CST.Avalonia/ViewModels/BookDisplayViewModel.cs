@@ -152,7 +152,8 @@ namespace CST.Avalonia.ViewModels
             // Until the reader looks at this book, its restored position IS where they are. The last-captured
             // pair is filled only by the view's scroll tracking, which runs while the book is on screen, so a
             // restored tab the reader never brought forward saved null at quit and lost its place: [fsnow],
-            // testing beta 8, of a book reopened at dn1_1 earlier that day: "What about the DN1 issue ?"
+            // testing beta 8: "What about the DN1 issue ?" - [observed] a restored tab he had not brought forward,
+            // which reopened at dn1_1 earlier that day and later had no saved position.
             _lastCapturedAnchor = initialAnchor;
             _lastPositionToken = initialPositionToken;
             _initialCurrentHitIndex = initialCurrentHitIndex;
@@ -281,6 +282,9 @@ namespace CST.Avalonia.ViewModels
                         if (BookDisplayControl != null)
                         {
                             savedToken = await BookDisplayControl.GetCurrentPositionTokenAsync();
+                            // A tab never brought forward has no live position (its anchor cache never built);
+                            // its last known one - the restored position, until the reader moves - stands in.
+                            savedToken ??= _lastPositionToken;
                             if (savedToken != null)
                                 _logger.Debug("Captured reading-position token: above={Above} below={Below} frac={Frac}", savedToken.Above, savedToken.Below, savedToken.Fraction);
                             else
@@ -582,7 +586,8 @@ namespace CST.Avalonia.ViewModels
 
         /// <summary>
         /// Gets the last captured anchor for scroll position restoration.
-        /// Updated every 200ms by the scroll timer, persists across float/unfloat.
+        /// Starts at the restored anchor (if any), then updated every 200ms by the scroll timer while the book is on
+        /// screen; persists across float/unfloat.
         /// </summary>
         public string? LastCapturedAnchor { get { lock (_anchorGate) return _lastCapturedAnchor; } }
 
@@ -967,7 +972,8 @@ namespace CST.Avalonia.ViewModels
                 //
                 // A search-restored book has a saved hit index as well as a saved position. The exact reading
                 // position (#434 token) wins: it is where the reader was, and they may have read on past the hit.
-                // [fsnow], testing beta 8: "my position is not restoring correctly" - the hit used to win here,
+                // [fsnow], testing beta 8: "my position is not restoring correctly in book 185" ([observed] a book
+                // opened from search results, saved well past its hit) - the hit used to win here,
                 // and the position was never even queued. The hit index is still restored (below), for the
                 // "N of M" counter and the current hit's highlight; BookDisplayView.ExecutePendingRestoration
                 // marks it without scrolling. Over the coarse string ANCHOR the hit still wins (#36): the anchor

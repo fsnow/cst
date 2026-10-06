@@ -69,8 +69,9 @@ public enum ReaderStateProblem
 /// scrolled in the last fifth of a second — which is smaller than the trade a live round trip makes by
 /// occasionally returning nothing at all.</para>
 ///
-/// <para>Null before the anchor cache has built, which is the same case the store already documents as "not
-/// captured": a turn is worth keeping without one.</para>
+/// <para>Null before the anchor cache has built - or, for a restored book, its restored anchor until then -
+/// which is the same case the store already documents as "not captured": a turn is worth keeping without
+/// one.</para>
 /// </param>
 public sealed record ReaderState(
     string BookId,
