@@ -2467,7 +2467,9 @@ public partial class BookDisplayView : UserControl
                 // tree's window view and the book did not scroll. [fsnow], testing beta 8: "when a book is
                 // open, I expect that the focus is put there and arrows scroll the book, but they do not".
                 // WebView.Focus() hands Chromium the native focus (WebViewControl's own chromium.Focus()).
-                // Only a book on screen takes it: a background tab finishing its load must not.
+                // A background tab cannot take it: Avalonia refuses focus to a hidden control. Any visible
+                // book that reloads does take it - including one in another split or window, on a global script
+                // or font change, or at launch - exactly as the container's this.Focus() did before.
                 if (_webView != null && _webView.IsEffectivelyVisible)
                     _webView.Focus();
                 else

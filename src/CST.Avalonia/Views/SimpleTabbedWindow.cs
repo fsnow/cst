@@ -1458,16 +1458,16 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    // "Search for Selection" (Cmd+F): take the word or phrase selected in the active book and run it
+    // "Search for Selection" (⌘⇧F / Ctrl+Shift+F): take the word or phrase selected in the active book and run it
     // through the Search tool, bringing the Search tab forward. Multi-word selections are quoted so they
     // search as an exact phrase. (#25 adjacent feature)
     private async void OnSearchForSelectionClick(object? sender, EventArgs e)
     {
-        _logger.Information("Search for Selection (Cmd+F) from window: {WindowTitle}", this.Title);
+        _logger.Information("Search for Selection (Cmd+Shift+F) from window: {WindowTitle}", this.Title);
         await SearchForSelectionAsync(FindActiveBookInThisWindow());
     }
 
-    // Shared by both windows' Cmd+F, same as LookUpInDictionaryAsync above. (#448)
+    // Shared by both windows' ⌘⇧F, same as LookUpInDictionaryAsync above. (#448)
     internal static async Task SearchForSelectionAsync(BookDisplayViewModel? book)
     {
         try
