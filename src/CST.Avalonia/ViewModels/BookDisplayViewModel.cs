@@ -972,23 +972,25 @@ namespace CST.Avalonia.ViewModels
                 // "N of M" counter and the current hit's highlight; BookDisplayView.ExecutePendingRestoration
                 // marks it without scrolling. Over the coarse string ANCHOR the hit still wins (#36): the anchor
                 // lands at the paragraph start and can leave the highlighted term off-screen.
-                bool restoreSearchHit = _searchTerms?.Any() == true && _initialCurrentHitIndex.HasValue;
-                bool anchorQueued = false;
-                if (_initialPositionToken != null)
+                var plan = PlanInitialRestore(
+                    hasPositionToken: _initialPositionToken != null,
+                    hasAnchor: !string.IsNullOrEmpty(_initialAnchor),
+                    hasSearchTerms: _searchTerms?.Any() == true,
+                    hasSavedHit: _initialCurrentHitIndex.HasValue);
+                if (plan.QueuePositionToken && _initialPositionToken is { } token)
                 {
                     // #434 cross-run restore: prefer the exact reading-position token over the coarse anchor.
-                    lock (_anchorGate) _pendingPositionToken = _initialPositionToken;
+                    lock (_anchorGate) _pendingPositionToken = token;
                     _logger.Debug("Queued initial reading-position token restore (above={Above}, below={Below})",
-                        _initialPositionToken.Above, _initialPositionToken.Below);
+                        token.Above, token.Below);
                 }
-                else if (!string.IsNullOrEmpty(_initialAnchor) && !restoreSearchHit)
+                else if (plan.QueueAnchor)
                 {
                     lock (_anchorGate) _pendingAnchorNavigation = _initialAnchor;
-                    anchorQueued = true;
                     _logger.Debug("Queued initial anchor navigation: {Anchor}", _initialAnchor);
                 }
 
-                if (_searchTerms?.Any() == true && !anchorQueued)
+                if (plan.SetUpSearch && _searchTerms != null)
                 {
                     _logger.Debug("Setting up search navigation: {TermCount} terms", _searchTerms.Count);
                     await Dispatcher.UIThread.InvokeAsync(() =>
@@ -1021,6 +1023,22 @@ namespace CST.Avalonia.ViewModels
             {
                 await Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
             }
+        }
+
+        /// <summary>What a newly opened book restores, from what it was saved with. (#36, #434, #1032)</summary>
+        /// <param name="hasPositionToken">A saved #434 reading position: always wins - it is where the reader was.</param>
+        /// <param name="hasAnchor">A saved paragraph anchor: used only without a token, and only when there is no
+        /// saved search hit (the hit is more exact than a paragraph start).</param>
+        /// <param name="hasSearchTerms">Opened from search results.</param>
+        /// <param name="hasSavedHit">A saved "current hit" index.</param>
+        /// <returns><c>SetUpSearch</c> restores the hit counter and queues the hit; with a token queued as well,
+        /// the view only marks that hit, without scrolling to it.</returns>
+        internal static (bool QueuePositionToken, bool QueueAnchor, bool SetUpSearch) PlanInitialRestore(
+            bool hasPositionToken, bool hasAnchor, bool hasSearchTerms, bool hasSavedHit)
+        {
+            bool restoreSearchHit = hasSearchTerms && hasSavedHit;
+            bool queueAnchor = !hasPositionToken && hasAnchor && !restoreSearchHit;
+            return (hasPositionToken, queueAnchor, hasSearchTerms && !queueAnchor);
         }
 
         private void CheckWebViewAvailability()
