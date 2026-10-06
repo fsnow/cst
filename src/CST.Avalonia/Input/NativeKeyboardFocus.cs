@@ -16,7 +16,8 @@ namespace CST.Avalonia.Input;
 /// Avalonia's own focus; it does not change the first responder. A shortcut handled from inside the browser (⌘F
 /// for Find in Page) could therefore show the find box focused while the next keystrokes still went to the book.
 /// [fsnow], testing beta 8: "⌘F for Find in Page does not put the focus into the text box. I can't just ⌘F and
-/// start typing." Clicking the box worked, because a click moves native focus too.</para>
+/// start typing." [observed] A click does move native focus (AppKit makes the clicked view first responder), which
+/// is why clicking into the box and then typing was never affected.</para>
 ///
 /// <para>macOS only. On Windows the same gap is plausible (the browser is a child HWND) but unverified.</para>
 /// </summary>
@@ -27,11 +28,17 @@ public static class NativeKeyboardFocus
     {
         if (!OperatingSystem.IsMacOS()) return;
         if (TopLevel.GetTopLevel(visual)?.TryGetPlatformHandle() is not IMacOSTopLevelPlatformHandle handle) return;
-        if (handle.NSWindow == IntPtr.Zero || handle.NSView == IntPtr.Zero) return;
 
         try
         {
-            objc_msgSend_bool(handle.NSWindow, sel_registerName("makeFirstResponder:"), handle.NSView);
+            // Read inside the try: NSWindow and NSView are live calls into the native window.
+            var window = handle.NSWindow;
+            var view = handle.NSView;
+            if (window == IntPtr.Zero || view == IntPtr.Zero) return;
+
+            if (!objc_msgSend_bool(window, sel_registerName("makeFirstResponder:"), view))
+                Log.ForContext(typeof(NativeKeyboardFocus))
+                    .Warning("The window refused to make its view first responder; keys stay with the browser");
         }
         catch (Exception ex)
         {
