@@ -34,7 +34,7 @@ candidate to *replace* (not re-add) in the overhaul.
 | What | Where | Works around / why |
 |---|---|---|
 | ControlRecycling **enabled** | App.axaml ~43–56 | Preserves scroll/state on same-window tab switch (instant switching). It's the *reason* most CEF kludges exist. |
-| **Unique GUID per BookDisplayViewModel** | BookDisplayViewModel ~126–138 | ControlRecycling caches Views by VM id; duplicate ids → reused View → CEF crash. |
+| **Unique id per BookDisplayViewModel**, kept across launches | `BookDisplayViewModel` constructor; `CstDockFactory.OpenBook` | Not a ControlRecycling requirement: [observed] Dock.Controls.Recycling 11.3.6.5 keys its cache by the view-model **object** (`App.axaml` leaves `TryToUseIdAsKey` off). Uniqueness matters to the dock and state lookups by id (`FindDockable`, `CloseDockable`, `ApplicationStateService`, `RestoreSelectedBookTab`). A restore reuses the saved id so the selected tab is found again; `OpenBook` falls back to a fresh id on a clash or an empty id. (#1032) |
 | `FloatAllDockables` suppressed outright | CstDockFactory 2064 | It bypasses `SplitToWindow`, so it would re-parent several live browsers at once and sweep in the non-floatable Welcome tab. Nothing needs it. |
 | Local drag monitoring **disabled** in BookDisplayView (consolidated to SimpleTabbedWindow) | BookDisplayView ~2329–2335 | Duplicate hide/show from two monitors invalidates CEF handles (the `InitializeWithChildHandle` crash). |
 

@@ -605,9 +605,13 @@ namespace CST.Avalonia.Services
             // (App.RestoreSelectedBookTab) and the book restored without the keyboard can be recognised. It was
             // passed as null here, so every restored book got a fresh id and the saved selection never matched:
             // [fsnow], testing beta 8: "The selected tab (book 185) is not getting the selection".
-            // The id also keys Dock's ControlRecycling (one WebView per id), so an id already in use - a
-            // hand-edited or corrupt state file - falls back to a fresh one rather than share a browser.
-            var restoredId = windowId != null && FindDockable(windowId) == null ? windowId : null;
+            // This was a regression: the feature's own commit (5f148f43, "Save selected tab") reused the saved id;
+            // a later CEF workaround commit dropped it. Ids must stay unique - FindDockable, CloseDockable, the
+            // state service's lookups by WindowId and RestoreSelectedBookTab all assume it - so an id already in
+            // use, or an empty one (a hand-edited or corrupt state file), falls back to a fresh id. [observed]
+            // Dock's ControlRecycling keys its cache by the view-model OBJECT (App.axaml does not set
+            // TryToUseIdAsKey), so a restored id cannot hand one book's browser to another.
+            var restoredId = !string.IsNullOrEmpty(windowId) && FindDockable(windowId) == null ? windowId : null;
             var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, restoredId, this, initialCurrentHitIndex, targetScript, initialPositionToken);
 
             // No-op given the seed above (avoids the second full pipeline run); kept as a safety net.

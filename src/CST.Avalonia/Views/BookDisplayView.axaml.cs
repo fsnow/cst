@@ -548,6 +548,10 @@ public partial class BookDisplayView : UserControl
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
+        // A book whose first load happened while its tab was in the background takes the keyboard now that it is
+        // on screen. A no-op unless it is still owed it (see TryTakeKeyboard); posted so the browser is in place.
+        Dispatcher.UIThread.Post(TryTakeKeyboard, DispatcherPriority.Loaded);
+
         // PHASE 2 LOGGING: Track lifecycle events to determine if tab reordering triggers detachment
         _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         _logger.Information("▶▶▶ ATTACHED to visual tree - Book: {BookFile}, Instance: {InstanceId}",
@@ -727,7 +731,12 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        if (!_isBrowserInitialized || _webView == null || !_webView.IsEffectivelyVisible) return;
+        // On screen means ATTACHED: a tab switch detaches the view rather than hiding it, and a detached control
+        // still reports IsEffectivelyVisible. A book that loads behind another tab - at startup the selected one
+        // often does, while Welcome is briefly in front - keeps its turn and takes the keyboard when it is next
+        // attached (OnAttachedToVisualTree), not now, when Focus() would do nothing (review of #1032).
+        if (!_isBrowserInitialized || _webView == null
+            || _webView.GetVisualRoot() == null || !_webView.IsEffectivelyVisible) return;
 
         vm.KeyboardPending = false;
         _webView.Focus();
@@ -742,9 +751,6 @@ public partial class BookDisplayView : UserControl
             {
                 _logger.Debug("View became visible, starting scroll timer.");
                 _scrollTimer.Start();
-                // A restored book that was selected when the app quit may load before its tab is brought
-                // forward; it takes the keyboard when it is.
-                Dispatcher.UIThread.Post(TryTakeKeyboard, DispatcherPriority.Loaded);
                 // Becoming visible wakes an occluded renderer — dispatch the build if it hasn't happened
                 // yet (a restored/background tab whose navigation fired while hidden). Guarded/idempotent:
                 // no-ops when the cache is already built or a build is in flight. (#423)

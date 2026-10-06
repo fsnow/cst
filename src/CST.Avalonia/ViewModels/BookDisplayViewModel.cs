@@ -157,16 +157,17 @@ namespace CST.Avalonia.ViewModels
             // code seeded from a throwaway `new ScriptService()` (always Devanagari). (BOOK-3)
             _bookScript = initialBookScript ?? Script.Devanagari;
 
-            // Configure Dock properties - CRITICAL: Unique GUID per instance to prevent ControlRecycling cache conflicts
-            // This ensures each book window instance gets a unique ID, preventing CEF crashes when floating/unfloating
+            // Each book tab has its own id - two copies of one book are two tabs - kept across launches: a restore
+            // passes the saved one, so the tab selected at quit is found again. Ids must be unique among open
+            // documents (CstDockFactory.OpenBook falls back to a fresh one on a clash). [observed] ControlRecycling
+            // does NOT key on this id - it keys by the view-model object - so uniqueness here is about the dock and
+            // state lookups, not about which browser a tab gets.
             if (windowId != null)
             {
                 Id = windowId;  // Use restored ID from saved state
             }
             else
             {
-                // Generate unique GUID-based ID for each book instance (like search results do)
-                // This prevents ControlRecycling from reusing cached WebViews across different window contexts
                 var bookGuid = Guid.NewGuid();
                 Id = $"Book_{book.Index}_{book.FileName}_{bookGuid:N}";
             }
