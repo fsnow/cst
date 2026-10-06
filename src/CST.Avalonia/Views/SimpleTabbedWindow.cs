@@ -1489,7 +1489,13 @@ public partial class SimpleTabbedWindow : Window
             if (!string.IsNullOrEmpty(query))
                 search.SearchText = query;   // the Search tool's real-time throttle runs the search
             layoutViewModel.Factory?.SetActiveDockable(search);   // reveal the Search tab
-            RevealWindowHosting(search, layoutViewModel);
+            var host = RevealWindowHosting(search, layoutViewModel);
+
+            // Put the keyboard in the search box, after the layout settles (the pane may have just been
+            // recreated). [fsnow], testing beta 8: "Shift-cmd-F does not put the focus into the text box."
+            Dispatcher.UIThread.Post(
+                () => host?.FindDescendantOfType<SearchPanel>()?.FocusSearchInput(),
+                DispatcherPriority.Loaded);
             Serilog.Log.Information("Search for selection: '{Query}'", query);
         }
         catch (Exception ex)
