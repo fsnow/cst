@@ -32,6 +32,11 @@ namespace CST.Avalonia.ViewModels
 {
     public class BookDisplayViewModel : ReactiveDocument, IDisposable, IScriptFontedDocument
     {
+        /// <summary>Whether this book still has to take the keyboard when first on screen - true from opening until it
+        /// has (or a session restore said it should not). Lives here, not on the view, so a view rebuilt by a float or
+        /// dock - which reloads the page - does not take it again. See BookDisplayView.TryTakeKeyboard.</summary>
+        internal bool KeyboardPending { get; set; } = true;
+
         // Reactive subscriptions owned by this VM; disposed when the tab is permanently closed
         // (or replaced during float/unfloat) to release the FontService subscription that would
         // otherwise root this VM on a singleton for the life of the session.

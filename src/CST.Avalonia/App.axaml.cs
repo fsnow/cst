@@ -1252,6 +1252,8 @@ public partial class App : Application
                                     Log.Information("Restoring book: {BookFile} with WindowId: {WindowId}, SearchTerms: {TermCount}, Positions: {PosCount}, Anchor: {Anchor}",
                                         book.FileName, bookWindowState.WindowId, bookWindowState.SearchTerms.Count, bookWindowState.SearchPositions.Count,
                                         bookWindowState.CurrentAnchor ?? "null");
+                                    if (!bookWindowState.IsSelected && !string.IsNullOrEmpty(bookWindowState.WindowId))
+                                        BooksRestoredWithoutKeyboard.Add(bookWindowState.WindowId);
                                     mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId,
                                         bookWindowState.DocId, bookWindowState.SearchPositions, bookWindowState.CurrentAnchor,
                                         bookWindowState.CurrentHitIndex, bookWindowState.ShowFootnotes, bookWindowState.ShowSearchTerms,
@@ -1297,6 +1299,12 @@ public partial class App : Application
             Log.Error(ex, "Failed to restore book windows");
         }
     }
+
+    /// <summary>
+    /// Ids of books restored at startup that were NOT the selected tab at quit: they load without taking the
+    /// keyboard, so it lands on the book the reader left active. Consumed by BookDisplayView.TryTakeKeyboard.
+    /// </summary>
+    internal static readonly HashSet<string> BooksRestoredWithoutKeyboard = new(StringComparer.Ordinal);
 
     // WindowId of the book tab that was active when state was restored; re-selected after startup work
     // finishes (a re-index pulls the Welcome tab forward). Null/empty when no book tab was active. (#56)

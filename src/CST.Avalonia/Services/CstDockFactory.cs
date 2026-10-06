@@ -601,7 +601,14 @@ namespace CST.Avalonia.Services
             Script targetScript = bookScript ?? scriptService?.CurrentScript ?? Script.Devanagari;
 
             // Pass search data if available (for state restoration with highlighting)
-            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex, targetScript, initialPositionToken);
+            // A restore passes the tab's saved id; keep it, so the selected tab can be found again at startup
+            // (App.RestoreSelectedBookTab) and the book restored without the keyboard can be recognised. It was
+            // passed as null here, so every restored book got a fresh id and the saved selection never matched:
+            // [fsnow], testing beta 8: "The selected tab (book 185) is not getting the selection".
+            // The id also keys Dock's ControlRecycling (one WebView per id), so an id already in use - a
+            // hand-edited or corrupt state file - falls back to a fresh one rather than share a browser.
+            var restoredId = windowId != null && FindDockable(windowId) == null ? windowId : null;
+            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, restoredId, this, initialCurrentHitIndex, targetScript, initialPositionToken);
 
             // No-op given the seed above (avoids the second full pipeline run); kept as a safety net.
             bookDisplayViewModel.BookScript = targetScript;

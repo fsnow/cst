@@ -704,6 +704,35 @@ public partial class BookDisplayView : UserControl
         }
     }
 
+    /// <summary>
+    /// Put the keyboard in this book - its browser, so the arrow keys scroll it - once, when it is first on screen.
+    ///
+    /// <para><b>[fsnow]</b>, testing beta 8: <i>"when a book is open, I expect that the focus is put there and arrows
+    /// scroll the book, but they do not"</i>. At startup: <i>"I expect that the focus should be on the book whose tab
+    /// was open last"</i>. Agreed with him (2026-10-06): a book the reader opens takes the keyboard; at startup only
+    /// the book selected at quit does (the others are listed in <see cref="App.BooksRestoredWithoutKeyboard"/>);
+    /// a reload - script or font change, float or dock, which rebuild the page - never does.</para>
+    ///
+    /// <para>Focusing the browser, not this container: <c>WebView.Focus()</c> hands Chromium the native keyboard
+    /// focus (WebViewControl's own <c>chromium.Focus()</c>). The container's <c>this.Focus()</c> moved only
+    /// Avalonia's focus, so the arrow keys went nowhere.</para>
+    /// </summary>
+    private void TryTakeKeyboard()
+    {
+        if (_viewModel is not { KeyboardPending: true } vm) return;
+
+        if (App.BooksRestoredWithoutKeyboard.Remove(vm.Id))
+        {
+            vm.KeyboardPending = false;
+            return;
+        }
+
+        if (!_isBrowserInitialized || _webView == null || !_webView.IsEffectivelyVisible) return;
+
+        vm.KeyboardPending = false;
+        _webView.Focus();
+    }
+
     private void OnIsVisibleChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (e.Property == IsVisibleProperty && _scrollTimer != null)
@@ -713,6 +742,9 @@ public partial class BookDisplayView : UserControl
             {
                 _logger.Debug("View became visible, starting scroll timer.");
                 _scrollTimer.Start();
+                // A restored book that was selected when the app quit may load before its tab is brought
+                // forward; it takes the keyboard when it is.
+                Dispatcher.UIThread.Post(TryTakeKeyboard, DispatcherPriority.Loaded);
                 // Becoming visible wakes an occluded renderer — dispatch the build if it hasn't happened
                 // yet (a restored/background tab whose navigation fired while hidden). Guarded/idempotent:
                 // no-ops when the cache is already built or a build is in flight. (#423)
@@ -2462,19 +2494,10 @@ public partial class BookDisplayView : UserControl
 
                 // Make sure this UserControl can receive keyboard focus
                 this.Focusable = true;
-                // Put the keyboard in the book: the browser, not this container. Focusing the container moved
-                // only Avalonia's focus, so after opening a book from the tree the arrow keys still went to the
-                // tree's window view and the book did not scroll. [fsnow], testing beta 8: "when a book is
-                // open, I expect that the focus is put there and arrows scroll the book, but they do not".
-                // WebView.Focus() hands Chromium the native focus (WebViewControl's own chromium.Focus()).
-                // A background tab cannot take it: Avalonia refuses focus to a hidden control. Any visible
-                // book that reloads does take it - including one in another split or window, on a global script
-                // or font change, or at launch - exactly as the container's this.Focus() did before.
-                if (_webView != null && _webView.IsEffectivelyVisible)
-                    _webView.Focus();
-                else
-                    this.Focus();
-                _logger.Debug("BookDisplayView focused for keyboard shortcuts");
+                // A newly opened book takes the keyboard once it is on screen - see TryTakeKeyboard. A reload
+                // (script or font change, float/dock) does not: focus stays where the reader put it.
+                TryTakeKeyboard();
+
                 
                 // Set up JavaScript bridge after content loads
                 SetupJavaScriptBridge();
