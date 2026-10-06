@@ -1198,7 +1198,7 @@ public partial class SimpleTabbedWindow : Window
             {
                 // A focused CEF WebView (a book, or the Welcome page) holds the platform keyboard focus,
                 // and focusing an Avalonia control does not take it back — keystrokes keep going to the
-                // page, so the tree looked focused but arrow keys went nowhere. Release it first.
+                // page, so the tree looked focused but the arrow keys scrolled the book. Take it back first.
                 ReleaseWebViewKeyboardFocus(host);
                 host?.FindDescendantOfType<OpenBookPanel>()?.FocusBookTree();
             }, DispatcherPriority.Loaded);
@@ -1209,15 +1209,16 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    // Ask the top level to drop whatever holds focus before the tree takes it. This is enough when focus
-    // sits on an Avalonia control; it is NOT enough when a CEF WebView (a book, or the Welcome page) holds
-    // the platform keyboard focus, which is the known limitation on #111 — the panel still reveals, but
-    // arrow keys keep going to the page until you click the tree.
+    // Drop whatever holds focus before the tree takes it: Avalonia's focus (ClearFocus) and, when a CEF
+    // WebView (a book, or the Welcome page) holds it, the platform keyboard focus too. ClearFocus alone left
+    // the arrow keys scrolling the book after ⌘O. [fsnow], testing beta 8: "⌘O does not focus into the tree.
+    // arrows scroll the book."
     private static void ReleaseWebViewKeyboardFocus(Window? host)
     {
         try
         {
             host?.FocusManager?.ClearFocus();
+            if (host != null) CST.Avalonia.Input.NativeKeyboardFocus.TakeFromEmbeddedBrowser(host);
         }
         catch (Exception ex)
         {

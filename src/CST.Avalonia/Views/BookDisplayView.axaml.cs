@@ -2462,8 +2462,16 @@ public partial class BookDisplayView : UserControl
 
                 // Make sure this UserControl can receive keyboard focus
                 this.Focusable = true;
-                // Focus the UserControl for keyboard shortcuts
-                this.Focus();
+                // Put the keyboard in the book: the browser, not this container. Focusing the container moved
+                // only Avalonia's focus, so after opening a book from the tree the arrow keys still went to the
+                // tree's window view and the book did not scroll. [fsnow], testing beta 8: "when a book is
+                // open, I expect that the focus is put there and arrows scroll the book, but they do not".
+                // WebView.Focus() hands Chromium the native focus (WebViewControl's own chromium.Focus()).
+                // Only a book on screen takes it: a background tab finishing its load must not.
+                if (_webView != null && _webView.IsEffectivelyVisible)
+                    _webView.Focus();
+                else
+                    this.Focus();
                 _logger.Debug("BookDisplayView focused for keyboard shortcuts");
                 
                 // Set up JavaScript bridge after content loads
