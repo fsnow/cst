@@ -1323,6 +1323,9 @@ public partial class BookDisplayView : UserControl
         }
 
         _findBar.IsVisible = true;
+        // The shortcut usually arrives from inside the book's browser, which holds the native keyboard focus;
+        // Focus() alone would leave the next keystrokes going to the book.
+        CST.Avalonia.Input.NativeKeyboardFocus.TakeFromEmbeddedBrowser(this);
         _findQueryBox.Focus();
         _findQueryBox.SelectAll();
         // Re-run whatever is in the box: reopening on a remembered query should light its matches again,
