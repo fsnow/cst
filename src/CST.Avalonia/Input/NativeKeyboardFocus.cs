@@ -19,13 +19,26 @@ namespace CST.Avalonia.Input;
 /// start typing." [observed] A click does move native focus (AppKit makes the clicked view first responder), which
 /// is why clicking into the box and then typing was never affected.</para>
 ///
-/// <para>macOS only. On Windows the same gap is plausible (the browser is a child HWND) but unverified.</para>
+/// <para>[observed] Windows has the same gap: the browser is a child HWND that keeps the Win32 keyboard focus.
+/// [fsnow], testing beta 8 on Merlin: "Find in Page requires an extra click to get focus on Windows." There the
+/// top-level window takes it back with <c>SetFocus</c>. [observed] Merlin, 2026-10-07: the focus was held by CEF's
+/// <c>Chrome_WidgetWin_0</c>. [fsnow], testing this there: "That change looks good." Ctrl+O and Ctrl+Shift+F go
+/// through here too, but were only tried with it in place, so whether Windows ever had their gap is unknown.</para>
 /// </summary>
 public static class NativeKeyboardFocus
 {
-    /// <summary>Make <paramref name="visual"/>'s window view the native first responder. A no-op elsewhere.</summary>
+    /// <summary>
+    /// Give <paramref name="visual"/>'s top-level window the native keyboard focus: its view becomes first
+    /// responder on macOS, its HWND takes the Win32 focus on Windows. A no-op elsewhere.
+    /// </summary>
     public static void TakeFromEmbeddedBrowser(Visual visual)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            TakeFromEmbeddedBrowserWindows(visual);
+            return;
+        }
+
         if (!OperatingSystem.IsMacOS()) return;
         if (TopLevel.GetTopLevel(visual)?.TryGetPlatformHandle() is not IMacOSTopLevelPlatformHandle handle) return;
 
@@ -45,6 +58,49 @@ public static class NativeKeyboardFocus
             Log.ForContext(typeof(NativeKeyboardFocus)).Warning(ex, "Could not take keyboard focus from the browser");
         }
     }
+
+    private static void TakeFromEmbeddedBrowserWindows(Visual visual)
+    {
+        try
+        {
+            var hwnd = TopLevel.GetTopLevel(visual)?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+            if (hwnd == IntPtr.Zero) return;
+
+            var holder = GetFocus();
+            if (holder == hwnd) return;
+
+            if (SetFocus(hwnd) == IntPtr.Zero && Marshal.GetLastWin32Error() != 0)
+            {
+                Log.ForContext(typeof(NativeKeyboardFocus))
+                    .Warning("SetFocus refused (error {Error}); keys stay with {Holder}",
+                        Marshal.GetLastWin32Error(), ClassNameOf(holder));
+                return;
+            }
+
+            Log.ForContext(typeof(NativeKeyboardFocus))
+                .Debug("Took the keyboard from {Holder}", ClassNameOf(holder));
+        }
+        catch (Exception ex)
+        {
+            Log.ForContext(typeof(NativeKeyboardFocus)).Warning(ex, "Could not take keyboard focus from the browser");
+        }
+    }
+
+    private static string ClassNameOf(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return "(none)";
+        var buffer = new System.Text.StringBuilder(256);
+        return GetClassName(hwnd, buffer, buffer.Capacity) > 0 ? buffer.ToString() : "(unknown)";
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetFocus();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
 
     [DllImport("/usr/lib/libobjc.dylib")]
     private static extern IntPtr sel_registerName(string name);
