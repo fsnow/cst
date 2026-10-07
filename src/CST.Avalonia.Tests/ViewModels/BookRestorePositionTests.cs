@@ -134,7 +134,7 @@ public class BookRestorePositionTests
     public void A_single_hit_on_screen_or_several_hits_add_nothing()
     {
         Assert.False(BookDisplayViewModel.CanReturnToSingleHit(true, 1, currentHitOnScreen: true));
-        Assert.False(BookDisplayViewModel.CanReturnToSingleHit(true, 3, false));   // First/Last already work by index
+        Assert.False(BookDisplayViewModel.CanReturnToSingleHit(true, 3, false));   // [fsnow] scoped this to one hit
         Assert.False(BookDisplayViewModel.CanReturnToSingleHit(false, 0, false));
     }
 }

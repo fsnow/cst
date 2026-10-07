@@ -50,7 +50,7 @@ public partial class BookDisplayView : UserControl
     // computed C#-side by ReadingPositionMath so it stays unit-tested.
     private TaskCompletionSource<string?>? _posTokenTcs = null;
     private int _posTokenReq = 0; // monotonic capture request id; a late title with a stale id is ignored (#434)
-    private ReadingPositionToken? _lastPositionToken = null; // #434 rolling-captured reading position (from the status tick); restored on tab reattach (#31)
+    private ReadingPositionToken? _lastPositionToken = null; // #434 rolling-captured reading position (from the status tick); feeds the resize and zoom restores. A tab reattach uses the view model's copy instead.
     // #434 resize consumer: a reflow moves content under the native scrollTop, so the reading position drifts.
     // Resize events fire AFTER layout changed, so we snapshot the still-pre-reflow rolling token on the FIRST
     // event of a gesture and restore it once the gesture settles.
@@ -1861,7 +1861,9 @@ public partial class BookDisplayView : UserControl
                         if (sh && sh.hits && sh.hits.length > 0) {{
                             var hitEl = sh.hits[Math.max(0, Math.min(sh.currentIndex, sh.hits.length - 1))];
                             var r = hitEl.getBoundingClientRect();
-                            hitVis = (r.bottom > 0 && r.top < window.innerHeight) ? '1' : '0';
+                            // No box at all - a hit inside a hidden footnote - cannot be scrolled to: '-'.
+                            if (r.width === 0 && r.height === 0) hitVis = '-';
+                            else hitVis = (r.bottom > 0 && r.top < window.innerHeight) ? '1' : '0';
                         }}
                     }} catch(hvErr) {{ }}
 
@@ -2726,10 +2728,13 @@ public partial class BookDisplayView : UserControl
         // book's own last position (#31), on a search book too, with its current hit marked rather than scrolled
         // to. [fsnow], asked whether switching back to a search book's tab should keep the reader's position or
         // return to the current hit: "keep your position" (2026-10-06). A search book with no position yet (a
-        // fresh open from search results, before its first scroll capture) still lands on its hit. The VIEW
-        // MODEL's token, not this view's rolling field: ControlRecycling can rebind this view to another book.
+        // fresh open from search results, before its first scroll capture) still lands on its hit, and so does one
+        // whose reader just jumped to a hit (HitJumpPending) before the tick caught up. The VIEW MODEL's token,
+        // not this view's rolling field: it starts at the restored position and survives a view rebuilt by a
+        // float or drag.
         var lastToken = _viewModel.LastPositionToken;
-        switch (PlanReattachRestore(lastToken != null, _viewModel.HasSearchHighlights, _viewModel.CurrentHitIndex))
+        switch (PlanReattachRestore(lastToken != null && !_viewModel.HitJumpPending,
+                    _viewModel.HasSearchHighlights, _viewModel.CurrentHitIndex))
         {
             case ReattachRestore.Position:
                 _logger.Debug("Restoring last reading position (#31): above={Above}, below={Below}, frac={Frac}",

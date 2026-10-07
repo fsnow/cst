@@ -1649,7 +1649,18 @@ namespace CST.Avalonia.ViewModels
         }
 
         internal void SetCurrentHitOnScreen(bool onScreen) =>
-            Dispatcher.UIThread.Post(() => IsCurrentHitOnScreen = onScreen);
+            Dispatcher.UIThread.Post(() =>
+            {
+                IsCurrentHitOnScreen = onScreen;
+                if (onScreen) HitJumpPending = false;
+            });
+
+        /// <summary>
+        /// The reader just jumped to a hit and the status tick has not yet seen it on screen. The last captured
+        /// position is from before the jump, so a tab switch in that moment must return to the hit, not to it.
+        /// Cleared by the first report of the hit on screen. (review of #1032)
+        /// </summary>
+        internal bool HitJumpPending { get; private set; }
 
         /// <summary>First/Last are enabled for a single hit only while it is off screen. (#1032)</summary>
         internal static bool CanReturnToSingleHit(bool hasSearchHighlights, int totalHits, bool currentHitOnScreen) =>
@@ -1664,6 +1675,7 @@ namespace CST.Avalonia.ViewModels
             {
                 CurrentHitIndex = 1;
                 UpdateHitStatusText();
+                HitJumpPending = true;
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to first hit: hit_1";
             });
@@ -1678,6 +1690,7 @@ namespace CST.Avalonia.ViewModels
             {
                 CurrentHitIndex--;
                 UpdateHitStatusText();
+                HitJumpPending = true;
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to hit: hit_{CurrentHitIndex}";
             });
@@ -1693,6 +1706,7 @@ namespace CST.Avalonia.ViewModels
                 CurrentHitIndex++;
                 UpdateHitStatusText();
                 _logger.Debug("NavigateToNextHit - index {Index}", CurrentHitIndex);
+                HitJumpPending = true;
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to hit: hit_{CurrentHitIndex}";
             });
@@ -1707,6 +1721,7 @@ namespace CST.Avalonia.ViewModels
             {
                 CurrentHitIndex = TotalHits;
                 UpdateHitStatusText();
+                HitJumpPending = true;
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to last hit: hit_{TotalHits}";
             });
