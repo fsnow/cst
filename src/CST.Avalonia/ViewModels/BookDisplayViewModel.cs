@@ -1405,10 +1405,16 @@ namespace CST.Avalonia.ViewModels
         {
             if (pos <= 0 || pos > xml.Length) return false;
 
-            int lastOpen = xml.LastIndexOf('<', Math.Min(pos, xml.Length - 1));
+            // pos is a BOUNDARY - between xml[pos-1] and xml[pos] - so only what comes before it decides. Looking
+            // at xml[pos] as well made a word that ends exactly where a tag begins ("सम</hi>": the end offset is
+            // the '<' of "</hi>") read as inside markup, and its highlight was skipped while the hit counter
+            // still counted it. [fsnow], testing beta 8: a book with 5 hits for "sama" that "won't navigate to
+            // hit 5 with Next or Last".
+            int before = pos - 1;
+            int lastOpen = xml.LastIndexOf('<', before);
             if (lastOpen < 0) return false;
 
-            int lastClose = xml.LastIndexOf('>', Math.Min(pos, xml.Length - 1));
+            int lastClose = xml.LastIndexOf('>', before);
             return lastOpen > lastClose;
         }
 

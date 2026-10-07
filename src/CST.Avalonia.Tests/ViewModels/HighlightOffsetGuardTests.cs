@@ -56,6 +56,28 @@ public class HighlightOffsetGuardTests
         Assert.False(BookDisplayViewModel.IsInsideTag(spanning, spanning.IndexOf("tini")));
     }
 
+    /// <summary>A word that ends exactly where a tag begins: its END offset is that tag's '&lt;'. The offset is a
+    /// boundary, so it is not inside the tag. [fsnow]'s book: <c>&lt;hi rend="bold"&gt;सम&lt;/hi&gt;</c>, whose highlight
+    /// was skipped while the counter still showed 5 hits.</summary>
+    [Fact]
+    public void A_word_ending_where_a_tag_begins_is_spliceable_at_its_end()
+    {
+        const string xml = "<p><hi rend=\"bold\">sama</hi> <pb n=\"1\"/></p>";
+        int start = xml.IndexOf("sama");
+        int end = start + "sama".Length;   // the '<' of "</hi>"
+
+        Assert.False(BookDisplayViewModel.IsInsideTag(xml, start));
+        Assert.False(BookDisplayViewModel.IsInsideTag(xml, end));
+    }
+
+    /// <summary>The boundary just after a tag's '&lt;' is inside it.</summary>
+    [Fact]
+    public void Just_after_a_tags_opening_bracket_is_inside_it()
+    {
+        const string xml = "<p>sama</p>";
+        Assert.True(BookDisplayViewModel.IsInsideTag(xml, xml.IndexOf("</p>") + 1));
+    }
+
     [Fact]
     public void Degenerate_positions_are_not_treated_as_markup()
     {
