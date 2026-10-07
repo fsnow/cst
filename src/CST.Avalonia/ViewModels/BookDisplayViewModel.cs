@@ -226,10 +226,19 @@ namespace CST.Avalonia.ViewModels
             var canGoForward = this.WhenAnyValue(
                 x => x.HasSearchHighlights, x => x.CurrentHitIndex, x => x.TotalHits,
                 (has, idx, total) => has && total > 0 && idx < total);
-            FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit, canGoBack);
+            // First/Last also take the reader back to a SINGLE hit they have scrolled away from - Previous/Next
+            // stay disabled, since one hit has neither. [fsnow], testing beta 8: "if only one hit and the user has
+            // navigated away, one of the buttons should be enabled and will take you back to the hit". A book now
+            // reopens where the reader was rather than at its hit (#1032), so this is the way back to it.
+            var canReturnToSingleHit = this.WhenAnyValue(
+                x => x.HasSearchHighlights, x => x.TotalHits, x => x.IsCurrentHitOnScreen,
+                (has, total, onScreen) => CanReturnToSingleHit(has, total, onScreen));
+            var canGoToFirst = canGoBack.CombineLatest(canReturnToSingleHit, (a, b) => a || b);
+            var canGoToLast = canGoForward.CombineLatest(canReturnToSingleHit, (a, b) => a || b);
+            FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit, canGoToFirst);
             PreviousHitCommand = ReactiveCommand.Create(NavigateToPreviousHit, canGoBack);
             NextHitCommand = ReactiveCommand.Create(NavigateToNextHit, canGoForward);
-            LastHitCommand = ReactiveCommand.Create(NavigateToLastHit, canGoForward);
+            LastHitCommand = ReactiveCommand.Create(NavigateToLastHit, canGoToLast);
             
             OpenMulaCommand = ReactiveCommand.CreateFromTask(OpenMulaBookAsync);
             OpenAtthakathaCommand = ReactiveCommand.CreateFromTask(OpenAtthakathaBookAsync);
@@ -1628,6 +1637,23 @@ namespace CST.Avalonia.ViewModels
                 return Math.Min(saved, totalHits);
             return 1;
         }
+
+        private bool _isCurrentHitOnScreen = true;
+
+        /// <summary>Whether the current search hit is in the viewport, as the book's 200ms status tick reports it.
+        /// Starts true, so nothing is enabled before the first report.</summary>
+        public bool IsCurrentHitOnScreen
+        {
+            get => _isCurrentHitOnScreen;
+            private set => this.RaiseAndSetIfChanged(ref _isCurrentHitOnScreen, value);
+        }
+
+        internal void SetCurrentHitOnScreen(bool onScreen) =>
+            Dispatcher.UIThread.Post(() => IsCurrentHitOnScreen = onScreen);
+
+        /// <summary>First/Last are enabled for a single hit only while it is off screen. (#1032)</summary>
+        internal static bool CanReturnToSingleHit(bool hasSearchHighlights, int totalHits, bool currentHitOnScreen) =>
+            hasSearchHighlights && totalHits == 1 && !currentHitOnScreen;
 
         private void NavigateToFirstHit()
         {

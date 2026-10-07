@@ -1853,7 +1853,19 @@ public partial class BookDisplayView : UserControl
                     // position and scrollY comes out like 76563.5. The C# side parsed that as an int, which
                     // silently failed and left 0 — poisoning the reading-position token. Matches what
                     // GetCurrentPositionTokenAsync has always emitted. (#551)
-                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + Math.round(scrollY) + '|PTA=' + ptA + '|PTAP=' + ptAP + '|PTB=' + ptB + '|PTBP=' + ptBP + '|TAB:__TAB_ID_PLACEHOLDER__';
+                    // Whether the current search hit is on screen: 1, 0, or '-' when there are no hits. Lets a single
+                    // hit's First/Last buttons take the reader back to it once they have scrolled away. (#1032)
+                    var hitVis = '-';
+                    try {{
+                        var sh = window.cstSearchHighlights;
+                        if (sh && sh.hits && sh.hits.length > 0) {{
+                            var hitEl = sh.hits[Math.max(0, Math.min(sh.currentIndex, sh.hits.length - 1))];
+                            var r = hitEl.getBoundingClientRect();
+                            hitVis = (r.bottom > 0 && r.top < window.innerHeight) ? '1' : '0';
+                        }}
+                    }} catch(hvErr) {{ }}
+
+                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + Math.round(scrollY) + '|PTA=' + ptA + '|PTAP=' + ptAP + '|PTB=' + ptB + '|PTBP=' + ptBP + '|HITVIS=' + hitVis + '|TAB:__TAB_ID_PLACEHOLDER__';
                 }} catch(e) {{
                     // Emit nothing on error — an all-'*' title would clobber a good readout (#432
                     // constraint). The next scroll tick retries. (#423)
@@ -2940,6 +2952,11 @@ public partial class BookDisplayView : UserControl
                     else if (part.StartsWith("PTA=")) ptA = part.Substring(4);
                     else if (part.StartsWith("PTBP=")) ptBP = part.Substring(5);
                     else if (part.StartsWith("PTB=")) ptB = part.Substring(4);
+                    else if (part.StartsWith("HITVIS="))
+                    {
+                        var v = part.Substring(7);
+                        if (v == "1" || v == "0") _viewModel?.SetCurrentHitOnScreen(v == "1");
+                    }
                     // Parse as a DOUBLE with InvariantCulture, then round. `int.TryParse` here silently failed
                     // on a fractional value (Retina half-pixel scroll offsets, e.g. "76563.5") and left the
                     // out-param at 0 — which made the reading-position capture compute fraction 0 and pin the

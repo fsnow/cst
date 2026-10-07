@@ -119,4 +119,22 @@ public class BookRestorePositionTests
         Assert.Equal(CST.Avalonia.Views.BookDisplayView.ReattachRestore.None,
             CST.Avalonia.Views.BookDisplayView.PlanReattachRestore(false, false, 0));
     }
+
+    // ---- The way back to a single hit ----------------------------------------------------------------
+
+    // [fsnow]: "if only one hit and the user has navigated away, one of the buttons should be enabled and will take
+    // you back to the hit".
+    [Fact]
+    public void A_single_hit_off_screen_can_be_returned_to()
+    {
+        Assert.True(BookDisplayViewModel.CanReturnToSingleHit(hasSearchHighlights: true, totalHits: 1, currentHitOnScreen: false));
+    }
+
+    [Fact]
+    public void A_single_hit_on_screen_or_several_hits_add_nothing()
+    {
+        Assert.False(BookDisplayViewModel.CanReturnToSingleHit(true, 1, currentHitOnScreen: true));
+        Assert.False(BookDisplayViewModel.CanReturnToSingleHit(true, 3, false));   // First/Last already work by index
+        Assert.False(BookDisplayViewModel.CanReturnToSingleHit(false, 0, false));
+    }
 }
