@@ -1198,7 +1198,7 @@ public partial class SimpleTabbedWindow : Window
             {
                 // A focused CEF WebView (a book, or the Welcome page) holds the platform keyboard focus,
                 // and focusing an Avalonia control does not take it back — keystrokes keep going to the
-                // page, so the tree looked focused but arrow keys went nowhere. Release it first.
+                // page, so the tree looked focused but the arrow keys scrolled the book. Take it back first.
                 ReleaseWebViewKeyboardFocus(host);
                 host?.FindDescendantOfType<OpenBookPanel>()?.FocusBookTree();
             }, DispatcherPriority.Loaded);
@@ -1209,15 +1209,16 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    // Ask the top level to drop whatever holds focus before the tree takes it. This is enough when focus
-    // sits on an Avalonia control; it is NOT enough when a CEF WebView (a book, or the Welcome page) holds
-    // the platform keyboard focus, which is the known limitation on #111 — the panel still reveals, but
-    // arrow keys keep going to the page until you click the tree.
+    // Drop whatever holds focus before the tree takes it: Avalonia's focus (ClearFocus) and, when a CEF
+    // WebView (a book, or the Welcome page) holds it, the platform keyboard focus too. ClearFocus alone left
+    // the arrow keys scrolling the book after ⌘O. [fsnow], testing beta 8: "⌘O does not focus into the tree.
+    // arrows scroll the book."
     private static void ReleaseWebViewKeyboardFocus(Window? host)
     {
         try
         {
             host?.FocusManager?.ClearFocus();
+            if (host != null) CST.Avalonia.Input.NativeKeyboardFocus.TakeFromEmbeddedBrowser(host);
         }
         catch (Exception ex)
         {
@@ -1457,16 +1458,16 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    // "Search for Selection" (Cmd+F): take the word or phrase selected in the active book and run it
+    // "Search for Selection" (⌘⇧F / Ctrl+Shift+F): take the word or phrase selected in the active book and run it
     // through the Search tool, bringing the Search tab forward. Multi-word selections are quoted so they
     // search as an exact phrase. (#25 adjacent feature)
     private async void OnSearchForSelectionClick(object? sender, EventArgs e)
     {
-        _logger.Information("Search for Selection (Cmd+F) from window: {WindowTitle}", this.Title);
+        _logger.Information("Search for Selection (Cmd+Shift+F) from window: {WindowTitle}", this.Title);
         await SearchForSelectionAsync(FindActiveBookInThisWindow());
     }
 
-    // Shared by both windows' Cmd+F, same as LookUpInDictionaryAsync above. (#448)
+    // Shared by both windows' ⌘⇧F, same as LookUpInDictionaryAsync above. (#448)
     internal static async Task SearchForSelectionAsync(BookDisplayViewModel? book)
     {
         try
@@ -1488,7 +1489,13 @@ public partial class SimpleTabbedWindow : Window
             if (!string.IsNullOrEmpty(query))
                 search.SearchText = query;   // the Search tool's real-time throttle runs the search
             layoutViewModel.Factory?.SetActiveDockable(search);   // reveal the Search tab
-            RevealWindowHosting(search, layoutViewModel);
+            var host = RevealWindowHosting(search, layoutViewModel);
+
+            // Put the keyboard in the search box, after the layout settles (the pane may have just been
+            // recreated). [fsnow], testing beta 8: "Shift-cmd-F does not put the focus into the text box."
+            Dispatcher.UIThread.Post(
+                () => host?.FindDescendantOfType<SearchPanel>()?.FocusSearchInput(),
+                DispatcherPriority.Loaded);
             Serilog.Log.Information("Search for selection: '{Query}'", query);
         }
         catch (Exception ex)

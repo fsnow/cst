@@ -32,6 +32,11 @@ namespace CST.Avalonia.ViewModels
 {
     public class BookDisplayViewModel : ReactiveDocument, IDisposable, IScriptFontedDocument
     {
+        /// <summary>Whether this book still has to take the keyboard when first on screen - true from opening until it
+        /// has (or a session restore said it should not). Lives here, not on the view, so a view rebuilt by a float or
+        /// dock - which reloads the page - does not take it again. See BookDisplayView.TryTakeKeyboard.</summary>
+        internal bool KeyboardPending { get; set; } = true;
+
         // Reactive subscriptions owned by this VM; disposed when the tab is permanently closed
         // (or replaced during float/unfloat) to release the FontService subscription that would
         // otherwise root this VM on a singleton for the life of the session.
@@ -144,6 +149,13 @@ namespace CST.Avalonia.ViewModels
             _searchPositions = searchPositions;  // NEW: Store positions for two-color highlighting
             _initialAnchor = initialAnchor;
             _initialPositionToken = initialPositionToken;
+            // Until the reader looks at this book, its restored position IS where they are. The last-captured
+            // pair is filled only by the view's scroll tracking, which runs while the book is on screen, so a
+            // restored tab the reader never brought forward saved null at quit and lost its place: [fsnow],
+            // testing beta 8: "What about the DN1 issue ?" - [observed] a restored tab he had not brought forward,
+            // which reopened at dn1_1 earlier that day and later had no saved position.
+            _lastCapturedAnchor = initialAnchor;
+            _lastPositionToken = initialPositionToken;
             _initialCurrentHitIndex = initialCurrentHitIndex;
             _docId = docId;
             // Seed the per-tab script to the target the factory will use, so its post-construction
@@ -152,16 +164,17 @@ namespace CST.Avalonia.ViewModels
             // code seeded from a throwaway `new ScriptService()` (always Devanagari). (BOOK-3)
             _bookScript = initialBookScript ?? Script.Devanagari;
 
-            // Configure Dock properties - CRITICAL: Unique GUID per instance to prevent ControlRecycling cache conflicts
-            // This ensures each book window instance gets a unique ID, preventing CEF crashes when floating/unfloating
+            // Each book tab has its own id - two copies of one book are two tabs - kept across launches: a restore
+            // passes the saved one, so the tab selected at quit is found again. Ids must be unique among open
+            // documents (CstDockFactory.OpenBook falls back to a fresh one on a clash). [observed] ControlRecycling
+            // does NOT key on this id - it keys by the view-model object - so uniqueness here is about the dock and
+            // state lookups, not about which browser a tab gets.
             if (windowId != null)
             {
                 Id = windowId;  // Use restored ID from saved state
             }
             else
             {
-                // Generate unique GUID-based ID for each book instance (like search results do)
-                // This prevents ControlRecycling from reusing cached WebViews across different window contexts
                 var bookGuid = Guid.NewGuid();
                 Id = $"Book_{book.Index}_{book.FileName}_{bookGuid:N}";
             }
@@ -213,10 +226,19 @@ namespace CST.Avalonia.ViewModels
             var canGoForward = this.WhenAnyValue(
                 x => x.HasSearchHighlights, x => x.CurrentHitIndex, x => x.TotalHits,
                 (has, idx, total) => has && total > 0 && idx < total);
-            FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit, canGoBack);
+            // First/Last also take the reader back to a SINGLE hit they have scrolled away from - Previous/Next
+            // stay disabled, since one hit has neither. [fsnow], testing beta 8: "if only one hit and the user has
+            // navigated away, one of the buttons should be enabled and will take you back to the hit". A book now
+            // reopens where the reader was rather than at its hit (#1032), so this is the way back to it.
+            var canReturnToSingleHit = this.WhenAnyValue(
+                x => x.HasSearchHighlights, x => x.TotalHits, x => x.IsCurrentHitOnScreen,
+                (has, total, onScreen) => CanReturnToSingleHit(has, total, onScreen));
+            var canGoToFirst = canGoBack.CombineLatest(canReturnToSingleHit, (a, b) => a || b);
+            var canGoToLast = canGoForward.CombineLatest(canReturnToSingleHit, (a, b) => a || b);
+            FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit, canGoToFirst);
             PreviousHitCommand = ReactiveCommand.Create(NavigateToPreviousHit, canGoBack);
             NextHitCommand = ReactiveCommand.Create(NavigateToNextHit, canGoForward);
-            LastHitCommand = ReactiveCommand.Create(NavigateToLastHit, canGoForward);
+            LastHitCommand = ReactiveCommand.Create(NavigateToLastHit, canGoToLast);
             
             OpenMulaCommand = ReactiveCommand.CreateFromTask(OpenMulaBookAsync);
             OpenAtthakathaCommand = ReactiveCommand.CreateFromTask(OpenAtthakathaBookAsync);
@@ -269,6 +291,9 @@ namespace CST.Avalonia.ViewModels
                         if (BookDisplayControl != null)
                         {
                             savedToken = await BookDisplayControl.GetCurrentPositionTokenAsync();
+                            // A tab never brought forward has no live position (its anchor cache never built);
+                            // its last known one - the restored position, until the reader moves - stands in.
+                            savedToken ??= _lastPositionToken;
                             if (savedToken != null)
                                 _logger.Debug("Captured reading-position token: above={Above} below={Below} frac={Frac}", savedToken.Above, savedToken.Below, savedToken.Fraction);
                             else
@@ -570,7 +595,8 @@ namespace CST.Avalonia.ViewModels
 
         /// <summary>
         /// Gets the last captured anchor for scroll position restoration.
-        /// Updated every 200ms by the scroll timer, persists across float/unfloat.
+        /// Starts at the restored anchor (if any), then updated every 200ms by the scroll timer while the book is on
+        /// screen; persists across float/unfloat.
         /// </summary>
         public string? LastCapturedAnchor { get { lock (_anchorGate) return _lastCapturedAnchor; } }
 
@@ -953,23 +979,33 @@ namespace CST.Avalonia.ViewModels
                 // complete) that silently no-opped when the browser wasn't initialized yet, leaving
                 // the book at the top on slow loads. (BOOK-7)
                 //
-                // A search-restored book has BOTH a saved scroll anchor and a saved hit index; prefer
-                // the exact hit over the anchor, which only lands at the paragraph start and can leave
-                // the highlighted term off-screen in a long paragraph. (#36)
-                bool restoreSearchHit = _searchTerms?.Any() == true && _initialCurrentHitIndex.HasValue;
-                if (_initialPositionToken != null && !restoreSearchHit)
+                // A search-restored book has a saved hit index as well as a saved position. The exact reading
+                // position (#434 token) wins: it is where the reader was, and they may have read on past the hit.
+                // [fsnow], testing beta 8: "my position is not restoring correctly in book 185" ([observed] a book
+                // opened from search results, saved well past its hit) - the hit used to win here,
+                // and the position was never even queued. The hit index is still restored (below), for the
+                // "N of M" counter and the current hit's highlight; BookDisplayView.ExecutePendingRestoration
+                // marks it without scrolling. Over the coarse string ANCHOR the hit still wins (#36): the anchor
+                // lands at the paragraph start and can leave the highlighted term off-screen.
+                var plan = PlanInitialRestore(
+                    hasPositionToken: _initialPositionToken != null,
+                    hasAnchor: !string.IsNullOrEmpty(_initialAnchor),
+                    hasSearchTerms: _searchTerms?.Any() == true,
+                    hasSavedHit: _initialCurrentHitIndex.HasValue);
+                if (plan.QueuePositionToken && _initialPositionToken is { } token)
                 {
                     // #434 cross-run restore: prefer the exact reading-position token over the coarse anchor.
-                    lock (_anchorGate) _pendingPositionToken = _initialPositionToken;
+                    lock (_anchorGate) _pendingPositionToken = token;
                     _logger.Debug("Queued initial reading-position token restore (above={Above}, below={Below})",
-                        _initialPositionToken.Above, _initialPositionToken.Below);
+                        token.Above, token.Below);
                 }
-                else if (!string.IsNullOrEmpty(_initialAnchor) && !restoreSearchHit)
+                else if (plan.QueueAnchor)
                 {
                     lock (_anchorGate) _pendingAnchorNavigation = _initialAnchor;
                     _logger.Debug("Queued initial anchor navigation: {Anchor}", _initialAnchor);
                 }
-                else if (_searchTerms?.Any() == true)
+
+                if (plan.SetUpSearch && _searchTerms != null)
                 {
                     _logger.Debug("Setting up search navigation: {TermCount} terms", _searchTerms.Count);
                     await Dispatcher.UIThread.InvokeAsync(() =>
@@ -1002,6 +1038,22 @@ namespace CST.Avalonia.ViewModels
             {
                 await Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
             }
+        }
+
+        /// <summary>What a newly opened book restores, from what it was saved with. (#36, #434, #1032)</summary>
+        /// <param name="hasPositionToken">A saved #434 reading position: always wins - it is where the reader was.</param>
+        /// <param name="hasAnchor">A saved paragraph anchor: used only without a token, and only when there is no
+        /// saved search hit (the hit is more exact than a paragraph start).</param>
+        /// <param name="hasSearchTerms">Opened from search results.</param>
+        /// <param name="hasSavedHit">A saved "current hit" index.</param>
+        /// <returns><c>SetUpSearch</c> restores the hit counter and queues the hit; with a token queued as well,
+        /// the view only marks that hit, without scrolling to it.</returns>
+        internal static (bool QueuePositionToken, bool QueueAnchor, bool SetUpSearch) PlanInitialRestore(
+            bool hasPositionToken, bool hasAnchor, bool hasSearchTerms, bool hasSavedHit)
+        {
+            bool restoreSearchHit = hasSearchTerms && hasSavedHit;
+            bool queueAnchor = !hasPositionToken && hasAnchor && !restoreSearchHit;
+            return (hasPositionToken, queueAnchor, hasSearchTerms && !queueAnchor);
         }
 
         private void CheckWebViewAvailability()
@@ -1586,6 +1638,34 @@ namespace CST.Avalonia.ViewModels
             return 1;
         }
 
+        private bool _isCurrentHitOnScreen = true;
+
+        /// <summary>Whether the current search hit is in the viewport, as the book's 200ms status tick reports it.
+        /// Starts true, so nothing is enabled before the first report.</summary>
+        public bool IsCurrentHitOnScreen
+        {
+            get => _isCurrentHitOnScreen;
+            private set => this.RaiseAndSetIfChanged(ref _isCurrentHitOnScreen, value);
+        }
+
+        internal void SetCurrentHitOnScreen(bool onScreen) =>
+            Dispatcher.UIThread.Post(() =>
+            {
+                IsCurrentHitOnScreen = onScreen;
+                if (onScreen) HitJumpPending = false;
+            });
+
+        /// <summary>
+        /// The reader just jumped to a hit and the status tick has not yet seen it on screen. The last captured
+        /// position is from before the jump, so a tab switch in that moment must return to the hit, not to it.
+        /// Cleared by the first report of the hit on screen. (review of #1032)
+        /// </summary>
+        internal bool HitJumpPending { get; private set; }
+
+        /// <summary>First/Last are enabled for a single hit only while it is off screen. (#1032)</summary>
+        internal static bool CanReturnToSingleHit(bool hasSearchHighlights, int totalHits, bool currentHitOnScreen) =>
+            hasSearchHighlights && totalHits == 1 && !currentHitOnScreen;
+
         private void NavigateToFirstHit()
         {
             // Check if we have search highlights
@@ -1595,6 +1675,7 @@ namespace CST.Avalonia.ViewModels
             {
                 CurrentHitIndex = 1;
                 UpdateHitStatusText();
+                HitJumpPending = true;
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to first hit: hit_1";
             });
@@ -1609,6 +1690,7 @@ namespace CST.Avalonia.ViewModels
             {
                 CurrentHitIndex--;
                 UpdateHitStatusText();
+                HitJumpPending = true;
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to hit: hit_{CurrentHitIndex}";
             });
@@ -1624,6 +1706,7 @@ namespace CST.Avalonia.ViewModels
                 CurrentHitIndex++;
                 UpdateHitStatusText();
                 _logger.Debug("NavigateToNextHit - index {Index}", CurrentHitIndex);
+                HitJumpPending = true;
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to hit: hit_{CurrentHitIndex}";
             });
@@ -1638,6 +1721,7 @@ namespace CST.Avalonia.ViewModels
             {
                 CurrentHitIndex = TotalHits;
                 UpdateHitStatusText();
+                HitJumpPending = true;
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to last hit: hit_{TotalHits}";
             });

@@ -50,7 +50,7 @@ public partial class BookDisplayView : UserControl
     // computed C#-side by ReadingPositionMath so it stays unit-tested.
     private TaskCompletionSource<string?>? _posTokenTcs = null;
     private int _posTokenReq = 0; // monotonic capture request id; a late title with a stale id is ignored (#434)
-    private ReadingPositionToken? _lastPositionToken = null; // #434 rolling-captured reading position (from the status tick); restored on tab reattach (#31)
+    private ReadingPositionToken? _lastPositionToken = null; // #434 rolling-captured reading position (from the status tick); feeds the resize and zoom restores. A tab reattach uses the view model's copy instead.
     // #434 resize consumer: a reflow moves content under the native scrollTop, so the reading position drifts.
     // Resize events fire AFTER layout changed, so we snapshot the still-pre-reflow rolling token on the FIRST
     // event of a gesture and restore it once the gesture settles.
@@ -548,6 +548,10 @@ public partial class BookDisplayView : UserControl
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
+        // A book whose first load happened while its tab was in the background takes the keyboard now that it is
+        // on screen. A no-op unless it is still owed it (see TryTakeKeyboard); posted so the browser is in place.
+        Dispatcher.UIThread.Post(TryTakeKeyboard, DispatcherPriority.Loaded);
+
         // PHASE 2 LOGGING: Track lifecycle events to determine if tab reordering triggers detachment
         _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         _logger.Information("▶▶▶ ATTACHED to visual tree - Book: {BookFile}, Instance: {InstanceId}",
@@ -702,6 +706,40 @@ public partial class BookDisplayView : UserControl
                 Dispatcher.UIThread.Post(() => LoadHtmlContent());
             }
         }
+    }
+
+    /// <summary>
+    /// Put the keyboard in this book - its browser, so the arrow keys scroll it - once, when it is first on screen.
+    ///
+    /// <para><b>[fsnow]</b>, testing beta 8: <i>"when a book is open, I expect that the focus is put there and arrows
+    /// scroll the book, but they do not"</i>. At startup: <i>"I expect that the focus should be on the book whose tab
+    /// was open last"</i>. Agreed with him (2026-10-06): a book the reader opens takes the keyboard; at startup only
+    /// the book selected at quit does (the others are listed in <see cref="App.BooksRestoredWithoutKeyboard"/>);
+    /// a reload - script or font change, float or dock, which rebuild the page - never does.</para>
+    ///
+    /// <para>Focusing the browser, not this container: <c>WebView.Focus()</c> hands Chromium the native keyboard
+    /// focus (WebViewControl's own <c>chromium.Focus()</c>). The container's <c>this.Focus()</c> moved only
+    /// Avalonia's focus, so the arrow keys went nowhere.</para>
+    /// </summary>
+    private void TryTakeKeyboard()
+    {
+        if (_viewModel is not { KeyboardPending: true } vm) return;
+
+        if (App.BooksRestoredWithoutKeyboard.Remove(vm.Id))
+        {
+            vm.KeyboardPending = false;
+            return;
+        }
+
+        // On screen means ATTACHED: a tab switch detaches the view rather than hiding it, and a detached control
+        // still reports IsEffectivelyVisible. A book that loads behind another tab - at startup the selected one
+        // often does, while Welcome is briefly in front - keeps its turn and takes the keyboard when it is next
+        // attached (OnAttachedToVisualTree), not now, when Focus() would do nothing (review of #1032).
+        if (!_isBrowserInitialized || _webView == null
+            || _webView.GetVisualRoot() == null || !_webView.IsEffectivelyVisible) return;
+
+        vm.KeyboardPending = false;
+        _webView.Focus();
     }
 
     private void OnIsVisibleChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -1323,6 +1361,9 @@ public partial class BookDisplayView : UserControl
         }
 
         _findBar.IsVisible = true;
+        // The shortcut usually arrives from inside the book's browser, which holds the native keyboard focus;
+        // Focus() alone would leave the next keystrokes going to the book.
+        CST.Avalonia.Input.NativeKeyboardFocus.TakeFromEmbeddedBrowser(this);
         _findQueryBox.Focus();
         _findQueryBox.SelectAll();
         // Re-run whatever is in the box: reopening on a remembered query should light its matches again,
@@ -1812,7 +1853,21 @@ public partial class BookDisplayView : UserControl
                     // position and scrollY comes out like 76563.5. The C# side parsed that as an int, which
                     // silently failed and left 0 — poisoning the reading-position token. Matches what
                     // GetCurrentPositionTokenAsync has always emitted. (#551)
-                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + Math.round(scrollY) + '|PTA=' + ptA + '|PTAP=' + ptAP + '|PTB=' + ptB + '|PTBP=' + ptBP + '|TAB:__TAB_ID_PLACEHOLDER__';
+                    // Whether the current search hit is on screen: 1, 0, or '-' when there are no hits. Lets a single
+                    // hit's First/Last buttons take the reader back to it once they have scrolled away. (#1032)
+                    var hitVis = '-';
+                    try {{
+                        var sh = window.cstSearchHighlights;
+                        if (sh && sh.hits && sh.hits.length > 0) {{
+                            var hitEl = sh.hits[Math.max(0, Math.min(sh.currentIndex, sh.hits.length - 1))];
+                            var r = hitEl.getBoundingClientRect();
+                            // No box at all - a hit inside a hidden footnote - cannot be scrolled to: '-'.
+                            if (r.width === 0 && r.height === 0) hitVis = '-';
+                            else hitVis = (r.bottom > 0 && r.top < window.innerHeight) ? '1' : '0';
+                        }}
+                    }} catch(hvErr) {{ }}
+
+                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + Math.round(scrollY) + '|PTA=' + ptA + '|PTAP=' + ptAP + '|PTB=' + ptB + '|PTBP=' + ptBP + '|HITVIS=' + hitVis + '|TAB:__TAB_ID_PLACEHOLDER__';
                 }} catch(e) {{
                     // Emit nothing on error — an all-'*' title would clobber a good readout (#432
                     // constraint). The next scroll tick retries. (#423)
@@ -2459,9 +2514,10 @@ public partial class BookDisplayView : UserControl
 
                 // Make sure this UserControl can receive keyboard focus
                 this.Focusable = true;
-                // Focus the UserControl for keyboard shortcuts
-                this.Focus();
-                _logger.Debug("BookDisplayView focused for keyboard shortcuts");
+                // A newly opened book takes the keyboard once it is on screen - see TryTakeKeyboard. A reload
+                // (script or font change, float/dock) does not: focus stays where the reader put it.
+                TryTakeKeyboard();
+
                 
                 // Set up JavaScript bridge after content loads
                 SetupJavaScriptBridge();
@@ -2534,8 +2590,9 @@ public partial class BookDisplayView : UserControl
     // Execute any queued restoration (saved anchor / saved search hit) now that the document is
     // actually ready. Called from OnNavigationCompleted (fresh load and reloads, e.g. script change)
     // and from the attach handler when a recycled tab reattaches with a live browser. Precedence:
-    // saved hit > saved anchor > re-anchor to the current hit after a reload of a search book —
-    // mirroring InitializeAsync's #36 preference for the exact hit over its paragraph anchor.
+    // saved reading position (#434 token; the current hit is marked, not scrolled to) > saved hit >
+    // saved anchor > with nothing queued, the book's last position, else a search book's current hit
+    // (PlanReattachRestore) - mirroring InitializeAsync's PlanInitialRestore.
     // Replaces three racing fixed-delay attempts (1000/500/300 ms) that silently no-opped when the
     // browser wasn't ready, leaving the book at the top on slow loads. (BOOK-7)
     /// <summary>
@@ -2612,8 +2669,31 @@ public partial class BookDisplayView : UserControl
         var pendingHit = _viewModel.TakePendingHitNavigation();
         var pendingToken = _viewModel.TakePendingPositionToken();
         var pendingAnchor = _viewModel.TakePendingAnchorNavigation();
+        var pending = PlanPendingRestore(pendingToken != null, pendingHit, !string.IsNullOrEmpty(pendingAnchor));
 
-        if (pendingHit is int savedHit && savedHit >= 1)
+        // #434 reading-position token: where the reader actually was. It wins over a saved search hit, and over
+        // the coarse string anchor (it interpolates to the exact position). [fsnow], testing beta 8: "my position
+        // is not restoring correctly in book 185" ([observed] opened from search results, saved past its hit). The
+        // hit used to win - #36 assumed restoring the hit would restore the position, which holds only until the
+        // reader scrolls away from it. The hit is still restored as the "N of M" counter and the red highlight,
+        // without scrolling (below). ScrollToPositionToken is cache-free (live querySelector), so it works here
+        // even before the deferred cache rebuild (Fable §2).
+        if (pending == PendingRestore.Position && pendingToken != null)
+        {
+            _logger.Information("Restoring reading position from #434 token (above={Above}, below={Below}, frac={Frac})",
+                pendingToken.Above, pendingToken.Below, pendingToken.Fraction);
+            ScrollToPositionToken(pendingToken);
+
+            // As in the anchor branch: the token owns the scroll position, so re-mark the CURRENT hit (red)
+            // WITHOUT scrolling to keep the highlight matching the "N of M" counter after a reload.
+            var markHit = pendingHit is int h && h >= 1 ? h : _viewModel.CurrentHitIndex;
+            if (_viewModel.HasSearchHighlights && markHit > 0)
+                SyncCurrentHitStyle(markHit);
+            return;
+        }
+
+        // A saved hit with no saved reading position (a state file from before #434): go to the hit.
+        if (pending == PendingRestore.Hit && pendingHit is int savedHit)
         {
             // Inject IMMEDIATELY: cstSearchHighlights exists (the JS bridge was set up earlier in
             // this same callback) but its hits aren't collected yet, so the script queues the intent
@@ -2627,23 +2707,7 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        // #434 reading-position token — preferred over the coarse string anchor (it interpolates to the exact
-        // reading position). Search-hit restore still wins (Fable §6 / #36). ScrollToPositionToken is cache-free
-        // (live querySelector), so it works here even before the deferred cache rebuild (Fable §2).
-        if (pendingToken != null)
-        {
-            _logger.Information("Restoring reading position from #434 token (above={Above}, below={Below}, frac={Frac})",
-                pendingToken.Above, pendingToken.Below, pendingToken.Fraction);
-            ScrollToPositionToken(pendingToken);
-
-            // As in the anchor branch: the token owns the scroll position, so re-mark the CURRENT hit (red)
-            // WITHOUT scrolling to keep the highlight matching the "N of M" counter after a reload.
-            if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
-                SyncCurrentHitStyle(_viewModel.CurrentHitIndex);
-            return;
-        }
-
-        if (!string.IsNullOrEmpty(pendingAnchor))
+        if (pending == PendingRestore.Anchor && pendingAnchor != null)
         {
             _logger.Information("Restoring scroll to saved anchor {Anchor}", pendingAnchor);
             ScrollToPageAnchor(pendingAnchor);
@@ -2660,23 +2724,57 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        // No queued intent: a (re)load of a search book still lands on the current hit once the
-        // highlights initialize (e.g. a fresh search-result open, tab reattach) — injected
-        // immediately, queued by the JS if hits aren't collected yet (no flash). (BOOK-7)
-        if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
+        // No queued intent: a tab coming back, or a reload with nothing captured. Keep the reader's place - the
+        // book's own last position (#31), on a search book too, with its current hit marked rather than scrolled
+        // to. [fsnow], asked whether switching back to a search book's tab should keep the reader's position or
+        // return to the current hit: "keep your position" (2026-10-06). A search book with no position yet (a
+        // fresh open from search results, before its first scroll capture) still lands on its hit, and so does one
+        // whose reader just jumped to a hit (HitJumpPending) before the tick caught up. The VIEW MODEL's token,
+        // not this view's rolling field: it starts at the restored position and survives a view rebuilt by a
+        // float or drag.
+        var lastToken = _viewModel.LastPositionToken;
+        switch (PlanReattachRestore(lastToken != null && !_viewModel.HitJumpPending,
+                    _viewModel.HasSearchHighlights, _viewModel.CurrentHitIndex))
         {
-            _logger.Debug("Navigating to current search hit: {HitIndex}", _viewModel.CurrentHitIndex);
-            NavigateToHighlight(_viewModel.CurrentHitIndex);
+            case ReattachRestore.Position:
+                _logger.Debug("Restoring last reading position (#31): above={Above}, below={Below}, frac={Frac}",
+                    lastToken!.Above, lastToken.Below, lastToken.Fraction);
+                ScrollToPositionToken(lastToken);
+                if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
+                    SyncCurrentHitStyle(_viewModel.CurrentHitIndex);
+                break;
+            case ReattachRestore.CurrentHit:
+                _logger.Debug("Navigating to current search hit: {HitIndex}", _viewModel.CurrentHitIndex);
+                NavigateToHighlight(_viewModel.CurrentHitIndex);
+                break;
         }
-        // #31: a NON-search book reattaching a recycled tab has no hit/anchor/token intent, but CEF can reset
-        // the live browser's scroll on reattach — so restore the rolling-captured reading position. Lowest
-        // precedence (search-hit wins, Fable §6); cache-free, so it's safe before the deferred cache rebuild.
-        else if (_lastPositionToken != null)
-        {
-            _logger.Debug("Restoring rolling reading-position token on reattach (#31): above={Above}, below={Below}, frac={Frac}",
-                _lastPositionToken.Above, _lastPositionToken.Below, _lastPositionToken.Fraction);
-            ScrollToPositionToken(_lastPositionToken);
-        }
+    }
+
+    internal enum PendingRestore { None, Position, Hit, Anchor }
+
+    /// <summary>
+    /// Which queued restore intent wins: the saved reading position (where the reader was), then a saved search
+    /// hit, then the coarse paragraph anchor. (#36, #434, #1032)
+    /// </summary>
+    internal static PendingRestore PlanPendingRestore(bool hasPendingPosition, int? pendingHit, bool hasPendingAnchor)
+    {
+        if (hasPendingPosition) return PendingRestore.Position;
+        if (pendingHit is int hit && hit >= 1) return PendingRestore.Hit;
+        if (hasPendingAnchor) return PendingRestore.Anchor;
+        return PendingRestore.None;
+    }
+
+    internal enum ReattachRestore { None, Position, CurrentHit }
+
+    /// <summary>
+    /// With no queued restore intent: the reader's last position if the book has one, otherwise a search book's
+    /// current hit, otherwise nothing. (#31, #1032)
+    /// </summary>
+    internal static ReattachRestore PlanReattachRestore(bool hasLastPosition, bool hasSearchHighlights, int currentHitIndex)
+    {
+        if (hasLastPosition) return ReattachRestore.Position;
+        if (hasSearchHighlights && currentHitIndex > 0) return ReattachRestore.CurrentHit;
+        return ReattachRestore.None;
     }
 
 
@@ -2859,6 +2957,11 @@ public partial class BookDisplayView : UserControl
                     else if (part.StartsWith("PTA=")) ptA = part.Substring(4);
                     else if (part.StartsWith("PTBP=")) ptBP = part.Substring(5);
                     else if (part.StartsWith("PTB=")) ptB = part.Substring(4);
+                    else if (part.StartsWith("HITVIS="))
+                    {
+                        var v = part.Substring(7);
+                        if (v == "1" || v == "0") _viewModel?.SetCurrentHitOnScreen(v == "1");
+                    }
                     // Parse as a DOUBLE with InvariantCulture, then round. `int.TryParse` here silently failed
                     // on a fractional value (Retina half-pixel scroll offsets, e.g. "76563.5") and left the
                     // out-param at 0 — which made the reading-position capture compute fraction 0 and pin the

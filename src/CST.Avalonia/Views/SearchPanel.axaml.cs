@@ -31,6 +31,9 @@ public partial class SearchPanel : UserControl
         if (occurrencesList != null)
         {
             occurrencesList.DoubleTapped += OnOccurrenceDoubleClick;
+            // Enter opens the selected book too, as double-click does. [fsnow], testing beta 8: "when a book is
+            // selected in search results, enter does not open it."
+            occurrencesList.KeyDown += OnOccurrencesKeyDown;
         }
         
         // Enter/Escape on the search box are wired once via the TextBox.KeyBindings in the axaml
@@ -70,12 +73,42 @@ public partial class SearchPanel : UserControl
     private static DateTime _lastOpenTime = DateTime.MinValue;
     private static string? _lastOpenedBook = null;
     
-    private void OnOccurrenceDoubleClick(object? sender, TappedEventArgs e)
+    /// <summary>
+    /// Put the keyboard in the search box, with its text selected so typing replaces it. Used by Search for
+    /// Selection (⌘⇧F), which reveals this pane from wherever the reader was - usually a book, whose browser holds
+    /// the native keyboard focus, so that is taken back first.
+    /// </summary>
+    public void FocusSearchInput()
     {
-        if (sender is ListBox listBox && 
-            listBox.SelectedItem is BookOccurrenceViewModel occurrence)
+        if (this.FindControl<TextBox>("SearchInput") is not { } box) return;
+        CST.Avalonia.Input.NativeKeyboardFocus.TakeFromEmbeddedBrowser(this);
+        box.Focus();
+        box.SelectAll();
+    }
+
+    private void OnOccurrencesKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || e.KeyModifiers != KeyModifiers.None) return;
+        if (sender is ListBox { SelectedItem: BookOccurrenceViewModel } listBox)
         {
             e.Handled = true;
+            OpenSelectedOccurrence(listBox);
+        }
+    }
+
+    private void OnOccurrenceDoubleClick(object? sender, TappedEventArgs e)
+    {
+        if (sender is ListBox { SelectedItem: BookOccurrenceViewModel } listBox)
+        {
+            e.Handled = true;
+            OpenSelectedOccurrence(listBox);
+        }
+    }
+
+    private void OpenSelectedOccurrence(ListBox listBox)
+    {
+        if (listBox.SelectedItem is BookOccurrenceViewModel occurrence)
+        {
             
             lock (_openLock)
             {
