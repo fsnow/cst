@@ -1,9 +1,9 @@
 # macOS Notarization Ticket Parsing Issue
 
-**Date:** October 4, 2025
-**App Version:** 5.0.0-beta.2
-**Platform:** macOS Sequoia 15.6.1
-**Status:** Unresolved - Blocking Beta 2 Release
+**Opened:** October 4, 2025 (5.0.0-beta.2, macOS Sequoia 15.6.1)
+**Status:** Closed as a known limitation of **Kestrel** - it cannot validate any vendor's stapled notarization
+ticket. Not a build problem, and it does not block releases: build and notarize on **Caracara**, verify on
+**Egret**. Last re-checked October 7, 2026 on macOS 27.0.1 - still failing (see the end of this document).
 
 ## Issue Summary
 
@@ -494,8 +494,27 @@ A brand-new user has a fresh login keychain and clean per-user security state, s
 | Third-party process lock | Ruled out — `lsof` clean, daemon idle 0.0% CPU for 22 days |
 | Network, disk space, clock, MDM, trust-setting overrides | Ruled out (Jun 21) |
 | **User-level corruption (keychain / per-user state)** | **Ruled out — Jul 28, fresh account fails identically** |
+| A major macOS upgrade clears it | **Ruled out — Oct 7, macOS 27.0.1 fails identically** (see below) |
 
 ### Final decision
 The only remaining remedy is an **erase-install** (an in-place reinstall would not help — it spares the data volume). That is not justified for a development-box quirk that does not block releases.
 
 **Closed.** Standing workflow: **build + notarize on Caracara, verify on Egret.** Kestrel remains unable to validate any vendor's stapled ticket; this is a known, understood, and accepted limitation of that machine. Do not re-investigate without new evidence — the hypothesis space above is exhausted.
+
+## October 7, 2026 - macOS 27 does not fix it
+
+Re-checked after upgrading Kestrel from macOS 26.5.1 to **macOS 27.0.1** (build 26A434), to test whether a major
+OS upgrade clears the state. On 26.5.1 the same morning, before the upgrade, the result was the same as in June.
+
+| | macOS 26.5.1 (Oct 7, before) | macOS 27.0.1 (Oct 7, after) |
+|---|---|---|
+| `xcrun stapler validate` - Google Chrome, VS Code, Slack, Brave | exit 65 (all four) | **exit 65 (all four)** |
+| `/var/db/SystemPolicyConfiguration/Tickets-wal` last modified | Jun 23 | **Jun 23** (unchanged) |
+
+This is what the reasoning above predicts: an upgrade replaces the sealed system volume and leaves the data volume,
+where the bad state lives, untouched. A full notarization run was not attempted - stapling validates the ticket
+with the same check, so it would stop at the same Error 65; Apple-side submission has always succeeded here.
+
+**Remaining remedy unchanged:** an erase-install. **Standing workflow unchanged:** build and notarize on
+Caracara, verify on Egret. Re-check (the four-app `stapler validate`) only after an erase-install or other new
+evidence.
