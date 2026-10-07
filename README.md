@@ -2,7 +2,7 @@
 
 CST Reader is a cross-platform application for reading and searching Pāli texts. The current main branch contains CST 5.0, built on .NET 10 and Avalonia UI — a ground-up rewrite of the Windows-only CST4.
 
-**Status: 5.0.0-beta.7.** CST 5 matches or exceeds CST4 in features, apart from interface localization (see [Known Gaps](#known-gaps)). Beta 6 was the largest release of this cycle — an AI Assistant you can ask about the text you are reading, your choice of AI provider, and first-class Windows support on x64 and ARM64 — and Beta 7 follows it two days later with a fix for the AI Assistant in dark mode.
+**Status: 5.0.0-beta.8.** CST 5 matches or exceeds CST4 in features, apart from interface localization (see [Known Gaps](#known-gaps)). Beta 6 brought an AI Assistant you can ask about the text you are reading, your choice of AI provider, and first-class Windows support on x64 and ARM64; in Beta 8 the AI Assistant remembers your conversations, and Digital Pāḷi Dictionary entries show the word's root.
 
 CST Reader presents the Tipiṭaka **in Pāli**, rendered in 14 scripts. It does not include translations of the texts; the built-in dictionaries give the meaning of individual words.
 
@@ -25,7 +25,7 @@ One further branch, `experimental/cef-controlrecycling-workarounds`, is a 2025 s
 - **Cross-Platform**: macOS (Apple Silicon and Intel) and Windows (x64 and ARM64)
 - **IDE-Style Interface**: dock-based layout with resizable panels, tab management, and persistent session state
 - **Session Restoration**: restores open books, search highlights, window positions, reading positions, the active tool tab, and the last dictionary lookup
-- **Floating Windows**: float a book by dragging its tab out of the main window, and drag it back to re-dock
+- **Floating Windows**: float a book, the dictionary or a source PDF by dragging its tab out of the main window, and drag it back to re-dock
 - **Dark Mode**: across all panels and book content, including color-inverted search highlights
 - **Native Packaging**: notarized macOS `.dmg` installers, and per-user Windows `setup.exe` installers plus portable zips
 
@@ -72,7 +72,6 @@ An optional loopback HTTP API and **MCP server** let an AI assistant search the 
 ## Known Gaps
 
 - **The interface is English only.** CST4 offers 24 interface languages; that work is still ahead and needs both a localization system and the translations themselves.
-- **Book content fonts** are not yet user-configurable (UI fonts per script are).
 - **Elevated idle CPU on macOS** (~30%), inherent to Avalonia's macOS event loop and amplified by CEF rather than specific to CST Reader.
 
 ## Development Setup
