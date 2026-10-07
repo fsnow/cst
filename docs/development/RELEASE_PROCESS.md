@@ -345,7 +345,7 @@ release until it is. Clear the label once the note has been written and the limi
 ## Installation
 
 ### macOS Requirements
-- macOS 11.0 (Big Sur) or later
+- macOS 12 (Monterey) or later
 - Apple Silicon (M1/M2/M3) or Intel processor
 
 ### Windows Requirements
