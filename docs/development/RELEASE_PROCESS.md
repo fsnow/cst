@@ -2,18 +2,16 @@
 
 This document describes the complete process for releasing a new version of CST Reader.
 
-**Last Updated:** September 3, 2026
+**Last Updated:** October 7, 2026
 **Current Version:** 5.0.0-beta.8 (in development; Beta 7 released 2026-09)
 
-> **Clean-start status for Beta 8: not yet determined.** The cycle has just opened and nothing on disk
-> has changed, so as of today a Beta 7 user would upgrade in place. That is a statement about right now,
-> not a promise about the release — **re-derive it before publishing** rather than carrying this line
-> forward. A tokenizer or index-format change is what flips it to a mandatory clean start, because no
-> migration can absorb that one.
->
-> Users coming from **Beta 5 or earlier** are a separate question, to be answered at the same time. Beta 6
-> and Beta 7 both required a wipe from Beta 4 and earlier (the Beta 5 index-offset change, #53) and neither
-> extended that line to Beta 5; whether Beta 8 does depends on what this cycle changes.
+> **Clean-start status for Beta 8: none needed from Beta 5, 6 or 7** [observed 2026-10-07]. Nothing in
+> `src/CST.Lucene`, `src/CST.Lexicon`, or the indexing and search services changed since
+> `v5.0.0-beta.7`, and the indexer does not call the converters #1025 touched, so the search index and its
+> tokenizer are as Beta 5 left them. **Beta 4 and earlier still need a wipe** (the Beta 5 index-offset
+> change, #53). Re-derive this at the start of each cycle rather than carrying the line forward: a
+> tokenizer or index-format change is what flips it to a mandatory clean start, because no migration can
+> absorb that one.
 >
 > **What to verify before publishing** is not "did anything change" but "does the upgrade path still
 > work": launch the new build on a real data directory from the previous release and confirm settings,
@@ -426,6 +424,10 @@ Build both Apple Silicon and Intel DMG installers:
 # Build Intel package
 ./package-macos.sh x64
 ```
+
+**The script stops if this machine has no `Developer ID Application` signing identity** (2026-10-07). It
+used to carry on and produce an unsigned app that looked like any other build. Pass `--unsigned` only
+for a local test build that will not be notarized: `./package-macos.sh arm64 --unsigned`.
 
 Packages are created in the `dist/` directory:
 - `dist/CST-Reader-arm64.dmg`

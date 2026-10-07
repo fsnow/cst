@@ -2,13 +2,22 @@
 
 # CST Avalonia macOS Packaging Script
 # This script builds and packages the CST Avalonia application for macOS
-# Usage: ./package-macos.sh [architecture]
+# Usage: ./package-macos.sh [architecture] [--unsigned]
 # Architecture options: arm64 (default), x64
+# --unsigned: build without a Developer ID signature, for a local test build only. Without it, a machine
+#             with no "Developer ID Application" identity stops here instead of producing an unsigned app.
 
 set -e  # Exit on error
 
-# Parse architecture argument
-ARCH=${1:-arm64}  # Default to arm64 if no argument provided
+# Parse arguments: an architecture, and optionally --unsigned
+ARCH="arm64"  # Default to arm64 if no architecture is given
+ALLOW_UNSIGNED=0
+for arg in "$@"; do
+    case $arg in
+        --unsigned) ALLOW_UNSIGNED=1 ;;
+        *) ARCH="$arg" ;;
+    esac
+done
 
 # Validate architecture
 case $ARCH in
@@ -22,7 +31,7 @@ case $ARCH in
         ;;
     *)
         echo "Error: Invalid architecture '$ARCH'"
-        echo "Usage: $0 [arm64|x64]"
+        echo "Usage: $0 [arm64|x64] [--unsigned]"
         echo "  arm64 - Build for Apple Silicon Macs (default)"
         echo "  x64   - Build for Intel Macs"
         exit 1
@@ -46,6 +55,17 @@ DIST_DIR="$PROJECT_DIR/dist"
 
 # Check for available signing identities early
 SIGNING_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/^[[:space:]]*[0-9]*)[[:space:]]*[A-Z0-9]*[[:space:]]*"//' | sed 's/".*$//')
+
+# Refuse to build unsigned by accident. Without this the script carried on with no identity and produced
+# an unsigned app that looked like any other build -- discovered only when notarization rejected it, or
+# not at all if that step was skipped. Building on a machine whose keychain lacks the certificate (a new
+# build host, or Egret before the certificate was imported) is exactly how that happens.
+if [ -z "$SIGNING_IDENTITY" ] && [ "$ALLOW_UNSIGNED" -ne 1 ]; then
+    echo "Error: no \"Developer ID Application\" signing identity found in this machine's keychain."
+    echo "  A release build must be signed. Import the Developer ID certificate, or pass --unsigned"
+    echo "  for a local test build that will not be notarized."
+    exit 1
+fi
 
 # Clean previous builds
 echo "Cleaning previous builds..."
