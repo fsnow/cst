@@ -343,7 +343,7 @@
     </div>
 
     <div class="beta-notice">
-        <strong>Upgrading from Beta 5 or Beta 6? Nothing to do.</strong>
+        <strong>Upgrading from Beta 5, 6 or 7? Nothing to do.</strong>
         <p>Install over the top. Your settings, layout, open books and downloaded dictionaries carry across.</p>
         <p style="margin-top: 8px;"><strong>Coming from Beta 4 or earlier:</strong> delete your CST Reader data directory first &mdash; the search index changed in Beta 5 and an older one will not be read correctly.</p>
         <p style="margin-top: 8px;"><strong>macOS:</strong> <code>~/Library/Application Support/CSTReader/</code> &nbsp;&bull;&nbsp; <strong>Windows:</strong> <code>%APPDATA%\CSTReader\</code></p>
@@ -354,35 +354,35 @@
         <p>Thank you for testing CST Reader! Your feedback will help shape the final release.</p>
 
         <h3 style="margin-top: 24px; margin-bottom: 16px;">Focus Areas</h3>
-        <p>Beta 5 reached feature parity with CST4. Beta 6 and Beta 7 add a great deal on top of it, and these areas are the newest &mdash; feedback on them is especially valuable:</p>
+        <p>Beta 5 reached feature parity with CST4. Beta 8 lets the AI Assistant hold a conversation and keep it, and brings word roots into the Digital Pāḷi Dictionary. These are the newest areas &mdash; feedback on them is especially valuable:</p>
 
         <div class="focus-item">
-            <strong>The AI Assistant &mdash; brand new</strong>
+            <strong>AI Assistant conversations &mdash; new in Beta 8</strong>
             <ul>
-                <li>Opens as a fourth tab in the left tool dock, beside Search, Open a Book and Dictionary</li>
-                <li>Select a passage and ask for a translation, a word-by-word breakdown, or an explanation</li>
-                <li>Turn it on under Settings &rsaquo; AI &mdash; then add a provider you have an account with under Settings &rsaquo; AI &rsaquo; Providers, a tab that appears once it is on</li>
-                <li>Your API key goes to the macOS Keychain or, on Windows, DPAPI under your user account &mdash; never into the app's settings file</li>
-                <li>If a key is already in your environment, the Providers tab offers it; nothing connects until you say so</li>
-                <li>Every answer shows what was actually sent to the model &mdash; is it the passage you meant?</li>
+                <li>Ask a follow-up &mdash; &ldquo;what did you mean by the third word?&rdquo; &mdash; and the answer takes the earlier ones into account</li>
+                <li>Quit and relaunch: your last conversation is where you left it</li>
+                <li>The <strong>+</strong> button starts a new conversation without losing the old one; the list beside it switches, renames and deletes them</li>
+                <li><strong>Compact</strong> summarises the earlier turns of a long conversation for the model and keeps the last four as they were; it also happens automatically as a conversation nears the model's limit (Settings &rsaquo; AI)</li>
             </ul>
             <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">This is the least-tested part of the release. Anything that looks wrong is worth reporting.</p>
         </div>
 
         <div class="focus-item">
-            <strong>Access for AI clients &mdash; first release with testers</strong>
+            <strong>Dictionary roots &mdash; new in Beta 8</strong>
             <ul>
-                <li>Off by default. Turn it on under Settings &rsaquo; AI &rsaquo; Access for AI Clients, which carries what a client needs</li>
-                <li>Does your agent get from there to reading the corpus without further help?</li>
+                <li>A Digital Pāḷi Dictionary entry now shows the word's root, linked</li>
+                <li>Look a root up directly: <code>&radic;var</code> finds &radic;var 1 and &radic;var 2, with their meanings and the words built on them</li>
             </ul>
         </div>
 
         <div class="focus-item">
-            <strong>Windows on ARM &mdash; brand new</strong>
+            <strong>Getting started with the AI Assistant</strong>
             <ul>
-                <li>A native arm64 build, alongside the existing x64 one</li>
-                <li>Install and first launch: does the text download and index build complete?</li>
-                <li>If book text appears blank, turn off &ldquo;Use hardware acceleration&rdquo; under Settings &rsaquo; Configuration &rsaquo; Graphics, and restart</li>
+                <li>Opens as a fourth tab in the left tool dock, beside Search, Open a Book and Dictionary</li>
+                <li>Turn it on under Settings &rsaquo; AI &mdash; then add a provider you have an account with under Settings &rsaquo; AI &rsaquo; Providers, a tab that appears once it is on</li>
+                <li>Your API key goes to the macOS Keychain or, on Windows, DPAPI under your user account &mdash; never into the app's settings file</li>
+                <li>Select a passage and ask for a translation, a word-by-word breakdown, or an explanation; every answer shows what was actually sent to the model</li>
+                <li>AI clients can reach the texts too: Settings &rsaquo; AI &rsaquo; Access for AI Clients, off by default</li>
             </ul>
         </div>
 
@@ -393,6 +393,7 @@
                 <li><strong>Text zoom</strong> &mdash; &#8984;/Ctrl with +, &minus; and 0, or the percentage control in the book toolbar</li>
                 <li><strong>Book fonts</strong> &mdash; choose a face for each script under Settings &rsaquo; Pali Script Fonts</li>
                 <li>Does your reading position survive zooming, switching tabs and restarting?</li>
+                <li>Windows: if book text appears blank, turn off &ldquo;Use hardware acceleration&rdquo; under Settings &rsaquo; Configuration &rsaquo; Graphics, and restart</li>
             </ul>
         </div>
 
@@ -401,6 +402,7 @@
             <ul>
                 <li>Float a book by dragging its tab out of the main window, and drag it back to re-dock</li>
                 <li>Split the reading area, and move a book between splits</li>
+                <li>Source PDFs float the same way &mdash; new in Beta 8</li>
                 <li>Books that were floated or moved should all reopen when you restart</li>
             </ul>
         </div>
