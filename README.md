@@ -6,6 +6,13 @@ CST Reader is a cross-platform application for reading and searching Pāli texts
 
 CST Reader presents the Tipiṭaka **in Pāli**, rendered in 14 scripts. It does not include translations of the texts; the built-in dictionaries give the meaning of individual words.
 
+## Download
+
+Get the [latest release](https://github.com/fsnow/cst/releases/latest):
+
+- **macOS 11 or later** — a notarized `.dmg` for Apple Silicon or Intel.
+- **Windows 10 or later** — `setup.exe` or a portable zip, for x64 or ARM64. These builds are unsigned, so SmartScreen warns on first run: choose **More info**, then **Run anyway**.
+
 ## Branch Overview
 
 This repository contains multiple branches representing different stages of CST development:
@@ -32,7 +39,8 @@ One further branch, `experimental/cef-controlrecycling-workarounds`, is a 2025 s
 ### Text Display & Scripts
 - **Multi-Script Support**: all 14 Pāli scripts for both display and search input (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
 - **Global and Per-Tab Script Selection**: changing the script re-renders every open book; each tab also remembers its own setting
-- **Font Management**: per-script UI font system with native font detection and real-time updates
+- **Fonts**: a font per script, for book text and for the interface
+- **Find and Zoom**: Find in Page (⌘/Ctrl+F) within the book you are reading, and text zoom remembered per script
 - **Script Conversion Quality**: lossless round-trip conversion for 13 of the 14 scripts, verified by a validation framework. The Cyrillic exceptions are inherent to that transliteration scheme — it cannot distinguish certain vowel sequences — not a converter defect.
 
 ### Search
@@ -49,6 +57,7 @@ One further branch, `experimental/cef-controlrecycling-workarounds`, is a 2025 s
 - **User-controlled**: choose which dictionaries appear, and in what order
 - **Attribution**: each dictionary carries its own citation metadata
 - **Morphology**: DPD-backed resolution from an inflected form to its lemma, with a lemma report (etymology, root, paradigm, frequency)
+- **Roots**: a DPD entry shows the word's root, and a root can be looked up directly — `√var` finds √var 1 and √var 2 with the words built on each
 
 ### Printing
 Print a whole book, or print the current selection.
@@ -58,21 +67,23 @@ Print a whole book, or print the current selection.
 - **Context-Aware Navigation**: opens the PDF at the page matching your position in the rendered book
 - Each book offers only the editions it actually has
 
-### AI and Agent Access (optional, off by default)
-An optional loopback HTTP API and **MCP server** let an AI assistant search the corpus, read passages with their apparatus, use the dictionaries, resolve inflected forms to lemmas, and drive the reader's navigation — returning real references rather than recalled text. It binds only to the loopback interface, requires a per-session token, and stays off until enabled in Settings.
+### AI (optional, off by default)
+No AI feature is available until it is turned on in **Settings ▸ AI**.
 
-**To start:** enable it under **Settings ▸ AI ▸ Access for AI Clients**. That panel carries what a client needs — a ready-made MCP configuration, and a sample prompt for an agent that speaks plain HTTP.
+**AI Assistant.** Select a passage and ask about it — a translation, a word-by-word breakdown, an explanation. Answers cite the passage they came from, and conversations are kept, several at a time, by name. Bring your own provider, from the [models.dev](https://models.dev) catalogue or a local runner such as Ollama or LM Studio; keys are stored in the macOS Keychain or Windows DPAPI.
+
+**Access for AI clients.** Coding agents such as Claude Code, and chat clients such as Claude Desktop, can use the app to search the corpus, read passages, use the dictionaries and drive the reader's navigation — answering with real references rather than recalled text. Settings gives a sample configuration for each. The app listens only on the loopback interface.
 
 ### Technical Architecture
 - **Stack**: .NET 10, Avalonia UI 11.3, ReactiveUI, Dock.Avalonia, dependency injection
 - **WebView Rendering**: WebViewControl-Avalonia (CEF) for book content and search highlighting
-- **Testing**: 1,400+ tests covering unit, integration, and performance scenarios
+- **Testing**: 3,200+ tests covering unit, integration, and performance scenarios, plus a headless Avalonia suite for styles
 - **Logging**: structured Serilog logging across all components
 
 ## Known Gaps
 
 - **The interface is English only.** CST4 offers 24 interface languages; that work is still ahead and needs both a localization system and the translations themselves.
-- **Elevated idle CPU on macOS** (~30%), inherent to Avalonia's macOS event loop and amplified by CEF rather than specific to CST Reader.
+- **Elevated idle CPU on macOS** (~30%), inherent to Avalonia's macOS event loop and amplified by CEF rather than specific to CST Reader ([#523](https://github.com/fsnow/cst/issues/523)).
 
 ## Development Setup
 
@@ -83,12 +94,14 @@ Development and testing are primarily on macOS; Windows builds and runs, and is 
 - Git access to this repository
 
 ### Build & Run
-```bash
-cd src/CST.Avalonia
+From the repository root:
 
-dotnet build      # build
-dotnet run        # run
+```bash
+dotnet build src/CST.Avalonia
+dotnet run --project src/CST.Avalonia
 ```
+
+On an **Intel Mac**, add `-r osx-x64` to both. Without a runtime identifier the build picks the Apple Silicon WebView package, and the app stops at startup.
 
 ```bash
 dotnet test src/CST.Avalonia.Tests                              # main suite
@@ -101,10 +114,11 @@ dotnet test src/CST.Avalonia.Tests --filter "FullyQualifiedName~CstDockFactoryTe
 cd src/CST.Avalonia
 ./package-macos.sh arm64     # Apple Silicon
 ./package-macos.sh x64       # Intel
-./notarize-macos.sh arm64    # code sign, notarize, staple
+./notarize-macos.sh arm64    # notarize and staple
+./notarize-macos.sh x64
 ```
 
-Produces self-contained app bundles and DMG installers (requires `brew install create-dmg`).
+Produces self-contained app bundles and DMG installers (requires `brew install create-dmg`). Packaging needs a **Developer ID Application** certificate in the keychain and stops without one; pass `--unsigned` for a local test build. Notarizing reads `APPLE_ID`, `APPLE_APP_PASSWORD` (an app-specific password) and optionally `APPLE_TEAM_ID` from the environment.
 
 ### Windows Packaging
 ```powershell
