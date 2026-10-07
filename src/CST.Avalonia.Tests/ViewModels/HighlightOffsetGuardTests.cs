@@ -56,6 +56,57 @@ public class HighlightOffsetGuardTests
         Assert.False(BookDisplayViewModel.IsInsideTag(spanning, spanning.IndexOf("tini")));
     }
 
+    /// <summary>A word that ends exactly where a tag begins: its END offset is that tag's '&lt;'. The offset is a
+    /// boundary, so it is not inside the tag. [fsnow]'s book, e0804n: <c>&lt;hi rend="bold"&gt;sama&lt;/hi&gt;</c>, whose
+    /// highlight was skipped ([observed] the counter, counted from the positions, still showed 5 hits). The review of
+    /// #1033 measured 163,074 corpus words ending where a tag begins, all refused before this fix.</summary>
+    [Fact]
+    public void A_word_ending_where_a_tag_begins_is_spliceable_at_its_end()
+    {
+        const string xml = "<p><hi rend=\"bold\">sama</hi> <pb n=\"1\"/></p>";
+        int start = xml.IndexOf("sama");
+        int end = start + "sama".Length;   // the '<' of "</hi>"
+
+        Assert.False(BookDisplayViewModel.IsInsideTag(xml, start));
+        Assert.False(BookDisplayViewModel.IsInsideTag(xml, end));
+    }
+
+    /// <summary>The boundary just after a tag's '&lt;' is inside it.</summary>
+    [Fact]
+    public void Just_after_a_tags_opening_bracket_is_inside_it()
+    {
+        const string xml = "<p>sama</p>";
+        Assert.True(BookDisplayViewModel.IsInsideTag(xml, xml.IndexOf("</p>") + 1));
+    }
+
+    // ---- The span: what a stale index can produce (review of #1033) ----------------------------------
+
+    [Fact]
+    public void A_span_of_text_or_hi_markup_is_spliceable()
+    {
+        const string xml = "<p>eka sa<hi rend=\"bold\">ma</hi> tini</p>";
+        int start = xml.IndexOf("sa<hi");
+        int end = xml.IndexOf("</hi>");
+        Assert.True(BookDisplayViewModel.IsSpliceableSpan(xml, start, end));
+        Assert.True(BookDisplayViewModel.IsSpliceableSpan(xml, xml.IndexOf("eka"), xml.IndexOf("eka") + 3));
+    }
+
+    [Fact]
+    public void A_span_starting_on_a_tag_is_refused()
+    {
+        const string xml = "<p>eka</p><p rend=\"b\">tini</p>";
+        int start = xml.IndexOf("<p rend");
+        Assert.False(BookDisplayViewModel.IsSpliceableSpan(xml, start, xml.IndexOf("tini") + 2));
+    }
+
+    [Fact]
+    public void A_span_crossing_a_paragraph_or_ending_after_a_tag_is_refused()
+    {
+        const string xml = "<p>eka dve</p><p>tini</p>";
+        Assert.False(BookDisplayViewModel.IsSpliceableSpan(xml, xml.IndexOf("dve"), xml.IndexOf("tini") + 2));
+        Assert.False(BookDisplayViewModel.IsSpliceableSpan(xml, xml.IndexOf("dve"), xml.IndexOf("</p>") + 4));
+    }
+
     [Fact]
     public void Degenerate_positions_are_not_treated_as_markup()
     {

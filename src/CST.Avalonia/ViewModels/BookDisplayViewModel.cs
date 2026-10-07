@@ -1401,14 +1401,41 @@ namespace CST.Avalonia.ViewModels
         /// last thing opened has not closed, so this position is inside markup. Bounded in practice by the
         /// distance to the previous tag, which in TEI is short.</para>
         /// </summary>
+        /// <summary>
+        /// Whether a highlight may be spliced around <c>xml[start..end)</c>: neither end inside a tag, the span not
+        /// starting ON a tag, and nothing in it but text and <c>&lt;hi&gt;</c> markup (which the &lt;hi&gt;-crossing
+        /// cases downstream handle). A current index only ever gives such spans - its tokenizer blanks all other
+        /// markup - so this refuses only drifted offsets from a stale one, whose splice would make the document
+        /// malformed (R8-6). The span test also closes cases the endpoint test alone missed: an end just after a
+        /// '&gt;', and a span crossing "&lt;/p&gt;...&lt;p&gt;". (review of #1033)
+        /// </summary>
+        internal static bool IsSpliceableSpan(string xml, int start, int end)
+        {
+            if (start < 0 || end < start || end > xml.Length) return false;
+            if (IsInsideTag(xml, start) || IsInsideTag(xml, end)) return false;
+            if (start < xml.Length && xml[start] == '<' && !xml.AsSpan(start).StartsWith("<hi")) return false;
+
+            var text = HiMarkup.Replace(xml.Substring(start, end - start), "");
+            return text.IndexOf('<') < 0 && text.IndexOf('>') < 0;
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex HiMarkup =
+            new("</?hi\\b[^>]*>", System.Text.RegularExpressions.RegexOptions.Compiled);
+
         internal static bool IsInsideTag(string xml, int pos)
         {
             if (pos <= 0 || pos > xml.Length) return false;
 
-            int lastOpen = xml.LastIndexOf('<', Math.Min(pos, xml.Length - 1));
+            // pos is a BOUNDARY - between xml[pos-1] and xml[pos] - so only what comes before it decides. Looking
+            // at xml[pos] as well made a word that ends exactly where a tag begins ("सम</hi>": the end offset is
+            // the '<' of "</hi>") read as inside markup, and its highlight was skipped while the hit counter
+            // still counted it. [fsnow], testing beta 8: a book with 5 hits for "sama" that "won't navigate to
+            // hit 5 with Next or Last".
+            int before = pos - 1;
+            int lastOpen = xml.LastIndexOf('<', before);
             if (lastOpen < 0) return false;
 
-            int lastClose = xml.LastIndexOf('>', Math.Min(pos, xml.Length - 1));
+            int lastClose = xml.LastIndexOf('>', before);
             return lastOpen > lastClose;
         }
 
@@ -1449,7 +1476,7 @@ namespace CST.Avalonia.ViewModels
                     //
                     // Testing the ENDPOINTS, not the span: a highlight legitimately contains whole tags, and
                     // the <hi>-crossing cases below exist to handle exactly that.
-                    if (IsInsideTag(xmlContent, startOffset) || IsInsideTag(xmlContent, endOffset))
+                    if (!IsSpliceableSpan(xmlContent, startOffset, endOffset))
                     {
                         Log.Warning("[BookDisplay] Skipping a highlight whose offsets land inside markup: " +
                                     "{Start}-{End}. The search index is likely stale for this book (R8-6)",
