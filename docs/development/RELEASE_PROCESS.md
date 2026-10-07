@@ -389,9 +389,9 @@ minutes — the welcome page shows progress.
 
 ## Feedback
 
-Found a bug or have a suggestion?
-- **GitHub Issues:** https://github.com/fsnow/cst/issues
-- **Email:** help@tipitaka.org
+Found a bug or have a suggestion? Please open an issue: https://github.com/fsnow/cst/issues
+
+Found an error in the Pāli text itself? That is a text correction: help@tipitaka.org
 
 ---
 
