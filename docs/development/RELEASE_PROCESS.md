@@ -3,13 +3,12 @@
 This document describes the complete process for releasing a new version of CST Reader.
 
 **Last Updated:** October 7, 2026
-**Current Version:** 5.0.0-beta.8 (in development; Beta 7 released 2026-09)
+**Current Version:** 5.0.0-beta.9 (in development; Beta 8 released 2026-10-07)
 
-> **Clean-start status for Beta 8: none needed from Beta 5, 6 or 7** [observed 2026-10-07]. Nothing in
-> `src/CST.Lucene`, `src/CST.Lexicon`, or the indexing and search services changed since
-> `v5.0.0-beta.7`, and the indexer does not call the converters #1025 touched, so the search index and its
-> tokenizer are as Beta 5 left them. **Beta 4 and earlier still need a wipe** (the Beta 5 index-offset
-> change, #53). Re-derive this at the start of each cycle rather than carrying the line forward: a
+> **Clean-start status for Beta 9: none needed from Beta 5–8, so far** [observed 2026-10-07, at the
+> opening of the cycle]. Nothing in `src/CST.Lucene`, `src/CST.Lexicon`, or the indexing and search
+> services has changed since `v5.0.0-beta.8`, so the search index and its tokenizer are as Beta 5 left
+> them. **Beta 4 and earlier still need a wipe** (the Beta 5 index-offset change, #53). Re-derive this at the start of each cycle rather than carrying the line forward: a
 > tokenizer or index-format change is what flips it to a mandatory clean start, because no migration can
 > absorb that one.
 >
@@ -304,19 +303,22 @@ git log v5.0.0-beta.2..v5.0.0-beta.3 --format="%h %s%n%b"
 
 This ensures accurate release notes based on actual changes, not assumptions.
 
-**Then collect the notes that cannot be derived from commits.** A shipped limitation is invisible in a
-commit log — the commit says what was fixed, not what still is not. Anything that needs a sentence in the
-release is labelled `release-note` as the work lands, so it is queried rather than remembered:
+**Then collect the known issues, which cannot be derived from commits.** A shipped limitation is invisible
+in a commit log — the commit says what was fixed, not what still is not. Anything that needs a sentence in
+the release notes is labelled `release-note`, so it is queried rather than remembered:
 
 ```bash
-# Everything flagged for this release's notes, open or closed
-gh issue list --repo fsnow/cst --label release-note --milestone "5.0.0-beta.X" --state all \
+# Known issues to restate: every open issue flagged for the notes
+gh issue list --repo fsnow/cst --label release-note --state open \
   --json number,title,url --jq '.[] | "#\(.number) \(.title)\n  \(.url)"'
 ```
 
-Each such issue carries the wording to use in a comment. **An open issue in the milestone is normal here**:
-a limitation that ships is a known issue precisely because it is not fixed, and it needs re-stating in every
-release until it is. Clear the label once the note has been written and the limitation is gone.
+**The query goes by label alone, never by milestone.** Milestones do not mark what ships in a release —
+**[fsnow]**, 2026-10-07: *"That's just not how I am using milestones so that query is not valid"* — and a
+milestone filter returned nothing for Beta 8, whose two known issues (#827, #959) sat on the next milestone
+and on none. A limitation that ships is a known issue precisely because it is not fixed, and it needs
+re-stating in every release until it is. Each such issue carries the wording to use in a comment; clear the
+label once the limitation is gone.
 
 ```markdown
 # CST Reader 5.0.0-beta.X

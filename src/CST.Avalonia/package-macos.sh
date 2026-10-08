@@ -159,9 +159,9 @@ HELPER_EOF
     <key>CFBundleDisplayName</key>
     <string>$HELPER_NAME</string>
     <key>CFBundleVersion</key>
-    <string>5.0.0-beta.8</string>
+    <string>5.0.0-beta.9</string>
     <key>CFBundleShortVersionString</key>
-    <string>5.0.0-beta.8</string>
+    <string>5.0.0-beta.9</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSBackgroundOnly</key>
