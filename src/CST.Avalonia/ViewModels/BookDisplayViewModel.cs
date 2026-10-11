@@ -2168,7 +2168,7 @@ namespace CST.Avalonia.ViewModels
                 PageEdition.Thai => ThaiPage,
                 PageEdition.Other => OtherPage,
                 _ => "*",
-            });
+            }, CurrentParagraph);
             var oldText = PageReferencesText;
             PageReferencesText = newText;
             

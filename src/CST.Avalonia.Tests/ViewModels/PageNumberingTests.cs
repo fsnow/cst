@@ -131,27 +131,28 @@ public class PageNumberingTests
     [Fact]
     public void ComposeStatus_OmitsSystemsTheBookDoesNotCarry()
     {
-        var text = PageNumbering.ComposeStatus(Eds(PageEdition.Vri, PageEdition.Myanmar), Page);
+        var text = PageNumbering.ComposeStatus(Eds(PageEdition.Vri, PageEdition.Myanmar), Page, "42");
 
-        Assert.Equal("VRI: 1.0023   Myanmar: 2.0117", text);
+        Assert.Equal("VRI: 1.0023   Myanmar: 2.0117   Para: 42", text);
         Assert.DoesNotContain("PTS", text);
         Assert.DoesNotContain("Thai", text);
         Assert.DoesNotContain("Other", text);
     }
 
-    /// <summary>The paragraph number was in the shipped status bar behind a comment calling it "for
-    /// debugging" (#541).</summary>
+    /// <summary>#684 removed the paragraph number as a "debugging" field; the maintainer had it restored
+    /// (2026-10-11). It comes last, after the page systems.</summary>
     [Fact]
-    public void ComposeStatus_DoesNotCarryTheParagraphDebugField()
+    public void ComposeStatus_EndsWithTheParagraphNumber()
     {
-        var text = PageNumbering.ComposeStatus(Eds(PageEdition.Vri), Page);
-        Assert.DoesNotContain("Para", text);
+        var text = PageNumbering.ComposeStatus(Eds(PageEdition.Vri), Page, "42");
+        Assert.Equal("VRI: 1.0023   Para: 42", text);
     }
 
+    /// <summary>A book with no page numbering still shows its paragraph number, with no leading separator.</summary>
     [Fact]
-    public void ComposeStatus_IsEmpty_WhenTheBookCarriesNoPageNumbering()
+    public void ComposeStatus_ShowsOnlyTheParagraph_WhenTheBookCarriesNoPageNumbering()
     {
-        Assert.Equal("", PageNumbering.ComposeStatus(Array.Empty<PageEdition>(), Page));
+        Assert.Equal("Para: 42", PageNumbering.ComposeStatus(Array.Empty<PageEdition>(), Page, "42"));
     }
 
     /// <summary>Before markers are built we show everything, so the bar does not visibly fill in on load —
@@ -159,9 +160,9 @@ public class PageNumberingTests
     [Fact]
     public void ComposeStatus_ShowsEverySystem_WhenEditionsAreNotYetKnown()
     {
-        var text = PageNumbering.ComposeStatus(null, Page);
+        var text = PageNumbering.ComposeStatus(null, Page, "42");
 
-        Assert.Equal("VRI: 1.0023   Myanmar: 2.0117   PTS: 1.0045   Thai: 3.0210   Other: 1.0002", text);
+        Assert.Equal("VRI: 1.0023   Myanmar: 2.0117   PTS: 1.0045   Thai: 3.0210   Other: 1.0002   Para: 42", text);
     }
 
     /// <summary>
@@ -174,9 +175,10 @@ public class PageNumberingTests
     {
         var text = PageNumbering.ComposeStatus(
             Eds(PageEdition.Vri, PageEdition.Myanmar),
-            e => e == PageEdition.Myanmar ? "*" : "1.0023");
+            e => e == PageEdition.Myanmar ? "*" : "1.0023",
+            "*");
 
-        Assert.Equal("VRI: 1.0023   Myanmar: *", text);
+        Assert.Equal("VRI: 1.0023   Myanmar: *   Para: *", text);
     }
 
     /// <summary>Fields appear in a fixed order regardless of how the book lists its editions, so the bar
@@ -184,18 +186,18 @@ public class PageNumberingTests
     [Fact]
     public void ComposeStatus_UsesAFixedFieldOrder()
     {
-        var forward = PageNumbering.ComposeStatus(Eds(PageEdition.Vri, PageEdition.Thai), Page);
-        var reversed = PageNumbering.ComposeStatus(Eds(PageEdition.Thai, PageEdition.Vri), Page);
+        var forward = PageNumbering.ComposeStatus(Eds(PageEdition.Vri, PageEdition.Thai), Page, "42");
+        var reversed = PageNumbering.ComposeStatus(Eds(PageEdition.Thai, PageEdition.Vri), Page, "42");
 
         Assert.Equal(forward, reversed);
-        Assert.Equal("VRI: 1.0023   Thai: 3.0210", forward);
+        Assert.Equal("VRI: 1.0023   Thai: 3.0210   Para: 42", forward);
     }
 
-    /// <summary>A single system produces no leading or trailing separator.</summary>
+    /// <summary>A single system and the paragraph: one separator between them, none at either end.</summary>
     [Fact]
     public void ComposeStatus_DoesNotPadASingleField()
     {
-        Assert.Equal("Thai: 3.0210", PageNumbering.ComposeStatus(Eds(PageEdition.Thai), Page));
+        Assert.Equal("Thai: 3.0210   Para: 42", PageNumbering.ComposeStatus(Eds(PageEdition.Thai), Page, "42"));
     }
 
     // ---- Offers / Resolve (#844) ----------------------------------------------------------------------

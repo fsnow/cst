@@ -37,6 +37,8 @@ namespace CST.Avalonia.ViewModels
             (PageEdition.Other, "Other"),
         };
 
+        private const string ParagraphLabel = "Para";
+
         private const string Separator = "   ";
 
         /// <summary>
@@ -145,10 +147,12 @@ namespace CST.Avalonia.ViewModels
 
         /// <summary>
         /// The status-bar text: only the systems this book carries, each with its page at the current
-        /// position.
+        /// position, then the paragraph number.
         ///
-        /// <para>The paragraph number is deliberately absent. It was in the shipped status bar behind a
-        /// comment describing it as "for debugging" (#541).</para>
+        /// <para>The paragraph number is always shown. #684 removed it on the strength of an old code comment
+        /// calling it "for debugging"; that was not the maintainer's decision, and he had it restored: "I missed
+        /// this in testing until now. We need to put that back." (fsnow, 2026-10-11). Which books should drop
+        /// it, because their paragraph numbers do not address a unique place, is open under #422.</para>
         ///
         /// <para>A book whose markers are not built yet (<paramref name="editions"/> null) shows every
         /// system, matching <see cref="Has"/> — the alternative is a status bar that flickers from empty to
@@ -157,9 +161,11 @@ namespace CST.Avalonia.ViewModels
         /// <param name="pageFor">The page currently in effect for an edition, as the reader reports it.
         /// <c>"*"</c> means no page of that edition is in effect at this scroll position — a real state
         /// (above the first page break, say), distinct from the book not having the edition at all.</param>
+        /// <param name="paragraph">The paragraph number at the current position, as the reader reports it.</param>
         public static string ComposeStatus(
             IReadOnlyList<PageEdition>? editions,
-            Func<PageEdition, string> pageFor)
+            Func<PageEdition, string> pageFor,
+            string paragraph)
         {
             var sb = new StringBuilder();
             foreach (var (edition, label) in Order)
@@ -168,6 +174,8 @@ namespace CST.Avalonia.ViewModels
                 if (sb.Length > 0) sb.Append(Separator);
                 sb.Append(label).Append(": ").Append(pageFor(edition));
             }
+            if (sb.Length > 0) sb.Append(Separator);
+            sb.Append(ParagraphLabel).Append(": ").Append(paragraph);
             return sb.ToString();
         }
     }
