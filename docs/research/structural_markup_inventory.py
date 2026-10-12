@@ -10,7 +10,7 @@ import os, re, glob, collections, datetime, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 XML  = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("CST_XML_DIR")
-        or os.path.expanduser("~/Library/Application Support/CSTReader/xml-data"))
+        or os.path.expanduser("~/Library/Application Support/CSTReader/xml"))
 BOOKS = os.path.join(REPO, "src", "CST.Core", "Books.cs")
 OUT   = os.path.join(HERE, "STRUCTURAL_MARKUP_INVENTORY.md")
 dt = re.compile(r'<div\b[^>]*\btype="([^"]+)"')

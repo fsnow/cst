@@ -90,6 +90,7 @@ Features planned for future implementation (from CST4 analysis):
 ### 🔬 **research/** - Research & Exploration
 Exploratory research and investigations:
 - [Alternative Rendering Engines](research/ALTERNATIVE_RENDERING_ENGINES.md) - Comparison of rendering approaches
+- [Book Relationships](research/book-relationships/README.md) - epic #422 working doc: the book-relationship model under test, fsnow's decisions, and corpus measurements (paragraph numbering, canonical/añña, how each commentary correlates with its base, Visuddhimagga and the other isolated sets); with [markup-conventions.md](research/book-relationships/markup-conventions.md) describing the 2007–08 `<div>` markup. Scripts in `scripts/`
 - [Browser Embedding Options](research/BROWSER_EMBEDDING_OPTIONS.md) - WebView alternatives
 - [DPD Dictionary Integration Spike](research/DPD_DICTIONARY_INTEGRATION_SPIKE.md) - #109 third-party dictionary support: DPD + external-dictionary import format
 - [Git Integration](research/GIT_INTEGRATION.md) - Git-based features
