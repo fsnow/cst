@@ -176,7 +176,10 @@ No conclusion changes. The lower Jātaka and Vinaya figures were mostly endings.
   - Both files end at ¶1156 only by coincidence. The last verse ("असंहीरं असङ्कुप्पं …") is mūla ¶1155 and commentary ¶1156. The mūla's ¶1156 is the closing summary verse naming the suttas, which the commentary does not number. Correctly numbered, the mūla would end at ¶1157.
   - The fix is one renumbering in `s0505m`: the second 274 becomes 275, and every later number goes up by one.
   - **Reported** [fsnow, 2026-10-12]: "I sent a short email to help@Tipitaka.org about the SN para numbering issue."
-  - [suggestion] Until a corrected file ships, linking could map commentary ¶*n* ≥ 274 to mūla ¶*n*−1, as a single dated exception to delete once the corpus is fixed. Paragraph Go To in the mūla stays one verse off until then.
+  - **Workaround, conditional on the reader's copy** [fsnow, 2026-10-12]: "in our implementation we will want to have a check where we look for the max para number in Suttanipata and only workaround the issue if it isn't fixed yet (in that user's text)."
+    - [observed] Today the mūla's highest number is 1156. Correctly numbered, it would be 1157.
+    - [suggestion] The workaround maps commentary ¶*n* ≥ 274 to mūla ¶*n*−1.
+    - [suggestion] The max-number check rests on VRI fixing it by renumbering. If the fix instead dropped the number from the closing summary verse, the max would stay at 1156 in a fixed file. Testing for the duplicate ¶274 directly would not depend on how it is fixed. Which check to use is fsnow's call.
 - **Udāna** (`s0503a`): confirmed. The *n*+5 control hits 89%, because each mūla paragraph is a whole sutta full of stock phrases, so `content.py --best` asks which base paragraph shares the most lemmas. For all 80 commentary paragraphs it is the one with the same number, where chance is 1.2%.
 - A commentary can quote another text with that text's own numbers. `s0503a` quotes verses numbered from 1, which reads as a restart.
 
