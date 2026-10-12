@@ -92,8 +92,13 @@ There are seven opening sections in the corpus (ganthārambha / nidāna, with id
 | `s0301t.tik.xml` | `sn1_0` | `<head rend="subsubhead">` | yes |
 
 The "in the chapter list" column follows from `ChapterListsService`'s rule (listed when the div's type
-is in `ChapterListTypes` and it has a `.//head`). It has not been checked in the app. Which of the two
-treatments is intended is fsnow's call.
+is in `ChapterListTypes` and it has a `.//head`). It has not been checked in the app.
+
+[fsnow, 2026-10-12] "I see inconsistencies in my markup -- I think you already noticed these -- like
+for example the "0" section has a <head> in the DN1 Atthakatha, but not in mul or tika." [observed] The
+DN1 mūla (`s0101m`) has no `_0` div at all, because it has no ganthārambha: it opens on the Brahmajāla
+(`dn1_1`). So the head/no-head split here is between the aṭṭhakathā (`s0101a`) and the ṭīkā (`s0101t`).
+Which treatment the markup should standardise on is fsnow's call.
 
 Every opening div keeps the title's `subsubhead` rend, whether it is a `<p>` or a `<head>`.
 
