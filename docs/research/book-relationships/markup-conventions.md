@@ -48,6 +48,12 @@ important because they drive the chapter list dropdown. The <trailer> elements m
 correctness" but have no particular function. Whether trailer or p they render as whatever style is in
 the "rend" attribute."
 
+**`rend` values are source data, not markup choices.** [fsnow, 2026-10-12] "Note that rend comes
+directly from the source text files, which were marked up with numerical codes corresponding to para
+styles. I didn't change any of these". So every `rend` on a `<head>` or `<trailer>` is the paragraph style
+that the source gave that line. An unusual `rend` (below) is a fact about the source text, not an
+inconsistency in the div markup.
+
 Colophons of units that did *not* get a div stay as `<p rend="centre">`. Examples are bhāṇavāra ends
 and the sīla sections inside a sutta: `s0101t` has nine of them inside `dn1_1`. `subhead` paragraphs are
 never divs.
@@ -175,12 +181,15 @@ its purpose: fsnow added it for "structural correctness", not for any function (
 eleven files with `<p>` colophons are inconsistent in form only. Nothing is broken in them.
 
 Two trailers have `rend="bodytext"` instead of `centre`: `an1_6` in `s0401m` (अच्छरासङ्घातवग्गो छट्ठो।)
-and `kn20_5` in `s0520m` (पञ्चमा भूमि।).
+and `kn20_5` in `s0520m` (पञ्चमा भूमि।). Both styles come from the source text (see above).
 
 ### Book-level `<head>` rend
 Book divs use `<head rend="book">`, with two exceptions:
 - `vin5` in `vin02m4`: `rend="title"` (१. भिक्खुविभङ्गो);
 - `vin2_5` in `vin02m1`: a `type="subbook"` div whose head is `rend="book"` (भिक्खुनीविभङ्गो).
+
+As with the trailers, the `rend` values are the source's. What was chosen in the markup is the div
+structure: `vin5` is a book div whose heading the source styles as a title.
 
 ### Closing matter of a nikāya or book
 Material after the last section sits in different places:
