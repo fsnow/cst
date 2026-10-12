@@ -48,7 +48,7 @@ All from 2026-10-09 unless dated otherwise.
 
 ### Background: how the XML became the only master
 These are fsnow's account (2026-10-10), not measurements:
-- The XML used to have a parallel **text version**. That was essentially the original VRI-typed files, converted by fsnow in early 2007 from the Aalekh word-processor encoding to Devanagari Unicode. The converter, `aalekh2uni` (Delphi source `aalekh2uni.dpr`), is still in `conversion scripts/` in `VipassanaTech/tipitaka-xml` [observed].
+- The XML used to have a parallel **text version**. That was essentially the original VRI-typed files, converted by fsnow in early 2007 from the Aalekh word-processor encoding to Devanagari Unicode. `aalekh2uni` in `VipassanaTech/tipitaka-xml`'s `conversion scripts/` is **not** that converter. [fsnow, 2026-10-12] "aalekh2uni.dpr is not my converter. It is one that was written by someone before me and was known to be wrong."
 - VRI made each correction in both versions.
 - One of Len Aye's goals for the site rewrite was to retire the text version, so that the XML would be the single master copy.
 
