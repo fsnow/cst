@@ -175,7 +175,7 @@ No conclusion changes. The lower Jātaka and Vinaya figures were mostly endings.
   - With that offset, the commentary hits 24–30 of every 30 blocks (`drift.py`). Before ¶274 it hits 94% unshifted.
   - Both files end at ¶1156 only by coincidence. The last verse ("असंहीरं असङ्कुप्पं …") is mūla ¶1155 and commentary ¶1156. The mūla's ¶1156 is the closing summary verse naming the suttas, which the commentary does not number. Correctly numbered, the mūla would end at ¶1157.
   - The fix is one renumbering in `s0505m`: the second 274 becomes 275, and every later number goes up by one.
-  - **Reported** [fsnow, 2026-10-12]: "I sent a short email to help@Tipitaka.org about the SN para numbering issue."
+  - **Reported** [fsnow, 2026-10-12]: "I sent a short email to help@Tipitaka.org about the SN para numbering issue." Tracked at [VipassanaTech/tipitaka-xml#2723](https://github.com/VipassanaTech/tipitaka-xml/issues/2723).
   - **Workaround, conditional on the reader's copy** [fsnow, 2026-10-12]: "in our implementation we will want to have a check where we look for the max para number in Suttanipata and only workaround the issue if it isn't fixed yet (in that user's text)."
     - [observed] Today the mūla's highest number is 1156. Correctly numbered, it would be 1157.
     - [suggestion] The workaround maps commentary ¶*n* ≥ 274 to mūla ¶*n*−1.
