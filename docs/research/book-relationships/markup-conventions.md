@@ -136,6 +136,8 @@ the page turn actually is.
 | partial | 1 | `s0404a`. AN8 is fully marked. AN9–11 have their book divs, and their headings and colophons were converted to `<head>`/`<trailer>`, but the vagga and paṇṇāsaka divs were never added. This leaves runs of `</trailer><head rend="chapter">` with no `</div><div>` between them: 22 of the file's 36 trailers close nothing. |
 | unmarked | 139 | Plain `<p>` throughout. |
 
+[fsnow, 2026-10-12] "s0404a is where I stopped the work I guess and need to pick up there." So `s0404a` (AN9–11) is where the 2007–08 markup work resumes.
+
 [suggestion] The partial state suggests an order of work: first convert the headings and colophons,
 then add the divs. `s0404a` is where that work stopped.
 
