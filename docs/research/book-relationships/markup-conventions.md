@@ -43,6 +43,11 @@ Marking a section up made three changes:
 3. **Its closing colophon `<p rend="centre">` became `<trailer rend="centre">`**, the last element
    before `</div>`.
 
+Why each change was made [fsnow, 2026-10-12]: "when I added the markup, the <head> elements were
+important because they drive the chapter list dropdown. The <trailer> elements matter for "structural
+correctness" but have no particular function. Whether trailer or p they render as whatever style is in
+the "rend" attribute."
+
 Colophons of units that did *not* get a div stay as `<p rend="centre">`. Examples are bhāṇavāra ends
 and the sīla sections inside a sutta: `s0101t` has nine of them inside `dn1_1`. `subhead` paragraphs are
 never divs.
@@ -158,8 +163,9 @@ aṭṭhakathās and ṭīkās, the AN aṭṭhakathās, and every mūla file. W
 sections that end in something other than a trailer are ones whose last element is a verse or a
 numbered paragraph. These look like texts with no colophon at that point.
 
-Nothing in the app reads `<trailer>` differently from `<p rend="centre">` today. It matters only as a
-convention for the markup work to follow.
+Nothing in the app reads `<trailer>` differently from `<p rend="centre">` today [observed], which matches
+its purpose: fsnow added it for "structural correctness", not for any function (quoted above). So the
+eleven files with `<p>` colophons are inconsistent in form only. Nothing is broken in them.
 
 Two trailers have `rend="bodytext"` instead of `centre`: `an1_6` in `s0401m` (अच्छरासङ्घातवग्गो छट्ठो।)
 and `kn20_5` in `s0520m` (पञ्चमा भूमि।).
