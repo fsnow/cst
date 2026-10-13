@@ -69,6 +69,15 @@ namespace CST.Conversion
             telu2Dev['\u0C32'] = '\u0932'; // la
             telu2Dev['\u0C35'] = '\u0935'; // va
             telu2Dev['\u0C38'] = '\u0938'; // sa
+            telu2Dev['\u0C03'] = '\u0903'; // visarga (#1049)
+            telu2Dev['\u0C0B'] = '\u090B'; // vocalic r (#1049)
+            telu2Dev['\u0C43'] = '\u0943'; // vocalic r (#1049)
+            telu2Dev['\u0C10'] = '\u0910'; // ai (#1049)
+            telu2Dev['\u0C48'] = '\u0948'; // ai (#1049)
+            telu2Dev['\u0C14'] = '\u0914'; // au (#1049)
+            telu2Dev['\u0C4C'] = '\u094C'; // au (#1049)
+            telu2Dev['\u0C36'] = '\u0936'; // palatal sa (#1049)
+            telu2Dev['\u0C37'] = '\u0937'; // retroflex sa (#1049)
             telu2Dev['\u0C39'] = '\u0939'; // ha
             telu2Dev['\u0C33'] = '\u0933'; // l underdot a
 

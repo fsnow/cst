@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -60,7 +61,8 @@ namespace CST.Avalonia.Tests.Services
 
         /// <summary>Writes a real, openable Lucene index with the given number of documents
         /// into the configured test index directory.</summary>
-        private void CreateMinimalIndex(int docCount)
+        // A readable index built with the current IPE: it carries the version stamp (#1049).
+        private void CreateMinimalIndex(int docCount, bool stamped = true)
         {
             using var directory = global::Lucene.Net.Store.FSDirectory.Open(_testIndexDir);
             using var analyzer = new DevaXmlAnalyzer(LuceneVersion.LUCENE_48);
@@ -73,6 +75,8 @@ namespace CST.Avalonia.Tests.Services
                 writer.AddDocument(doc);
             }
             writer.Commit();
+            if (stamped)
+                CST.Avalonia.Services.IndexIpeStamp.Write(_testIndexDir);
         }
 
         [Fact]
@@ -269,6 +273,59 @@ namespace CST.Avalonia.Tests.Services
             
             _mockXmlFileDatesService.Verify(x => x.GetChangedBooksAsync(), Times.Once);
             _mockXmlFileDatesService.Verify(x => x.SaveFileDatesAsync(), Times.Never);
+        }
+
+        [Fact]
+        public async Task BuildIndexAsync_IndexFromAnotherIpeVersion_IsDeletedAndRebuiltFromScratch()
+        {
+            // A readable index with no IPE stamp, as every index built before #1049 is. It opens fine, but its
+            // terms are in the old IPE, so it must be rebuilt even though no book changed.
+            await _service.InitializeAsync();
+            CreateMinimalIndex(1, stamped: false);
+            Assert.True(await _service.IsIndexValidAsync());
+
+            _mockXmlFileDatesService.Setup(x => x.GetChangedBooksAsync()).ReturnsAsync(new List<int>());
+
+            // The rebuild itself then fails here (this fixture has no book XML); what is under test is that
+            // the stale index is thrown away and every book is marked for re-indexing.
+            await Record.ExceptionAsync(() => _service.BuildIndexAsync(new SynchronousProgress<IndexingProgress>(_ => { })));
+
+            _mockXmlFileDatesService.Verify(x => x.ResetFileDates(), Times.Once);
+            Assert.False(Directory.GetFiles(_testIndexDir).Any(f => Path.GetFileName(f).StartsWith("segments")),
+                "the old index should have been deleted");
+        }
+
+        [Fact]
+        public async Task BuildIndexAsync_AfterAFullBuild_WritesTheIpeStamp()
+        {
+            // Without the stamp every launch would delete and rebuild the index (#1049 review).
+            // A full build reads every book, so give each one a tiny stand-in file (UTF-16, like the corpus).
+            foreach (var book in CST.Books.Inst)
+                File.WriteAllText(Path.Combine(_testXmlDir, book.FileName),
+                    "<TEI.2><text><body><p>\u0927\u092E\u094D\u092E</p></body></text></TEI.2>",
+                    System.Text.Encoding.Unicode);
+            await _service.InitializeAsync();
+            _mockXmlFileDatesService.Setup(x => x.GetChangedBooksAsync())
+                .ReturnsAsync(Enumerable.Range(0, CST.Books.Inst.Count).ToList());
+            Assert.False(IndexIpeStamp.IsCurrent(_testIndexDir));
+
+            await _service.BuildIndexAsync(new SynchronousProgress<IndexingProgress>(_ => { }));
+
+            Assert.True(IndexIpeStamp.IsCurrent(_testIndexDir));
+        }
+
+        [Fact]
+        public async Task BuildIndexAsync_EmptyIndexDirectory_ReindexesEveryBook()
+        {
+            // An emptied index directory (an interrupted delete-and-rebuild, or a hand wipe) must not be
+            // rebuilt from the persisted file dates, which can say every book is already indexed.
+            await _service.InitializeAsync();
+            _mockXmlFileDatesService.Setup(x => x.GetChangedBooksAsync()).ReturnsAsync(new List<int>());
+
+            // The rebuild then fails here (this fixture has no book XML); what is under test is the reset.
+            await Record.ExceptionAsync(() => _service.BuildIndexAsync(new SynchronousProgress<IndexingProgress>(_ => { })));
+
+            _mockXmlFileDatesService.Verify(x => x.ResetFileDates(), Times.Once);
         }
 
         [Fact]

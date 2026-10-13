@@ -27,25 +27,47 @@ Using multi-character representations for single Pāli phonemes (like 'kh' in La
 IPE was created to solve these two problems directly. It is a custom, single-byte encoding scheme where each logical Pāli character is mapped to a unique value.
 
 ### How IPE Works
-The core of IPE is a carefully designed mapping, defined in `Deva2Ipe.cs` and `Latn2Ipe.cs`. It maps each Pāli character to a specific Unicode value in the `U+00C0` to `U+00E9` range.
+The core of IPE is a carefully designed mapping, defined in `Deva2Ipe.cs` and `Latn2Ipe.cs`. It maps each letter to a specific Unicode value in the `U+00C0` to `U+00EF` range (IPE version 2; see *Versions* below).
 
 **The key insight is that the numerical order of these target Unicode values exactly matches the traditional Pāli alphabetical order.**
 
-| Pāli Character | Devanagari | Latin | IPE Value | Unicode Point |
-| :------------- | :--------- | :---- | :-------- | :------------ |
-| niggahīta      | `ं`        | `ṃ`   | `À`       | `U+00C0`      |
-| a              | `अ`        | `a`   | `Á`       | `U+00C1`      |
-| ā              | `आ`        | `ā`   | `Â`       | `U+00C2`      |
-| i              | `इ`        | `i`   | `Ã`       | `U+00C3`      |
-| ...            | ...        | ...   | ...       | ...           |
-| k              | `क`        | `k`   | `É`       | `U+00C9`      |
-| kh             | `ख`        | `kh`  | `Ê`       | `U+00CA`      |
-| g              | `ग`        | `g`   | `Ë`       | `U+00CB`      |
-| gh             | `घ`        | `gh`  | `Ì`       | `U+00CC`      |
-| ...            | ...        | ...   | ...       | ...           |
-| ḷ              | `ळ`        | `ḷ`   | `é`       | `U+00E9`      |
+| Letter | Devanagari | Latin | IPE Value | Unicode Point |
+| :----- | :--------- | :---- | :-------- | :------------ |
+| niggahīta | `ं` | `ṃ` | `À` | `U+00C0` |
+| visarga | `ः` | `ḥ` | `Á` | `U+00C1` |
+| a | `अ` | `a` | `Â` | `U+00C2` |
+| ā | `आ` | `ā` | `Ã` | `U+00C3` |
+| ... | ... | ... | ... | ... |
+| ū | `ऊ` | `ū` | `Ç` | `U+00C7` |
+| vocalic r | `ऋ` | `ṛ` | `È` | `U+00C8` |
+| e | `ए` | `e` | `É` | `U+00C9` |
+| ai | `ऐ` | `ai` | `Ê` | `U+00CA` |
+| o | `ओ` | `o` | `Ë` | `U+00CB` |
+| au | `औ` | `au` | `Ì` | `U+00CC` |
+| k | `क` | `k` | `Í` | `U+00CD` |
+| kh | `ख` | `kh` | `Î` | `U+00CE` |
+| ... | ... | ... | ... | ... |
+| v | `व` | `v` | `ê` | `U+00EA` |
+| palatal s | `श` | `ś` | `ë` | `U+00EB` |
+| retroflex s | `ष` | `ṣ` | `ì` | `U+00EC` |
+| s | `स` | `s` | `í` | `U+00ED` |
+| h | `ह` | `h` | `î` | `U+00EE` |
+| ḷ | `ळ` | `ḷ` | `ï` | `U+00EF` |
 
 *(This is a simplified excerpt of the full mapping)*
+
+### Versions
+
+IPE packs the alphabet into consecutive code points, skipping only `U+00D7` (the multiplication sign). Adding a letter at its place in the alphabet therefore renumbers every letter after it, and any stored IPE becomes stale.
+
+- **Version 1** (2007): the Pāli alphabet, `U+00C0`–`U+00E9`.
+- **Version 2** (#1049, 2026-10): adds visarga, vocalic r, ai, au and the palatal and retroflex sibilants, which the corpus's Sanskrit needs (#1046). [fsnow, 2026-10-13] "IPE needs to be modified to support them (in correct alphabetical order)". The order was proposed by the agent and agreed by fsnow: visarga after niggahīta; vocalic r after ū; ai after e; au after o; the two sibilants between v and s.
+
+The version is `IpeVersion.Current` in `src/CST.Core/Conversion/IpeVersion.cs`. The search index is the only place that stores IPE. It records the version that built it in an `ipe-version` file in the index directory, and the app deletes and rebuilds an index whose stamp is missing or different (`IndexIpeStamp`, `IndexingService.BuildIndexAsync`). The dictionaries and DPD data store Latin or IAST and convert to IPE at lookup time, so they need no rebuild.
+
+Two display decisions came with version 2 (fsnow, 2026-10-13):
+- **Latin ai/au.** "Keep Pāli as is": Latin writes the diphthongs as `ai`/`au`, and typed Latin `ai`/`au` keeps meaning the Pāli vowel hiatus *a + i* / *a + u*.
+- **Missing letters.** "Keep Devanagari": where a script has no letter for one of these, the Devanagari letter stays in place.
 
 ### The Benefits of IPE
 

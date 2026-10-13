@@ -56,7 +56,7 @@ public sealed class LemmaSearchService : ILemmaSearchService
     /// <para><b>Fold case AFTER conversion, never before.</b> <see cref="Script.Ipe"/> is this interface's
     /// declared default, and IPE encodes Pāli letters in the Latin-1 <i>uppercase</i> block from U+00C0
     /// (<c>Ipe2Latn</c>) — so <c>ToLowerInvariant</c> on IPE shifts every letter onto a <i>different IPE
-    /// letter</i> or onto nothing, and IPE "dhammā" reads out as "übhmmm". An earlier draft folded first,
+    /// letter</i> or onto nothing, and IPE "dhammā" reads out as "dhpmmph" (IPE version 2; it was "übhmmm" in version 1). An earlier draft folded first,
     /// on the reasoning that it mirrored <c>DpdDictionarySource</c>; that sibling folds <i>user text</i> on
     /// its way INTO IPE and never folds IPE itself. (fable review)</para>
     /// </summary>

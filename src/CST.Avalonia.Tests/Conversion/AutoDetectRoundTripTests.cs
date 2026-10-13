@@ -45,6 +45,10 @@ public class AutoDetectRoundTripTests
         var misses = new List<string>();
         foreach (var deva in words)
         {
+            // Latin writes the diphthongs ai / au the same as the Pali hiatus a + i / a + u, and reads them
+            // back as the hiatus. fsnow, 2026-10-13: "Keep Pali as is". (#1049)
+            if (script == Script.Latin && deva.IndexOfAny(Diphthongs) >= 0)
+                continue;
             var ipe1 = ScriptConverter.Convert(deva, Script.Devanagari, Script.Ipe);
             var shown = ScriptConverter.Convert(ipe1, Script.Ipe, script);
             var ipe2 = Any2Ipe.Convert(shown);
@@ -66,24 +70,15 @@ public class AutoDetectRoundTripTests
         || ch == '\u200C' || ch == '\u200D'
         || ch == '\u0964' || ch == '\u0965';
 
-    // [observed] 2026-10-01: these converters have no mapping for the Devanagari letters that are not Pali -
-    // vocalic r (U+090B), independent ai/au (U+0910, U+0914) and the ai/au vowel signs (U+0948, U+094C) -
-    // so they pass them through as Devanagari. The ScriptValidation word lists hold them in 41 words. They still round-trip,
-    // because Any2Ipe converts the Devanagari run, but the output does cross blocks. Listed here per script
-    // so the leak stays visible and nothing else is let through; whether to map them is the maintainer's call.
-    private static readonly char[] NonPaliDevanagari = { '\u090B', '\u0910', '\u0914', '\u0948', '\u094C' };
+    private static readonly char[] Diphthongs = { '\u0910', '\u0914', '\u0948', '\u094C' };
 
+    // The Devanagari letters a script keeps because it has no letter of its own for them. fsnow, 2026-10-13,
+    // for a letter a script lacks: "Keep Devanagari". Every other Sanskrit letter is mapped since #1049; listed
+    // here per script so nothing else is let through. Any2Ipe joins the runs in Devanagari, so these still
+    // round-trip.
     private static readonly Dictionary<Script, char[]> KnownPassThrough = new()
     {
-        [Script.Gujarati] = NonPaliDevanagari,
-        [Script.Gurmukhi] = new[] { '\u090B' },
-        [Script.Khmer] = NonPaliDevanagari,
-        [Script.Latin] = NonPaliDevanagari,
-        [Script.Myanmar] = NonPaliDevanagari,
-        [Script.Sinhala] = NonPaliDevanagari,
-        [Script.Telugu] = NonPaliDevanagari,
-        [Script.Thai] = NonPaliDevanagari,
-        [Script.Tibetan] = NonPaliDevanagari,
+        [Script.Gurmukhi] = new[] { '\u090B', '\u0943', '\u0937' },  // vocalic r, retroflex sa
     };
 
     /// <summary>

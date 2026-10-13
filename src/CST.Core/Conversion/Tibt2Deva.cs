@@ -33,6 +33,10 @@ namespace CST.Conversion
             tibt2Deva["\u0F68\u0F71\u0F74"] = "\u090A"; // uu
             tibt2Deva["\u0F68\u0F7A"] = "\u090F"; // e
             tibt2Deva["\u0F68\u0F7C"] = "\u0913"; // o
+            tibt2Deva["\u0F68\u0F7B"] = "\u0910"; // ai (#1049)
+            tibt2Deva["\u0F68\u0F7D"] = "\u0914"; // au (#1049)
+            tibt2Deva["\u0F62\u0F80"] = "\u090B"; // vocalic r: ra + reversed gi gu (#1049)
+            tibt2Deva["\u0FB2\u0F80"] = "\u0943"; // vocalic r sign: subjoined ra + reversed gi gu (#1049)
 
             // velar stops
             tibtChar2Deva['\u0F40'] = "\u0915"; // ka
@@ -75,6 +79,11 @@ namespace CST.Conversion
             tibtChar2Deva['\u0F63'] = "\u0932"; // la
             tibtChar2Deva['\u0F5D'] = "\u0935"; // va
             tibtChar2Deva['\u0F66'] = "\u0938"; // sa
+            tibtChar2Deva['\u0F7F'] = "\u0903"; // visarga (#1049)
+            tibtChar2Deva['\u0F7B'] = "\u0948"; // ai (#1049)
+            tibtChar2Deva['\u0F7D'] = "\u094C"; // au (#1049)
+            tibtChar2Deva['\u0F64'] = "\u0936"; // palatal sa (#1049)
+            tibtChar2Deva['\u0F65'] = "\u0937"; // retroflex sa (#1049)
             tibtChar2Deva['\u0F67'] = "\u0939"; // ha
             tibt2Deva["\u0F63\u0F39"] = "\u0933"; // l underdot a (multi-char)
 

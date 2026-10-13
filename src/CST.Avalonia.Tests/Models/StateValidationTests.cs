@@ -501,4 +501,63 @@ public class StateValidationTests
         // A script with no entry (Ipe is not a display script) returns false.
         Assert.False(fs.TryGetFont(Script.Ipe, out _));
     }
+
+    // ---- 1.0 -> 2: IPE version 2 (#1049) ----
+
+    // Version-1 IPE codes in alphabetical order, and the Devanagari letter each encodes.
+    private static readonly (char V1, string Deva)[] V1Letters =
+    {
+        ('\u00C0', "\u0902"),
+        ('\u00C1', "\u0905"), ('\u00C2', "\u0906"), ('\u00C3', "\u0907"), ('\u00C4', "\u0908"),
+        ('\u00C5', "\u0909"), ('\u00C6', "\u090A"), ('\u00C7', "\u090F"), ('\u00C8', "\u0913"),
+        ('\u00C9', "\u0915\u094D"), ('\u00CA', "\u0916\u094D"), ('\u00CB', "\u0917\u094D"), ('\u00CC', "\u0918\u094D"),
+        ('\u00CD', "\u0919\u094D"), ('\u00CE', "\u091A\u094D"), ('\u00CF', "\u091B\u094D"), ('\u00D0', "\u091C\u094D"),
+        ('\u00D1', "\u091D\u094D"), ('\u00D2', "\u091E\u094D"), ('\u00D3', "\u091F\u094D"), ('\u00D4', "\u0920\u094D"),
+        ('\u00D5', "\u0921\u094D"), ('\u00D6', "\u0922\u094D"), ('\u00D8', "\u0923\u094D"), ('\u00D9', "\u0924\u094D"),
+        ('\u00DA', "\u0925\u094D"), ('\u00DB', "\u0926\u094D"), ('\u00DC', "\u0927\u094D"), ('\u00DD', "\u0928\u094D"),
+        ('\u00DE', "\u092A\u094D"), ('\u00DF', "\u092B\u094D"), ('\u00E0', "\u092C\u094D"), ('\u00E1', "\u092D\u094D"),
+        ('\u00E2', "\u092E\u094D"), ('\u00E3', "\u092F\u094D"), ('\u00E4', "\u0930\u094D"), ('\u00E5', "\u0932\u094D"),
+        ('\u00E6', "\u0935\u094D"), ('\u00E7', "\u0938\u094D"), ('\u00E8', "\u0939\u094D"), ('\u00E9', "\u0933\u094D"),
+    };
+
+    [Fact]
+    public void IpeUpgradeFromV1_MapsEveryLetterToItsVersion2Code()
+    {
+        foreach (var (v1, deva) in V1Letters)
+            Assert.Equal(CST.Conversion.Deva2Ipe.Convert(deva), CST.Conversion.IpeVersion.UpgradeFromV1(v1.ToString()));
+    }
+
+    [Fact]
+    public void Migrate_1_0_RewritesStoredSearchTermsInIpeVersion2()
+    {
+        // dhamma and buddho as version 1 wrote them
+        const string dhammaV1 = "\u00DC\u00C1\u00E2\u00E2\u00C1";
+        const string buddhoV1 = "\u00E0\u00C5\u00DB\u00DC\u00C8";
+        var state = new ApplicationState { Version = "1.0" };
+        state.SearchDialog.SelectedTerms = new() { dhammaV1, buddhoV1 };
+        state.BookWindows.Add(new BookWindowState
+        {
+            SearchTerms = new() { dhammaV1 },
+            SearchPositions = new() { new TermPosition { Position = 3, Word = buddhoV1 } },
+        });
+
+        ApplicationStateValidator.Migrate(state);
+
+        var dhamma = CST.Conversion.Deva2Ipe.Convert("\u0927\u092E\u094D\u092E");
+        var buddho = CST.Conversion.Deva2Ipe.Convert("\u092C\u0941\u0926\u094D\u0927\u094B");
+        Assert.Equal(new[] { dhamma, buddho }, state.SearchDialog.SelectedTerms);
+        Assert.Equal(new[] { dhamma }, state.BookWindows[0].SearchTerms);
+        Assert.Equal(buddho, state.BookWindows[0].SearchPositions[0].Word);
+        Assert.Equal("2", state.Version);
+    }
+
+    [Fact]
+    public void Migrate_2_LeavesSearchTermsAlone()
+    {
+        var dhamma = CST.Conversion.Deva2Ipe.Convert("\u0927\u092E\u094D\u092E");
+        var state = new ApplicationState(); // a new state is already the current version
+        state.SearchDialog.SelectedTerms = new() { dhamma };
+        ApplicationStateValidator.Migrate(state);
+        Assert.Equal(new[] { dhamma }, state.SearchDialog.SelectedTerms);
+    }
 }

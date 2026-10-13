@@ -41,6 +41,12 @@ namespace CST.Conversion
             paliChars.Add('v');
             paliChars.Add('s');
             paliChars.Add('h');
+            paliChars.Add('\u1E5B');  // r underdot: vocalic r (#1049)
+            paliChars.Add('\u015B');  // s acute: palatal sa (#1049)
+            paliChars.Add('\u1E63');  // s underdot: retroflex sa (#1049)
+            paliChars.Add('\u1E25');  // h underdot: visarga (#1049)
+            // ai / au are deliberately not diphthongs here: they stay a + i / a + u, the Pali vowel hiatus.
+            // fsnow, 2026-10-13: "Keep Pali as is". (#1049)
 
             paliVowels = new HashSet<char>();
             paliVowels.Add('a');
@@ -51,6 +57,7 @@ namespace CST.Conversion
             paliVowels.Add('\u016B');  // u macron
             paliVowels.Add('e');
             paliVowels.Add('o');
+            paliVowels.Add('\u1E5B');  // vocalic r (#1049)
 
             devInitialVowels = new Dictionary<char, char>();
             devInitialVowels['a'] = '\u0905';
@@ -61,6 +68,7 @@ namespace CST.Conversion
             devInitialVowels['\u016B'] = '\u090A';  // u macron
             devInitialVowels['e'] = '\u090F';
             devInitialVowels['o'] = '\u0913';
+            devInitialVowels['\u1E5B'] = '\u090B';  // vocalic r (#1049)
 
             devVowels = new Dictionary<char, object>();
             devVowels['a'] = "";
@@ -71,6 +79,7 @@ namespace CST.Conversion
             devVowels['\u016B'] = '\u0942';  // u macron
             devVowels['e'] = '\u0947';
             devVowels['o'] = '\u094B';
+            devVowels['\u1E5B'] = '\u0943';  // vocalic r (#1049)
 
             devConsonants = new Dictionary<string, string>();
             devConsonants["k"] = "\u0915";
@@ -104,6 +113,8 @@ namespace CST.Conversion
             devConsonants["\u1E37"] = "\u0933"; // l underdot
             devConsonants["v"] = "\u0935";
             devConsonants["s"] = "\u0938";
+            devConsonants["\u015B"] = "\u0936"; // palatal sa (#1049)
+            devConsonants["\u1E63"] = "\u0937"; // retroflex sa (#1049)
             devConsonants["h"] = "\u0939";
 
             paliAspiratables = new HashSet<char>();
@@ -251,6 +262,12 @@ namespace CST.Conversion
                         last = LetterType.Nasal;
                         wordLastChar = c; i++;
                     }
+                    else if (c == 0x1E25) // h underdot: visarga, which like niggahita follows a vowel (#1049)
+                    {
+                        buf[k++] = '\u0903';
+                        last = LetterType.Nasal;
+                        wordLastChar = c; i++;
+                    }
                     else // consonant
                     {
                         if (last == LetterType.Consonant)
@@ -373,6 +390,11 @@ namespace CST.Conversion
 				{
 					last = LetterType.Nasal;
 					dev = String.Concat(dev, '\u0902');  // anusvara
+				}
+				else if (c.Equals('\u1E25'))  // h underdot: visarga, which like niggahita follows a vowel (#1049)
+				{
+					last = LetterType.Nasal;
+					dev = String.Concat(dev, '\u0903');
 				}
 				else
 				{

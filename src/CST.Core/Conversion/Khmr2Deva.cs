@@ -25,6 +25,7 @@ namespace CST.Conversion
             // independent vowels (reverse of Deva2Khmr multi-char mappings)
             khmer2Dev["\u17A2"] = "\u0905"; // a
             khmer2Dev["\u17A2\u17B6"] = "\u0906"; // aa (two-char sequence)
+            khmer2Dev["\u17D2\u17AB"] = "\u0943"; // vocalic r sign: coeng + independent vocalic r (#1049)
             khmerChar2Dev['\u17A5'] = "\u0907"; // i
             khmerChar2Dev['\u17A6'] = "\u0908"; // ii
             khmerChar2Dev['\u17A7'] = "\u0909"; // u
@@ -73,6 +74,14 @@ namespace CST.Conversion
             khmerChar2Dev['\u179B'] = "\u0932"; // la
             khmerChar2Dev['\u179C'] = "\u0935"; // va
             khmerChar2Dev['\u179F'] = "\u0938"; // sa
+            khmerChar2Dev['\u17C7'] = "\u0903"; // visarga (#1049)
+            khmerChar2Dev['\u17AB'] = "\u090B"; // vocalic r (#1049)
+            khmerChar2Dev['\u17C3'] = "\u0948"; // ai (#1049)
+            khmerChar2Dev['\u17B0'] = "\u0910"; // ai (#1049)
+            khmerChar2Dev['\u17C5'] = "\u094C"; // au (#1049)
+            khmerChar2Dev['\u17B3'] = "\u0914"; // au (#1049)
+            khmerChar2Dev['\u179D'] = "\u0936"; // palatal sa (#1049)
+            khmerChar2Dev['\u179E'] = "\u0937"; // retroflex sa (#1049)
             khmerChar2Dev['\u17A0'] = "\u0939"; // ha
             khmerChar2Dev['\u17A1'] = "\u0933"; // l underdot a
 
@@ -120,6 +129,11 @@ namespace CST.Conversion
             for (int i = 0; i < n; i++)
             {
                 char c = khmerStr[i];
+                if (c == 0x17D2 && i + 1 < n && khmerStr[i + 1] == 0x17AB) // coeng + vocalic r = the vocalic r sign (#1049)
+                {
+                    buf[k++] = (char)0x0943; i++;
+                    continue;
+                }
                 if (c == 0x17A2) // independent a; with a following sign aa (U+17B6) it becomes independent aa
                 {
                     if (i + 1 < n && khmerStr[i + 1] == 0x17B6) { buf[k++] = (char)0x0906; i++; }

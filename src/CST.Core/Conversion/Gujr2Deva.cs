@@ -73,6 +73,13 @@ namespace CST.Conversion
             gujr2Deva['\u0AB6'] = '\u0936'; // sha (palatal)
             gujr2Deva['\u0AB7'] = '\u0937'; // sha (retroflex)
             gujr2Deva['\u0AB8'] = '\u0938'; // sa
+            gujr2Deva['\u0A83'] = '\u0903'; // visarga (#1049)
+            gujr2Deva['\u0A8B'] = '\u090B'; // vocalic r (#1049)
+            gujr2Deva['\u0AC3'] = '\u0943'; // vocalic r (#1049)
+            gujr2Deva['\u0A90'] = '\u0910'; // ai (#1049)
+            gujr2Deva['\u0AC8'] = '\u0948'; // ai (#1049)
+            gujr2Deva['\u0A94'] = '\u0914'; // au (#1049)
+            gujr2Deva['\u0ACC'] = '\u094C'; // au (#1049)
             gujr2Deva['\u0AB9'] = '\u0939'; // ha
 
             // dependent vowel signs

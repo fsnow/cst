@@ -121,8 +121,11 @@ namespace CST.Avalonia.Services
             }
         }
 
+        public bool LastBuildIndexedBooks { get; private set; }
+
         public async Task BuildIndexAsync(IProgress<IndexingProgress> progress)
         {
+            LastBuildIndexedBooks = false;
             try
             {
                 _logger.LogInformation("BuildIndexAsync() started");
@@ -131,11 +134,29 @@ namespace CST.Avalonia.Services
                 // index and reset the file-dates cache so every book is re-indexed from scratch — rather than
                 // skipping indexing (because "files exist") and leaving every search to throw. (SRCH-11)
                 var indexValid = await IsIndexValidAsync();
+
+                // No index at all, though the file dates may say every book is indexed: the index directory
+                // was emptied (by hand, or by a delete below that was interrupted before the rebuild wrote
+                // anything). Re-index every book; otherwise an empty index would be built and stamped as
+                // current. (#1049 review)
+                if (!indexValid && !IndexDirectoryHasFiles())
+                    _xmlFileDatesService.ResetFileDates();
+
                 if (!indexValid && IndexDirectoryHasFiles())
                 {
                     _logger.LogWarning("Search index is present but not readable (corrupt) - deleting and rebuilding from scratch");
                     DeleteCorruptIndex();
                     _xmlFileDatesService.ResetFileDates();
+                }
+
+                // An index built with another IPE version opens fine but its terms no longer match queries, so
+                // searches would miss silently. Rebuild it from scratch, the same way as a corrupt one. (#1049)
+                if (indexValid && !IndexIpeStamp.IsCurrent(_indexDirectory))
+                {
+                    _logger.LogWarning("Search index was built with another IPE version - deleting and rebuilding from scratch");
+                    DeleteCorruptIndex();
+                    _xmlFileDatesService.ResetFileDates();
+                    indexValid = false;
                 }
 
                 // Get changed books (all books on first run, or after a corrupt-index reset)
@@ -156,6 +177,8 @@ namespace CST.Avalonia.Services
 
                 _logger.LogInformation("Starting indexing process for {Count} books", changedBooks.Count);
                 await PerformIndexingAsync(changedBooks, progress);
+                IndexIpeStamp.Write(_indexDirectory); // (#1049)
+                LastBuildIndexedBooks = changedBooks.Count > 0;
 
                 // Save file dates after successful indexing
                 _logger.LogInformation("Saving file dates after successful indexing...");

@@ -124,6 +124,18 @@ namespace CST
                 '\x0947', // e
                 '\x094B', // o
 
+                // Sanskrit letters added to IPE (#1049). Without them a word containing one would be split
+                // at that letter and its pieces indexed as separate words.
+                '\x0903', // visarga
+                '\x090B', // vocalic r
+                '\x0910', // ai
+                '\x0914', // au
+                '\x0936', // palatal sa
+                '\x0937', // retroflex sa
+                '\x0943', // vocalic r sign
+                '\x0948', // ai sign
+                '\x094C', // au sign
+
                 '\x094D', // virama
                 '\x200C', // ZWNJ (ignore)
                 '\x200D', // ZWJ (ignore)

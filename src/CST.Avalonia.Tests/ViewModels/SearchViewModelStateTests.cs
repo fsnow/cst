@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using System.Threading;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
@@ -149,5 +150,42 @@ public class SearchViewModelStateTests
         state.Verify(x => x.UpdateSearchDialogState(It.IsAny<SearchDialogState>()), Times.Never);
         Assert.Equal("metta", vm.SearchText);
         Assert.False(vm.IncludeVinaya);
+    }
+
+    // ---- re-run after the startup index build (#1049) ----
+
+    [Fact]
+    public void RerunAfterIndexBuild_RearmsTheSavedSelection_WhenTheBuildChangedTheIndex()
+    {
+        var (vm, _) = CreateVm();
+        vm.ApplyState(new SearchDialogState { SearchText = "dhamma", SelectedTerms = new() { "t1", "t2" } });
+        vm.ClearPendingSelectedTerms(); // the view consumed it against the old index and matched nothing
+
+        Assert.True(vm.PrepareRerunAfterIndexBuild(indexChanged: true));
+        Assert.Equal(new[] { "t1", "t2" }, vm.PendingSelectedTerms);
+        Assert.False(vm.PrepareRerunAfterIndexBuild(indexChanged: true)); // used at most once
+    }
+
+    [Fact]
+    public void RerunAfterIndexBuild_DoesNothing_WhenTheIndexDidNotChange()
+    {
+        var (vm, _) = CreateVm();
+        vm.ApplyState(new SearchDialogState { SearchText = "dhamma", SelectedTerms = new() { "t1" } });
+        vm.ClearPendingSelectedTerms();
+
+        Assert.False(vm.PrepareRerunAfterIndexBuild(indexChanged: false));
+        Assert.Null(vm.PendingSelectedTerms);
+    }
+
+    [Fact]
+    public void RerunAfterIndexBuild_LeavesANewQueryAlone()
+    {
+        var (vm, _) = CreateVm();
+        vm.ApplyState(new SearchDialogState { SearchText = "dhamma", SelectedTerms = new() { "t1" } });
+        vm.ClearPendingSelectedTerms();
+        vm.SearchText = "buddha"; // the reader searched for something else meanwhile
+
+        Assert.False(vm.PrepareRerunAfterIndexBuild(indexChanged: true));
+        Assert.Null(vm.PendingSelectedTerms);
     }
 }

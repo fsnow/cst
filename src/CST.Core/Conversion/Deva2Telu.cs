@@ -72,6 +72,15 @@ namespace CST.Conversion
             dev2Telugu['\u0932'] = '\u0C32'; // la
             dev2Telugu['\u0935'] = '\u0C35'; // va
             dev2Telugu['\u0938'] = '\u0C38'; // sa
+            dev2Telugu['\u0903'] = '\u0C03'; // visarga (#1049)
+            dev2Telugu['\u090B'] = '\u0C0B'; // vocalic r (#1049)
+            dev2Telugu['\u0943'] = '\u0C43'; // vocalic r (#1049)
+            dev2Telugu['\u0910'] = '\u0C10'; // ai (#1049)
+            dev2Telugu['\u0948'] = '\u0C48'; // ai (#1049)
+            dev2Telugu['\u0914'] = '\u0C14'; // au (#1049)
+            dev2Telugu['\u094C'] = '\u0C4C'; // au (#1049)
+            dev2Telugu['\u0936'] = '\u0C36'; // palatal sa (#1049)
+            dev2Telugu['\u0937'] = '\u0C37'; // retroflex sa (#1049)
             dev2Telugu['\u0939'] = '\u0C39'; // ha
             dev2Telugu['\u0933'] = '\u0C33'; // l underdot a
 

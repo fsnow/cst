@@ -120,7 +120,7 @@ public sealed class LemmaSearchServiceTests : IDisposable
     // The regression the first draft of #868 introduced, caught in review. Script.Ipe is this interface's
     // DECLARED DEFAULT, and IPE encodes Pāli letters in the Latin-1 *uppercase* block from U+00C0 — so
     // case-folding before conversion shifts every letter onto a different IPE letter or onto nothing
-    // ("dhammā" read out as "übhmmm"). No production caller reaches the default today (REST rejects Ipe,
+    // ("dhammā" read out as "dhpmmph" in IPE version 2). No production caller reaches the default today (REST rejects Ipe,
     // MCP coerces it to Latin), which is exactly why the suite stayed green while the default path was
     // broken. Derived through the converter rather than hard-coded, so this cannot drift from IPE itself.
     [Fact]
