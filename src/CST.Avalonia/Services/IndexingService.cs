@@ -131,6 +131,14 @@ namespace CST.Avalonia.Services
                 // index and reset the file-dates cache so every book is re-indexed from scratch — rather than
                 // skipping indexing (because "files exist") and leaving every search to throw. (SRCH-11)
                 var indexValid = await IsIndexValidAsync();
+
+                // No index at all, though the file dates may say every book is indexed: the index directory
+                // was emptied (by hand, or by a delete below that was interrupted before the rebuild wrote
+                // anything). Re-index every book; otherwise an empty index would be built and stamped as
+                // current. (#1049 review)
+                if (!indexValid && !IndexDirectoryHasFiles())
+                    _xmlFileDatesService.ResetFileDates();
+
                 if (!indexValid && IndexDirectoryHasFiles())
                 {
                     _logger.LogWarning("Search index is present but not readable (corrupt) - deleting and rebuilding from scratch");

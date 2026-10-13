@@ -144,7 +144,8 @@ namespace CST.Conversion
 
         public string Capitalize(string latin)
         {
-            string latinPaliLowercase = "[a-z\u00F1\x1E45\x1E6D\x1E0D\x1E47\x1E37\x0101\x012B\x016B\x1E43]";
+            // s acute, s underdot and r underdot added with the Sanskrit letters (#1049)
+            string latinPaliLowercase = "[a-z\u00F1\x1E45\x1E6D\x1E0D\x1E47\x1E37\x0101\x012B\x016B\x1E43\x015B\x1E63\x1E5B]";
             latin = Regex.Replace(latin, this.capitalMarker + latinPaliLowercase, new MatchEvaluator(this.CapitalReplacer), RegexOptions.Compiled);
             latin = latin.Replace(this.capitalMarker, "");
             return latin;

@@ -47,7 +47,7 @@ public sealed class DictionaryIndex
     }
 
     /// <summary>
-    /// IPE <c>ḷ</c> (U+00E9) read as <c>l</c> (U+00E5), for MATCHING ONLY. (#933)
+    /// IPE <c>ḷ</c> (U+00EF) read as <c>l</c> (U+00E9), for MATCHING ONLY. (#933)
     ///
     /// <para><b>This is not a claim that they are the same letter.</b> They are distinct phonemes in Pāli.
     /// What it reconciles is two editorial traditions: DPPN follows Malalasekera's PTS spelling, while the
