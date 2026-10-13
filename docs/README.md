@@ -16,7 +16,7 @@ Core technical documentation about how the system works:
 - [Project Overview](architecture/OVERVIEW.md) - High-level project structure
 - [Ideal Pali Encoding (IPE)](architecture/IDEAL_PALI_ENCODING.md) - Script-independent encoding system
 - [Lemma Expansion (algorithm for review)](architecture/LEMMA_EXPANSION.md) - Word→lemma→forms→corpus pipeline over DPD data, the `derived_from` word-family definition, homograph handling, and open questions for expert review
-- [Character Set Analysis](architecture/CHARACTER_SET_ANALYSIS.md) - Unicode character analysis
+- [Character Set Analysis](architecture/CHARACTER_SET_ANALYSIS.md) - Unicode character analysis (2025), findings revised 2026-10 after the Aalekh files were recovered (#1031, #1046)
 - [Window & Dock Architecture](architecture/WINDOW_DOCK_ARCHITECTURE.md) - Docking system and window management
 - [Dock Subsystem (current behavior)](architecture/DOCK_SUBSYSTEM.md) - Live map of dock handling: object model, ID scheme, CEF WebView lifecycle, failure modes, open design questions
 - [Dock/WebView Workarounds Inventory](architecture/DOCK_WEBVIEW_WORKAROUNDS.md) - Every CEF/Dock/NativeControlHost workaround and the reason it exists
@@ -89,6 +89,7 @@ Features planned for future implementation (from CST4 analysis):
 
 ### 🔬 **research/** - Research & Exploration
 Exploratory research and investigations:
+- [Aalekh: non-Pāli letters (#1031)](research/aalekh/non-pali-letters-1031.csv) - CSV: every ṛ/ai/au in the corpus, checked against the original 1990s Aalekh typing, with a proposed classification (letter name, Burmese word, vowel junction, slip, unclear). Background in #1046
 - [Alternative Rendering Engines](research/ALTERNATIVE_RENDERING_ENGINES.md) - Comparison of rendering approaches
 - [Book Relationships](research/book-relationships/README.md) - epic #422 working doc: the book-relationship model under test, fsnow's decisions, and corpus measurements (paragraph numbering, canonical/añña, how each commentary correlates with its base, Visuddhimagga and the other isolated sets); with [markup-conventions.md](research/book-relationships/markup-conventions.md) describing the 2007–08 `<div>` markup. Scripts in `scripts/`
 - [Browser Embedding Options](research/BROWSER_EMBEDDING_OPTIONS.md) - WebView alternatives
