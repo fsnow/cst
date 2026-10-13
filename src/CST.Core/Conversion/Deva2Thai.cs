@@ -88,7 +88,13 @@ namespace CST.Conversion
             dev2Thai['\u0942'] = '\u0E39'; // uu
             dev2Thai['\u0947'] = '\u0E40'; // e
             dev2Thai['\u0948'] = '\u0E44'; // ai (#1049)
-            dev2Thai['\u0943'] = '\u0E24'; // vocalic r sign: written with the vocalic r letter, as in Thai Sanskrit spelling (#1049)
+            // vocalic r sign: phinthu + the vocalic r letter, the consonant being vowelless (as Aksharamukha
+            // writes it: vrksa = wa phinthu ru ka phinthu sso). Keeps ka + independent vocalic r distinct. (#1049)
+            dev2Thai['\u0943'] = "\u0E3A\u0E24";
+            // visarga: sara a, which Wikipedia's Thai script article gives as the closest equivalent and as used
+            // for the visarga in some Thai-script Sanskrit. Sara a is otherwise unused in this Thai, so it reads
+            // back unambiguously. (Aksharamukha writes ha + thanthakhat instead.) (#1049)
+            dev2Thai['\u0903'] = '\u0E30';
             dev2Thai['\u094B'] = '\u0E42'; // o
 
             dev2Thai['\u094D'] = '\u0E3A'; // virama

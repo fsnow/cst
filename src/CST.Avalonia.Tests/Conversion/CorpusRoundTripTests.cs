@@ -72,6 +72,8 @@ public class CorpusRoundTripTests
     [InlineData("\u0915\u094D \u090B")]           // ... after a visible halant and a space
     [InlineData("\u0915\u093E\u090B")]             // ... after a vowel sign
     [InlineData("\u0915\u094B\u0906")]             // ko + independent aa
+    [InlineData("\u0915\u090B")]                   // ka + independent vocalic r: distinct from the sign
+    [InlineData("\u0915\u0939")]                   // ka + ha: not a visarga
     public void Thai_RulesDoNotFireOnPaliSequences(string deva)
     {
         Assert.Equal(deva, Thai2Deva.Convert(Deva2Thai.Convert(deva)));

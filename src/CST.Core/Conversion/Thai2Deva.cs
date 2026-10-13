@@ -154,11 +154,16 @@ namespace CST.Conversion
                     sb.Append('\u0914'); i += 3;
                     continue;
                 }
-                // (#1049) the vocalic r letter after a consonant is the vocalic r sign (Pali has no consonant + independent vocalic r)
-                if (thaiStr[i] == '\u0E24')
+                // (#1049) phinthu + the vocalic r letter is the vocalic r sign; the letter alone is independent
+                if (thaiStr[i] == '\u0E3A' && i + 1 < thaiStr.Length && thaiStr[i + 1] == '\u0E24')
                 {
-                    bool afterConsonant = sb.Length > 0 && sb[sb.Length - 1] >= '\u0915' && sb[sb.Length - 1] <= '\u0939';
-                    sb.Append(afterConsonant ? '\u0943' : '\u090B'); i++;
+                    sb.Append('\u0943'); i += 2;
+                    continue;
+                }
+                // (#1049) sara a is the visarga
+                if (thaiStr[i] == '\u0E30')
+                {
+                    sb.Append('\u0903'); i++;
                     continue;
                 }
                 char first = thaiStr[i];
@@ -249,11 +254,16 @@ namespace CST.Conversion
                     sb.Append('\u0914'); i += 3;
                     continue;
                 }
-                // (#1049) the vocalic r letter after a consonant is the vocalic r sign (Pali has no consonant + independent vocalic r)
-                if (thaiStr[i] == '\u0E24')
+                // (#1049) phinthu + the vocalic r letter is the vocalic r sign; the letter alone is independent
+                if (thaiStr[i] == '\u0E3A' && i + 1 < thaiStr.Length && thaiStr[i + 1] == '\u0E24')
                 {
-                    bool afterConsonant = sb.Length > 0 && sb[sb.Length - 1] >= '\u0915' && sb[sb.Length - 1] <= '\u0939';
-                    sb.Append(afterConsonant ? '\u0943' : '\u090B'); i++;
+                    sb.Append('\u0943'); i += 2;
+                    continue;
+                }
+                // (#1049) sara a is the visarga
+                if (thaiStr[i] == '\u0E30')
+                {
+                    sb.Append('\u0903'); i++;
                     continue;
                 }
 

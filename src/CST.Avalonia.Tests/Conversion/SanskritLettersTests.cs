@@ -47,7 +47,6 @@ public class SanskritLettersTests
     private static readonly Dictionary<Script, string> KeptDevanagari = new()
     {
         [Script.Gurmukhi] = "\u090B\u0943\u0937",
-        [Script.Thai] = "\u0903",
     };
 
     private sealed record Pair(Script Script, Func<string, string> To, Func<string, string> ToRef,
@@ -109,8 +108,11 @@ public class SanskritLettersTests
     public void NativeSpellings_ExactCodePoints()
     {
         // fsnow, 2026-10-13: "use the native spellings" for the letters these scripts write by convention.
-        // Thai: the vocalic r sign is the vocalic r letter after the consonant; au is the e...aa frame.
-        Assert.Equal("\u0E27\u0E24\u0E01\u0E3A\u0E29", Deva2Thai.Convert("\u0935\u0943\u0915\u094D\u0937"));
+        // Thai: the vocalic r sign is phinthu + the vocalic r letter, as Aksharamukha writes it; au is the
+        // e...aa frame. Visarga is sara a, per Wikipedia's Thai script article; fsnow, 2026-10-13: "let's go
+        // with the Wikipedia form on that".
+        Assert.Equal("\u0E27\u0E3A\u0E24\u0E01\u0E3A\u0E29", Deva2Thai.Convert("\u0935\u0943\u0915\u094D\u0937"));
+        Assert.Equal("\u0E23\u0E32\u0E0A\u0E19\u0E3A\u0E22\u0E30", Deva2Thai.Convert("\u0930\u093E\u091C\u0928\u094D\u092F\u0903"));
         Assert.Equal("\u0E40\u0E01\u0E32", Deva2Thai.Convert("\u0915\u094C"));
         Assert.Equal("\u0E40\u0E2D\u0E32", Deva2Thai.Convert("\u0914"));
         // Tibetan: ra + reversed gi gu; subjoined ra after a consonant.
