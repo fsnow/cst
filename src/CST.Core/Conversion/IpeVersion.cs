@@ -2,10 +2,9 @@ namespace CST.Conversion
 {
     /// <summary>
     /// The version of the IPE encoding. Anything that stores IPE must record the version it was written with
-    /// and rebuild when it differs. The search index does (#1049). application-state.json also holds IPE, in
-    /// the restored search pane's selected terms and the book windows' search terms; after a version change
-    /// a restored term selection simply fails to match once, and highlighting still works because it runs
-    /// off stored offsets, so that state is not stamped.
+    /// and rebuild or migrate when it differs. Two places do (#1049): the search index records the version that
+    /// built it and is rebuilt when it differs (IndexIpeStamp), and application-state.json's stored search
+    /// terms are rewritten by the state file's 1.0 -> 1.1 migration (UpgradeFromV1).
     ///
     /// <para>IPE packs the alphabet into consecutive code points, so adding a letter in its alphabetical place
     /// renumbers every letter after it. An index built with an older IPE still opens, but its terms no longer
