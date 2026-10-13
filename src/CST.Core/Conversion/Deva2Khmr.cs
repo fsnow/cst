@@ -72,6 +72,14 @@ namespace CST.Conversion
             dev2Khmer['\u0932'] = '\u179B'; // la
             dev2Khmer['\u0935'] = '\u179C'; // va
             dev2Khmer['\u0938'] = '\u179F'; // sa
+            dev2Khmer['\u0903'] = '\u17C7'; // visarga (#1049)
+            dev2Khmer['\u090B'] = '\u17AB'; // vocalic r (#1049)
+            dev2Khmer['\u0948'] = '\u17C3'; // ai (#1049)
+            dev2Khmer['\u0910'] = '\u17B0'; // ai (#1049)
+            dev2Khmer['\u094C'] = '\u17C5'; // au (#1049)
+            dev2Khmer['\u0914'] = '\u17B3'; // au (#1049)
+            dev2Khmer['\u0936'] = '\u179D'; // palatal sa (#1049)
+            dev2Khmer['\u0937'] = '\u179E'; // retroflex sa (#1049)
             dev2Khmer['\u0939'] = '\u17A0'; // ha
             dev2Khmer['\u0933'] = '\u17A1'; // l underdot a
 

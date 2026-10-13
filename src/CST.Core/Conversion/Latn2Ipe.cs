@@ -22,61 +22,68 @@ namespace CST.Conversion
 
             latn2Ipe["\u1E43"] = "\u00C0"; // niggahita (m with dot below)
             latn2Ipe["\u1E41"] = "\u00C0"; // niggahita (m with dot above)
+            latn2Ipe["\u1E25"] = "\u00C1"; // visarga (h with dot below) (#1049)
 
             // vowels
-            latn2Ipe["a"] = "\u00C1"; // a
-            latn2Ipe["\u0101"] = "\u00C2"; // aa
-            latn2Ipe["i"] = "\u00C3"; // i
-            latn2Ipe["\u012B"] = "\u00C4"; // ii
-            latn2Ipe["u"] = "\u00C5"; // u
-            latn2Ipe["\u016B"] = "\u00C6"; // uu
-            latn2Ipe["e"] = "\u00C7"; // e
-            latn2Ipe["o"] = "\u00C8"; // o
+            latn2Ipe["a"] = "\u00C2"; // a
+            latn2Ipe["\u0101"] = "\u00C3"; // aa
+            latn2Ipe["i"] = "\u00C4"; // i
+            latn2Ipe["\u012B"] = "\u00C5"; // ii
+            latn2Ipe["u"] = "\u00C6"; // u
+            latn2Ipe["\u016B"] = "\u00C7"; // uu
+            latn2Ipe["\u1E5B"] = "\u00C8"; // vocalic r (r with dot below) (#1049)
+            // ai and au are NOT read as the diphthongs: in Latin they keep meaning a + i / a + u, the Pali
+            // vowel hiatus (about 7,850 in the corpus against about 67 diphthongs). fsnow, 2026-10-13: "Keep
+            // Pali as is". (#1049)
+            latn2Ipe["e"] = "\u00C9"; // e
+            latn2Ipe["o"] = "\u00CB"; // o
 
             // velar stops
-            latn2Ipe["k"] = "\u00C9"; // ka
-            latn2Ipe["kh"] = "\u00CA"; // kha
-            latn2Ipe["g"] = "\u00CB"; // ga
-            latn2Ipe["gh"] = "\u00CC"; // gha
-            latn2Ipe["\u1E45"] = "\u00CD"; // n overdot a
+            latn2Ipe["k"] = "\u00CD"; // ka
+            latn2Ipe["kh"] = "\u00CE"; // kha
+            latn2Ipe["g"] = "\u00CF"; // ga
+            latn2Ipe["gh"] = "\u00D0"; // gha
+            latn2Ipe["\u1E45"] = "\u00D1"; // n overdot a
 
             // palatal stops
-            latn2Ipe["c"] = "\u00CE"; // ca
-            latn2Ipe["ch"] = "\u00CF"; // cha
-            latn2Ipe["j"] = "\u00D0"; // ja
-            latn2Ipe["jh"] = "\u00D1"; // jha
-            latn2Ipe["\u00F1"] = "\u00D2"; // n tilde a
+            latn2Ipe["c"] = "\u00D2"; // ca
+            latn2Ipe["ch"] = "\u00D3"; // cha
+            latn2Ipe["j"] = "\u00D4"; // ja
+            latn2Ipe["jh"] = "\u00D5"; // jha
+            latn2Ipe["\u00F1"] = "\u00D6"; // n tilde a
 
             // retroflex stops
-            latn2Ipe["\u1E6D"] = "\u00D3"; // t underdot a
-            latn2Ipe["\u1E6Dh"] = "\u00D4"; // t underdot ha
-            latn2Ipe["\u1E0D"] = "\u00D5"; // d underdot a
-            latn2Ipe["\u1E0Dh"] = "\u00D6"; // d underdot ha
+            latn2Ipe["\u1E6D"] = "\u00D8"; // t underdot a
+            latn2Ipe["\u1E6Dh"] = "\u00D9"; // t underdot ha
+            latn2Ipe["\u1E0D"] = "\u00DA"; // d underdot a
+            latn2Ipe["\u1E0Dh"] = "\u00DB"; // d underdot ha
             // D7 multiplication sign is unused in IPE
-            latn2Ipe["\u1E47"] = "\u00D8"; // n underdot a
+            latn2Ipe["\u1E47"] = "\u00DC"; // n underdot a
 
             // dental stops
-            latn2Ipe["t"] = "\u00D9"; // ta
-            latn2Ipe["th"] = "\u00DA"; // tha
-            latn2Ipe["d"] = "\u00DB"; // da
-            latn2Ipe["dh"] = "\u00DC"; // dha
-            latn2Ipe["n"] = "\u00DD"; // na
+            latn2Ipe["t"] = "\u00DD"; // ta
+            latn2Ipe["th"] = "\u00DE"; // tha
+            latn2Ipe["d"] = "\u00DF"; // da
+            latn2Ipe["dh"] = "\u00E0"; // dha
+            latn2Ipe["n"] = "\u00E1"; // na
 
             // labial stops
-            latn2Ipe["p"] = "\u00DE"; // pa
-            latn2Ipe["ph"] = "\u00DF"; // pha
-            latn2Ipe["b"] = "\u00E0"; // ba
-            latn2Ipe["bh"] = "\u00E1"; // bha
-            latn2Ipe["m"] = "\u00E2"; // ma
+            latn2Ipe["p"] = "\u00E2"; // pa
+            latn2Ipe["ph"] = "\u00E3"; // pha
+            latn2Ipe["b"] = "\u00E4"; // ba
+            latn2Ipe["bh"] = "\u00E5"; // bha
+            latn2Ipe["m"] = "\u00E6"; // ma
 
             // liquids, fricatives, etc.
-            latn2Ipe["y"] = "\u00E3"; // ya
-            latn2Ipe["r"] = "\u00E4"; // ra
-            latn2Ipe["l"] = "\u00E5"; // la
-            latn2Ipe["v"] = "\u00E6"; // va
-            latn2Ipe["s"] = "\u00E7"; // sa
-            latn2Ipe["h"] = "\u00E8"; // ha
-            latn2Ipe["\u1E37"] = "\u00E9"; // l underdot a
+            latn2Ipe["y"] = "\u00E7"; // ya
+            latn2Ipe["r"] = "\u00E8"; // ra
+            latn2Ipe["l"] = "\u00E9"; // la
+            latn2Ipe["v"] = "\u00EA"; // va
+            latn2Ipe["\u015B"] = "\u00EB"; // palatal sa (#1049)
+            latn2Ipe["\u1E63"] = "\u00EC"; // retroflex sa (#1049)
+            latn2Ipe["s"] = "\u00ED"; // sa
+            latn2Ipe["h"] = "\u00EE"; // ha
+            latn2Ipe["\u1E37"] = "\u00EF"; // l underdot a
 
             latnAspiratables = new HashSet<char>();
             latnAspiratables.Add('k');

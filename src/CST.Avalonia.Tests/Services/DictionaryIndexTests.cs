@@ -82,9 +82,9 @@ public class DictionaryIndexTests
     // ---- ḷ/l folding on a miss (#933) ----
     //
     // These use the real IPE codepoints rather than ASCII stand-ins, because the fold is defined on them:
-    // Latn2Ipe maps l -> U+00E5 and ḷ -> U+00E9. Written as escapes, per CLAUDE.md.
-    private const string IpeL = "\u00E5";    // l
-    private const string IpeLDot = "\u00E9"; // ḷ
+    // Latn2Ipe maps l -> U+00E9 and ḷ -> U+00EF. Written as escapes, per CLAUDE.md.
+    private const string IpeL = "\u00E9";    // l
+    private const string IpeLDot = "\u00EF"; // ḷ
 
     /// <summary>The reported case. DPPN carries Nālandā with a plain l; the corpus spells the same name
     /// with ḷ four times in five, so most clicks missed the entry entirely (#933).</summary>

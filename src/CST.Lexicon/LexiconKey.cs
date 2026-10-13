@@ -75,7 +75,7 @@ namespace CST.Lexicon
                 : Any2Ipe.Convert(StripJoiners(query).ToLowerInvariant().Normalize(NormalizationForm.FormC));
 
         /// <summary>
-        /// IPE <c>ḷ</c> (U+00E9) read as <c>l</c> (U+00E5), for MATCHING ONLY. (#933)
+        /// IPE <c>ḷ</c> (U+00EF) read as <c>l</c> (U+00E9), for MATCHING ONLY. (#933)
         ///
         /// <para><b>Not a claim that they are the same letter.</b> They are distinct phonemes in Pāli. What
         /// this reconciles is two editorial traditions: DPPN follows Malalasekera's PTS spelling while the
@@ -88,6 +88,6 @@ namespace CST.Lexicon
         /// fold is exactly the kind that drifts once it is written down twice. There is no combined ḷh
         /// codepoint in IPE, so a single-character replacement covers ḷh as well.</para>
         /// </summary>
-        public static string FoldRetroflexL(string ipe) => ipe.Replace('\u00E9', '\u00E5');
+        public static string FoldRetroflexL(string ipe) => ipe.Replace('\u00EF', '\u00E9');
     }
 }

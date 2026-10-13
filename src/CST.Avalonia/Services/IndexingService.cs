@@ -138,6 +138,16 @@ namespace CST.Avalonia.Services
                     _xmlFileDatesService.ResetFileDates();
                 }
 
+                // An index built with another IPE version opens fine but its terms no longer match queries, so
+                // searches would miss silently. Rebuild it from scratch, the same way as a corrupt one. (#1049)
+                if (indexValid && !IndexIpeStamp.IsCurrent(_indexDirectory))
+                {
+                    _logger.LogWarning("Search index was built with another IPE version - deleting and rebuilding from scratch");
+                    DeleteCorruptIndex();
+                    _xmlFileDatesService.ResetFileDates();
+                    indexValid = false;
+                }
+
                 // Get changed books (all books on first run, or after a corrupt-index reset)
                 _logger.LogInformation("Getting changed books from XmlFileDatesService...");
                 var changedBooks = await _xmlFileDatesService.GetChangedBooksAsync();
@@ -156,6 +166,7 @@ namespace CST.Avalonia.Services
 
                 _logger.LogInformation("Starting indexing process for {Count} books", changedBooks.Count);
                 await PerformIndexingAsync(changedBooks, progress);
+                IndexIpeStamp.Write(_indexDirectory); // (#1049)
 
                 // Save file dates after successful indexing
                 _logger.LogInformation("Saving file dates after successful indexing...");

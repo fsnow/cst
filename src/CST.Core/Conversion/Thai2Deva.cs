@@ -35,6 +35,7 @@ namespace CST.Conversion
             thai2Dev["\u0E2D\u0E39"] = "\u090A"; // uu
             thai2Dev["\u0E40\u0E2D"] = "\u090F"; // e
             thai2Dev["\u0E42\u0E2D"] = "\u0913"; // o
+            thai2Dev["\u0E44\u0E2D"] = "\u0910"; // ai (#1049)
 
             // velar stops
             thaiChar2Dev['\u0E01'] = "\u0915"; // ka
@@ -77,6 +78,9 @@ namespace CST.Conversion
             thaiChar2Dev['\u0E25'] = "\u0932"; // la
             thaiChar2Dev['\u0E27'] = "\u0935"; // va
             thaiChar2Dev['\u0E2A'] = "\u0938"; // sa
+            thaiChar2Dev['\u0E24'] = "\u090B"; // vocalic r (#1049)
+            thaiChar2Dev['\u0E28'] = "\u0936"; // palatal sa (#1049)
+            thaiChar2Dev['\u0E29'] = "\u0937"; // retroflex sa (#1049)
             thaiChar2Dev['\u0E2B'] = "\u0939"; // ha
             thaiChar2Dev['\u0E2C'] = "\u0933"; // l underdot a
 
@@ -92,6 +96,8 @@ namespace CST.Conversion
             // Placeholder characters (used during preprocessing for round-trip preservation)
             thaiChar2Dev['\uFFF0'] = "\u0947"; // placeholder for dependent e (was before consonant in Thai)
             thaiChar2Dev['\uFFF1'] = "\u094B"; // placeholder for dependent o (was before consonant in Thai)
+            thaiChar2Dev['\u0E44'] = "\u0948"; // ai (#1049)
+            thaiChar2Dev['\uFFF2'] = "\u0948"; // placeholder for dependent ai (#1049)
 
             thaiChar2Dev['\u0E3A'] = "\u094D"; // virama
 
@@ -130,6 +136,7 @@ namespace CST.Conversion
             thaiStr = thaiStr.Replace("\u0E36", "\u0E34\u0E4D");
             thaiStr = Regex.Replace(thaiStr, "\u0E40([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF0");
             thaiStr = Regex.Replace(thaiStr, "\u0E42([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF1");
+            thaiStr = Regex.Replace(thaiStr, "\u0E44([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF2"); // ai (#1049)
 
             StringBuilder sb = new StringBuilder(thaiStr.Length);
             int i = 0;
@@ -153,6 +160,11 @@ namespace CST.Conversion
                         string? sv = (second < ThaiLen) ? thaiCharMap[second] : null;
                         if (sv != null) { sb.Append(sv); sb.Append('\u094B'); i += 2; matched = true; }
                     }
+                    else if (first == '\u0E44' && second >= '\u0E01' && second <= '\u0E2E' && second != '\u0E2D' && third == '\u0E2D') // ai (#1049)
+                    {
+                        string? sv = (second < ThaiLen) ? thaiCharMap[second] : null;
+                        if (sv != null) { sb.Append(sv); sb.Append('\u0948'); i += 2; matched = true; }
+                    }
                 }
 
                 // multi-char (independent vowels) - only probe when the char can begin a key
@@ -170,7 +182,7 @@ namespace CST.Conversion
                     else
                     {
                         string? cm = (c < ThaiLen) ? thaiCharMap[c]
-                                     : (c == '\uFFF0' ? "\u0947" : c == '\uFFF1' ? "\u094B" : null);
+                                     : (c == '\uFFF0' ? "\u0947" : c == '\uFFF1' ? "\u094B" : c == '\uFFF2' ? "\u0948" : null);
                         if (cm != null) { sb.Append(cm); i++; }
                         else { sb.Append(c); i++; } // pass through
                     }
@@ -202,6 +214,7 @@ namespace CST.Conversion
             // Exclude \u0E2D because \u0E42\u0E2D is independent vowel o, not consonant+vowel
             // Also exclude if consonant is followed by \u0E2D (independent vowel follows)
             thaiStr = Regex.Replace(thaiStr, "\u0E42([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF1");
+            thaiStr = Regex.Replace(thaiStr, "\u0E44([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF2"); // ai (#1049)
 
             StringBuilder sb = new StringBuilder();
             int i = 0;
@@ -236,6 +249,17 @@ namespace CST.Conversion
                         {
                             sb.Append(thaiChar2Dev[second]);
                             sb.Append('\u094B'); // dependent o
+                            i += 2;
+                            matched = true;
+                        }
+                    }
+                    // \u0E44 + consonant + \u0E2D -> consonant + dependent ai (#1049)
+                    else if (first == '\u0E44' && second >= '\u0E01' && second <= '\u0E2E' && second != '\u0E2D' && third == '\u0E2D')
+                    {
+                        if (thaiChar2Dev.ContainsKey(second))
+                        {
+                            sb.Append(thaiChar2Dev[second]);
+                            sb.Append('\u0948'); // dependent ai
                             i += 2;
                             matched = true;
                         }

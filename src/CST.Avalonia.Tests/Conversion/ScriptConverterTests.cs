@@ -100,9 +100,9 @@ namespace CST.Avalonia.Tests.Conversion
         }
 
         [Fact]
-        public void TestLatinAToIpeIsHexC1()
+        public void TestLatinAToIpeIsHexC2()
         {
-            // User mentioned that Latin 'a' should be hex C1 in IPE
+            // Latin 'a' was hex C1 in IPE until #1049 inserted visarga (C1) after niggahita; it is now C2.
             string result = Latn2Ipe.Convert("a");
             
             // Check if the result contains the expected byte
@@ -113,8 +113,7 @@ namespace CST.Avalonia.Tests.Conversion
             Console.WriteLine($"IPE char code: {(int)result[0]:X}");
             
             // The IPE encoding should produce a specific character
-            // Based on user's comment, 'a' in IPE is hex C1
-            Assert.Equal(0xC1, (int)result[0]);
+            Assert.Equal(0xC2, (int)result[0]);
         }
 
         [Theory]

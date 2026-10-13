@@ -33,83 +33,93 @@ namespace CST.Conversion
         // IPE vowel code point -> Devanagari independent vowel
         private static readonly Dictionary<char, char> independentVowels;
         // IPE vowel code point -> Devanagari dependent vowel sign
-        // (the inherent "a", \u00C1, has no dependent sign and is omitted)
+        // (the inherent "a", \u00C2, has no dependent sign and is omitted)
         private static readonly Dictionary<char, char> dependentVowels;
 
         // Fast char-indexed tables for the optimized Convert(): same data as the dictionaries above, '\0' = none.
-        // IPE code points all fit under U+00EA. (#86)
-        private const int MapLen = 0x00EA;
+        // IPE code points all fit under U+00F0. (#86, #1049)
+        private const int MapLen = 0x00F0;
         private static readonly char[] consonantArr = new char[MapLen];
         private static readonly char[] independentVowelArr = new char[MapLen];
         private static readonly char[] dependentVowelArr = new char[MapLen];
 
         private const char IpeNiggahita = '\u00C0';
-        private const char IpeInherentA = '\u00C1';
-        private const char IpeVowelFirst = '\u00C1'; // a
-        private const char IpeVowelLast = '\u00C8';  // o
+        private const char IpeInherentA = '\u00C2';
+        private const char IpeVowelFirst = '\u00C2'; // a
+        private const char IpeVowelLast = '\u00CC';  // au (#1049)
         private const char DevaVirama = '\u094D';
         private const char DevaNiggahita = '\u0902'; // anusvara
+        private const char IpeVisarga = '\u00C1';
+        private const char DevaVisarga = '\u0903';
 
         static Ipe2Deva()
         {
             consonants = new Dictionary<char, char>
             {
-                ['\u00C9'] = '\u0915', // ka
-                ['\u00CA'] = '\u0916', // kha
-                ['\u00CB'] = '\u0917', // ga
-                ['\u00CC'] = '\u0918', // gha
-                ['\u00CD'] = '\u0919', // n overdot
-                ['\u00CE'] = '\u091A', // ca
-                ['\u00CF'] = '\u091B', // cha
-                ['\u00D0'] = '\u091C', // ja
-                ['\u00D1'] = '\u091D', // jha
-                ['\u00D2'] = '\u091E', // n tilde
-                ['\u00D3'] = '\u091F', // t underdot
-                ['\u00D4'] = '\u0920', // t underdot ha
-                ['\u00D5'] = '\u0921', // d underdot
-                ['\u00D6'] = '\u0922', // d underdot ha
-                ['\u00D8'] = '\u0923', // n underdot
-                ['\u00D9'] = '\u0924', // ta
-                ['\u00DA'] = '\u0925', // tha
-                ['\u00DB'] = '\u0926', // da
-                ['\u00DC'] = '\u0927', // dha
-                ['\u00DD'] = '\u0928', // na
-                ['\u00DE'] = '\u092A', // pa
-                ['\u00DF'] = '\u092B', // pha
-                ['\u00E0'] = '\u092C', // ba
-                ['\u00E1'] = '\u092D', // bha
-                ['\u00E2'] = '\u092E', // ma
-                ['\u00E3'] = '\u092F', // ya
-                ['\u00E4'] = '\u0930', // ra
-                ['\u00E5'] = '\u0932', // la
-                ['\u00E6'] = '\u0935', // va
-                ['\u00E7'] = '\u0938', // sa
-                ['\u00E8'] = '\u0939', // ha
-                ['\u00E9'] = '\u0933', // l underdot
+                ['\u00CD'] = '\u0915', // ka
+                ['\u00CE'] = '\u0916', // kha
+                ['\u00CF'] = '\u0917', // ga
+                ['\u00D0'] = '\u0918', // gha
+                ['\u00D1'] = '\u0919', // n overdot
+                ['\u00D2'] = '\u091A', // ca
+                ['\u00D3'] = '\u091B', // cha
+                ['\u00D4'] = '\u091C', // ja
+                ['\u00D5'] = '\u091D', // jha
+                ['\u00D6'] = '\u091E', // n tilde
+                ['\u00D8'] = '\u091F', // t underdot
+                ['\u00D9'] = '\u0920', // t underdot ha
+                ['\u00DA'] = '\u0921', // d underdot
+                ['\u00DB'] = '\u0922', // d underdot ha
+                ['\u00DC'] = '\u0923', // n underdot
+                ['\u00DD'] = '\u0924', // ta
+                ['\u00DE'] = '\u0925', // tha
+                ['\u00DF'] = '\u0926', // da
+                ['\u00E0'] = '\u0927', // dha
+                ['\u00E1'] = '\u0928', // na
+                ['\u00E2'] = '\u092A', // pa
+                ['\u00E3'] = '\u092B', // pha
+                ['\u00E4'] = '\u092C', // ba
+                ['\u00E5'] = '\u092D', // bha
+                ['\u00E6'] = '\u092E', // ma
+                ['\u00E7'] = '\u092F', // ya
+                ['\u00E8'] = '\u0930', // ra
+                ['\u00E9'] = '\u0932', // la
+                ['\u00EA'] = '\u0935', // va
+                ['\u00EB'] = '\u0936', // palatal sa (#1049)
+                ['\u00EC'] = '\u0937', // retroflex sa (#1049)
+                ['\u00ED'] = '\u0938', // sa
+                ['\u00EE'] = '\u0939', // ha
+                ['\u00EF'] = '\u0933', // l underdot
             };
 
             independentVowels = new Dictionary<char, char>
             {
-                ['\u00C1'] = '\u0905', // a
-                ['\u00C2'] = '\u0906', // aa
-                ['\u00C3'] = '\u0907', // i
-                ['\u00C4'] = '\u0908', // ii
-                ['\u00C5'] = '\u0909', // u
-                ['\u00C6'] = '\u090A', // uu
-                ['\u00C7'] = '\u090F', // e
-                ['\u00C8'] = '\u0913', // o
+                ['\u00C2'] = '\u0905', // a
+                ['\u00C3'] = '\u0906', // aa
+                ['\u00C4'] = '\u0907', // i
+                ['\u00C5'] = '\u0908', // ii
+                ['\u00C6'] = '\u0909', // u
+                ['\u00C7'] = '\u090A', // uu
+                ['\u00C8'] = '\u090B', // vocalic r (#1049)
+                ['\u00C9'] = '\u090F', // e
+                ['\u00CA'] = '\u0910', // ai (#1049)
+                ['\u00CB'] = '\u0913', // o
+                ['\u00CC'] = '\u0914', // au (#1049)
             };
 
             dependentVowels = new Dictionary<char, char>
             {
-                // a (\u00C1) is inherent in the consonant and written as nothing
-                ['\u00C2'] = '\u093E', // aa
-                ['\u00C3'] = '\u093F', // i
-                ['\u00C4'] = '\u0940', // ii
-                ['\u00C5'] = '\u0941', // u
-                ['\u00C6'] = '\u0942', // uu
-                ['\u00C7'] = '\u0947', // e
-                ['\u00C8'] = '\u094B', // o
+                // a (\u00C2) is inherent in the consonant and written as nothing
+                ['\u00C3'] = '\u093E', // aa
+                ['\u00C4'] = '\u093F', // i
+                ['\u00C5'] = '\u0940', // ii
+                ['\u00C6'] = '\u0941', // u
+                ['\u00C7'] = '\u0942', // uu
+                ['\u00C8'] = '\u0943', // vocalic r (#1049)
+                ['\u00C9'] = '\u0947', // e
+                ['\u00CA'] = '\u0948', // ai (#1049)
+                ['\u00CB'] = '\u094B', // o
+                ['\u00CC'] = '\u094C', // au (#1049)
             };
 
             // Mirror the dictionaries into char-indexed tables for the optimized Convert(). (#86)
@@ -167,6 +177,10 @@ namespace CST.Conversion
                 else if (c == IpeNiggahita)
                 {
                     sb.Append(DevaNiggahita);
+                }
+                else if (c == IpeVisarga) // (#1049)
+                {
+                    sb.Append(DevaVisarga);
                 }
                 else
                 {
@@ -245,6 +259,10 @@ namespace CST.Conversion
                 else if (c == IpeNiggahita)
                 {
                     buf[k++] = DevaNiggahita;
+                }
+                else if (c == IpeVisarga) // (#1049)
+                {
+                    buf[k++] = DevaVisarga;
                 }
                 else
                 {

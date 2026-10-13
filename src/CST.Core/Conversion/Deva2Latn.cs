@@ -21,6 +21,7 @@ namespace CST.Conversion
             deva2Latn = new Dictionary<char, object>();
 
             deva2Latn['\u0902'] = '\u1E43'; // niggahita
+            deva2Latn['\u0903'] = '\u1E25'; // visarga (#1049)
 
             // independent vowels
             deva2Latn['\u0905'] = 'a'; // a
@@ -30,6 +31,7 @@ namespace CST.Conversion
             deva2Latn['\u0909'] = 'u'; // u
 			deva2Latn['\u0910'] = "ai"; // ai
             deva2Latn['\u090A'] = '\u016B'; // uu
+            deva2Latn['\u090B'] = '\u1E5B'; // vocalic r (#1049)
             deva2Latn['\u090F'] = 'e'; // e
             deva2Latn['\u0913'] = 'o'; // o
 			deva2Latn['\u0914'] = "au"; // au
@@ -74,6 +76,8 @@ namespace CST.Conversion
             deva2Latn['\u0930'] = 'r'; // ra
             deva2Latn['\u0932'] = 'l'; // la
             deva2Latn['\u0935'] = 'v'; // va
+            deva2Latn['\u0936'] = '\u015B'; // palatal sa (#1049)
+            deva2Latn['\u0937'] = '\u1E63'; // retroflex sa (#1049)
             deva2Latn['\u0938'] = 's'; // sa
             deva2Latn['\u0939'] = 'h'; // ha
             deva2Latn['\u0933'] = "\u1E37"; // l underdot a
@@ -84,6 +88,7 @@ namespace CST.Conversion
             deva2Latn['\u0940'] = "\u012B"; // ii
             deva2Latn['\u0941'] = 'u'; // u
             deva2Latn['\u0942'] = '\u016B'; // uu
+            deva2Latn['\u0943'] = '\u1E5B'; // vocalic r (#1049)
             deva2Latn['\u0947'] = 'e'; // e
 			deva2Latn['\u0948'] = "ai"; // ai
             deva2Latn['\u094B'] = 'o'; // o

@@ -30,6 +30,7 @@ namespace CST.Conversion
             dev2Thai['\u090A'] = "\u0E2D\u0E39"; // uu
             dev2Thai['\u090F'] = "\u0E40\u0E2D"; // e
             dev2Thai['\u0913'] = "\u0E42\u0E2D"; // o
+            dev2Thai['\u0910'] = "\u0E44\u0E2D"; // ai, a pre-vowel like e and o (#1049)
 
             // velar stops
             dev2Thai['\u0915'] = '\u0E01'; // ka
@@ -72,6 +73,9 @@ namespace CST.Conversion
             dev2Thai['\u0932'] = '\u0E25'; // la
             dev2Thai['\u0935'] = '\u0E27'; // va
             dev2Thai['\u0938'] = '\u0E2A'; // sa
+            dev2Thai['\u090B'] = '\u0E24'; // vocalic r (#1049)
+            dev2Thai['\u0936'] = '\u0E28'; // palatal sa (#1049)
+            dev2Thai['\u0937'] = '\u0E29'; // retroflex sa (#1049)
             dev2Thai['\u0939'] = '\u0E2B'; // ha
             dev2Thai['\u0933'] = '\u0E2C'; // l underdot a
 
@@ -82,6 +86,7 @@ namespace CST.Conversion
             dev2Thai['\u0941'] = '\u0E38'; // u
             dev2Thai['\u0942'] = '\u0E39'; // uu
             dev2Thai['\u0947'] = '\u0E40'; // e
+            dev2Thai['\u0948'] = '\u0E44'; // ai (#1049)
             dev2Thai['\u094B'] = '\u0E42'; // o
 
             dev2Thai['\u094D'] = '\u0E3A'; // virama
@@ -150,6 +155,9 @@ namespace CST.Conversion
             // not to an entire consonant cluster
             devStr = Regex.Replace(devStr, "([\u0915-\u0939])\u094B", "\u0E42$1");
 
+            // the same for the ai vowel (#1049)
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])\u0948", "\u0E44$1");
+
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
             {
@@ -195,9 +203,9 @@ namespace CST.Conversion
                     int j = i + 1;
                     while (j < n && devStr[j] == 0x200D) j++;
                     char next = (j < n) ? devStr[j] : '\0';
-                    if (next == 0x0947 || next == 0x094B)
+                    if (next == 0x0947 || next == 0x094B || next == 0x0948) // e, o, ai (#1049)
                     {
-                        k = Emit(buf, k, next == 0x0947 ? (char)0x0E40 : (char)0x0E42);
+                        k = Emit(buf, k, next == 0x0947 ? (char)0x0E40 : next == 0x094B ? (char)0x0E42 : (char)0x0E44);
                         k = Emit(buf, k, (c < MapLen && map[c] != null) ? map[c][0] : c); // consonant (single-char)
                         i = j; // consume the vowel (and any skipped ZWJ)
                         continue;

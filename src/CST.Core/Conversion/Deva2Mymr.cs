@@ -60,6 +60,13 @@ namespace CST.Conversion
             deva2Mymr['\u0932'] = '\u101C'; // la
             deva2Mymr['\u0935'] = '\u101D'; // va
             deva2Mymr['\u0938'] = '\u101E'; // sa
+            deva2Mymr['\u0903'] = '\u1038'; // visarga (#1049)
+            deva2Mymr['\u090B'] = '\u1052'; // vocalic r (#1049)
+            deva2Mymr['\u0943'] = '\u1056'; // vocalic r (#1049)
+            deva2Mymr['\u0948'] = '\u1032'; // ai (#1049)
+            deva2Mymr['\u0936'] = '\u1050'; // palatal sa (#1049)
+            deva2Mymr['\u0937'] = '\u1051'; // retroflex sa (#1049)
+            deva2Mymr['\u0910'] = "\u1021\u1032"; // ai (#1049)
             deva2Mymr['\u0939'] = '\u101F'; // ha
             deva2Mymr['\u0933'] = '\u1020'; // l underdot a
 

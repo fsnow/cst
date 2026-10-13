@@ -61,6 +61,12 @@ namespace CST.Conversion
             mymr2Deva['\u101C'] = '\u0932'; // la
             mymr2Deva['\u101D'] = '\u0935'; // va
             mymr2Deva['\u101E'] = '\u0938'; // sa
+            mymr2Deva['\u1038'] = '\u0903'; // visarga (#1049)
+            mymr2Deva['\u1052'] = '\u090B'; // vocalic r (#1049)
+            mymr2Deva['\u1056'] = '\u0943'; // vocalic r (#1049)
+            mymr2Deva['\u1032'] = '\u0948'; // ai (#1049)
+            mymr2Deva['\u1050'] = '\u0936'; // palatal sa (#1049)
+            mymr2Deva['\u1051'] = '\u0937'; // retroflex sa (#1049)
             mymr2Deva['\u101F'] = '\u0939'; // ha
             mymr2Deva['\u1020'] = '\u0933'; // l underdot a
 
@@ -144,6 +150,11 @@ namespace CST.Conversion
                 bool nextIsAa = (next == 0x102C || next == 0x102B); // U+102B normalizes to U+102C first
 
                 // independent a (U+1021) + aa -> independent aa (U+0906); dependent e (U+1031) + aa -> o (U+094B)
+                if (c == 0x1021 && next == 0x1032) // independent a + sign ai -> independent ai (#1049)
+                {
+                    k = EmitDeva(buf, k, (char)0x0910, ref prevC2Index, ref prevC1, ref prevC2);
+                    i++; continue;
+                }
                 if (c == 0x1021 && nextIsAa)
                 {
                     k = EmitDeva(buf, k, (char)0x0906, ref prevC2Index, ref prevC1, ref prevC2);
@@ -224,6 +235,9 @@ namespace CST.Conversion
 
             // independent "a" plus dependent sign aa = independent aa
 			str = str.Replace("\u1021\u102C", "\u0906");
+
+            // independent "a" plus dependent sign ai = independent ai (#1049)
+            str = str.Replace("\u1021\u1032", "\u0910");
 
             // dependent e plus dependent sign aa = dependent o
 			str = str.Replace("\u1031\u102C", "\u094B");

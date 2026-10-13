@@ -79,6 +79,7 @@ namespace CST.Conversion
             beng2Deva['\u09B6'] = '\u0936'; // sha (palatal)
             beng2Deva['\u09B7'] = '\u0937'; // sha (retroflex)
             beng2Deva['\u09B8'] = '\u0938'; // sa
+            beng2Deva['\u0983'] = '\u0903'; // visarga (#1049)
             beng2Deva['\u09B9'] = '\u0939'; // ha
 
             // dependent vowel signs

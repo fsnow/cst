@@ -71,6 +71,15 @@ namespace CST.Conversion
             sinh2Deva['\u0DBD'] = '\u0932'; // la
             sinh2Deva['\u0DC0'] = '\u0935'; // va
             sinh2Deva['\u0DC3'] = '\u0938'; // sa
+            sinh2Deva['\u0D83'] = '\u0903'; // visarga (#1049)
+            sinh2Deva['\u0D8D'] = '\u090B'; // vocalic r (#1049)
+            sinh2Deva['\u0DD8'] = '\u0943'; // vocalic r (#1049)
+            sinh2Deva['\u0D93'] = '\u0910'; // ai (#1049)
+            sinh2Deva['\u0DDB'] = '\u0948'; // ai (#1049)
+            sinh2Deva['\u0D96'] = '\u0914'; // au (#1049)
+            sinh2Deva['\u0DDE'] = '\u094C'; // au (#1049)
+            sinh2Deva['\u0DC1'] = '\u0936'; // palatal sa (#1049)
+            sinh2Deva['\u0DC2'] = '\u0937'; // retroflex sa (#1049)
             sinh2Deva['\u0DC4'] = '\u0939'; // ha
             sinh2Deva['\u0DC5'] = '\u0933'; // l underdot a
 

@@ -45,4 +45,22 @@ public class DevaXmlAnalyzerTests
         Assert.Equal(new[] { Any2Ipe.Convert("saṅgho") }, b);
         Assert.Equal(a1, a2);
     }
+
+    [Fact]
+    public void SanskritLetters_StayInsideTheirWord()
+    {
+        // The tokenizer keeps a fixed list of word characters. Before #1049 it held only the Pali letters, so
+        // a word with a Sanskrit letter was split at that letter and its pieces indexed as separate words.
+        using var analyzer = new DevaXmlAnalyzer(LuceneVersion.LUCENE_48);
+        // vaishyah shudro krtah kai kau (Latin keeps ai/au as hiatus, so build these from Devanagari)
+        var doc = "\u0935\u0948\u0936\u094D\u092F\u0903 \u0936\u0942\u0926\u094D\u0930\u094B "
+                  + "\u0915\u0943\u0924\u0903 \u0915\u0948 \u0915\u094C \u0915\u094D\u0937";
+        var expected = new[]
+        {
+            "\u0935\u0948\u0936\u094D\u092F\u0903", "\u0936\u0942\u0926\u094D\u0930\u094B",
+            "\u0915\u0943\u0924\u0903", "\u0915\u0948", "\u0915\u094C", "\u0915\u094D\u0937",
+        };
+        Assert.Equal(System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(expected, Deva2Ipe.Convert)),
+                     Terms(analyzer, doc));
+    }
 }

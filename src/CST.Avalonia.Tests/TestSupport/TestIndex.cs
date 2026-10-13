@@ -26,6 +26,8 @@ namespace CST.Avalonia.Tests.TestSupport
                 writer.AddDocument(doc);
             }
             writer.Commit();
+            // A current index carries the IPE version stamp; without it the service rebuilds the index (#1049).
+            CST.Avalonia.Services.IndexIpeStamp.Write(indexDir);
         }
     }
 }

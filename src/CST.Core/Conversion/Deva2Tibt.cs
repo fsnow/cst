@@ -74,6 +74,13 @@ namespace CST.Conversion
             deva2Tibt['\u0932'] = '\u0F63'; // la
             deva2Tibt['\u0935'] = '\u0F5D'; // va
             deva2Tibt['\u0938'] = '\u0F66'; // sa
+            deva2Tibt['\u0903'] = '\u0F7F'; // visarga (#1049)
+            deva2Tibt['\u0948'] = '\u0F7B'; // ai (#1049)
+            deva2Tibt['\u094C'] = '\u0F7D'; // au (#1049)
+            deva2Tibt['\u0936'] = '\u0F64'; // palatal sa (#1049)
+            deva2Tibt['\u0937'] = '\u0F65'; // retroflex sa (#1049)
+            deva2Tibt['\u0910'] = "\u0F68\u0F7B"; // ai (#1049)
+            deva2Tibt['\u0914'] = "\u0F68\u0F7D"; // au (#1049)
             deva2Tibt['\u0939'] = '\u0F67'; // ha
             deva2Tibt['\u0933'] = "\u0F63\u0F39"; // l underdot a (***** PENDING FURTHER RESEARCH BY CFYNN ****)
 
