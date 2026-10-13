@@ -2,7 +2,7 @@
 
 **Date**: October 17, 2025
 **Author**: Frank Snow (with Claude Code assistance)
-**Status**: Completed
+**Status**: Completed (findings revised 2026-10-13, see #1046)
 
 ## Background
 
@@ -81,29 +81,31 @@ When CST4 was developed in 2007, the encoding architecture (IPE - Internal Phone
 3. **Punctuation**:
    - Various marks
 
-### Key Insights
+### What the characters turned out to be
 
-1. **Visarga instances are likely typos**: All 21 occurrences of visarga (ः) appear in canonical texts, not post-canonical ones. These are very likely data entry errors from the original Aalekh typing process, possibly confused with niggahita (ṃ).
+Revised 2026-10-13, after the original Aalekh files were recovered from the CSCD 3.0 ISO. The 2025 reading of these results ("likely typos", "low frequency suggests errors", "IPE extension may be unnecessary") is superseded. Details in #1031 and #1046.
 
-2. **All Sanskrit characters may be typos**: Given that earlier conversion work systematically stripped out Sanskrit sibilants and other characters, the remaining 13 characters are likely:
-   - Data entry artifacts from the DOS-based Aalekh word processor
-   - Edge cases missed during the Aalekh → Unicode conversion
-   - Characters that survived because they were infrequent or looked similar to Pali characters
-
-3. **Low frequency suggests errors, not content**: If these were legitimate Sanskrit quotations or terminology in post-canonical texts, we would expect to see them more frequently and clustered in specific contexts. The low instance counts across the entire 217-book corpus suggest they are data quality issues rather than legitimate content.
-
-4. **IPE extension may be unnecessary**: If the text correction team determines these are all errors, no extension to the IPE encoding or script conversion system will be needed. The character analysis becomes a quality control tool rather than a requirements gathering exercise for encoding work.
+- **ai, au and vocalic ṛ** (#1031): [observed] All 67 occurrences are already in the 1990s Aalekh typing, so none came from the conversion.
+  - Genuine: the alphabet lists in the grammars, and Burmese words written in Devanagari.
+  - The rest are typing errors, most often ai/au written where a vowel junction gives e/o.
+  - The two ṛ are stray typos in Pāli. Neither is Sanskrit.
+  - The per-occurrence classification is in [`docs/research/aalekh/non-pali-letters-1031.csv`](../research/aalekh/non-pali-letters-1031.csv).
+- **Visarga.**
+  - [observed] The Aalekh files use the visarga byte both as a colon-like mark in Pāli and as a true visarga in Sanskrit passages.
+  - The 18 that survive in today's XML (abh01m 11, s0504m 6, s0519m 1) are the punctuation use.
+  - The Sanskrit visargas became `?` in the 2007 conversion.
+- **The Sanskrit letters that are absent** (ś, ṣ, and ṛ in Sanskrit). [observed] They are absent because they were never typed, not because the conversion stripped them.
+  - The Aalekh files contain no ś or ṣ at all.
+  - The Myanmar-script source print does contain them. The e0105n quotation of the Puruṣasūkta prints ś, ṛ, ai and visarga; the typing has ग for ś and drops ṛ and ai.
+  - So the low frequency of Sanskrit letters in the corpus is not evidence that the Sanskrit isn't there.
+- **IPE and the converters will need extending.** [fsnow, 2026-10-13] "All the converters need to support these additional characters, IPE needs to be modified to support them (in correct alphabetical order), etc."
 
 ## Digital Archaeology
 
-This project represents multiple layers of digital archaeology:
-
-1. **Text History**: Pali texts typed in India in the early 1990s using DOS-based Aalekh software
-2. **First Conversion**: Aalekh proprietary encoding → Unicode Devanagari (early 2007)
-3. **Systematic Cleanup**: Removal of Sanskrit characters like sibilants during conversion
-4. **Current Analysis**: Identifying what survived 30+ years and multiple format conversions
-
-Finding the original Aalekh conversion code to understand *why* these specific characters survived would itself be another archaeology project. Instead, this analysis takes a pragmatic approach: it doesn't matter *why* they're there, only *that* they're there and whether they should remain.
+1. **Source**: Myanmar-script printed editions, which include the Sanskrit letters in quoted Sanskrit.
+2. **Typing**: Devanagari typed into Aalekh, a DOS-based word processor, in India in the early 1990s. Most Sanskrit letters were not typed: ś and ṣ became other letters, and ṛ and some vowel signs were dropped. Visarga, ai and au were typed.
+3. **First Conversion**: Aalekh → Unicode Devanagari, early 2007, by fsnow's C# converter (`VriDevToUni` in `VipassanaTech/tipitaka-xml`). The converter had no Sanskrit entries at that time, so the typed visargas in Sanskrit passages became `?`.
+4. **Current corpus**: about 20 years of VRI corrections on top of that conversion.
 
 ## Deliverables
 
@@ -120,13 +122,7 @@ Finding the original Aalekh conversion code to understand *why* these specific c
 
 ## Next Steps
 
-1. **Text Correction Team Review**: Share the HTML report with the VRI text correction team for editorial review
-2. **Character-by-Character Evaluation**: Review each of the 13 characters in context to determine if they are:
-   - Legitimate content that should remain
-   - Typos/errors that should be corrected to proper Pali
-3. **Source Text Corrections**: Make necessary corrections to the XML files
-4. **Re-run Analysis**: After corrections, re-run the analysis tool to verify cleanup
-5. **IPE Extension Decision**: Based on review outcomes, determine if any genuine Sanskrit characters need to be added to the encoding system
+Tracked in #1031 (classifying ai/au/ṛ) and #1046 (restoring the Sanskrit from the print, and extending IPE and the converters).
 
 ## Technical Notes
 
@@ -146,7 +142,7 @@ dotnet run
 
 This side project successfully answered a question that had been outstanding since 2007: "What non-Pali characters exist in the CST texts, and where are they?"
 
-The answer turned out to be simpler than expected: only 13 distinct characters, with low frequency counts suggesting they are primarily data quality issues rather than legitimate Sanskrit content requiring encoding system extensions.
+The inventory answers what is in the XML. What the source books contain is a different question, answered by the 2026 work in #1031 and #1046: most of the Sanskrit letters were never typed, so the XML alone understates the Sanskrit.
 
 The tool provides a systematic, repeatable way to audit the character set across the entire corpus and will serve as a quality control mechanism for ongoing text correction work.
 
