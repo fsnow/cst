@@ -241,6 +241,12 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             // ExecuteSearchAsync applies them once the results come back.
             _pendingSelectedTerms = state.SelectedTerms is { Count: > 0 } ? new List<string>(state.SelectedTerms) : null;
 
+            // Kept for one re-run after the startup index build: this restore's search runs before that
+            // build finishes, and when the build rebuilds the index (an IPE version change, #1049) the saved
+            // terms are not in the old index's results, so the view drops them.
+            _restoredQuery = state.SearchText;
+            _restoredSelectedTerms = _pendingSelectedTerms;
+
             SearchText = state.SearchText; // set last - triggers the live search-as-you-type
         }
         finally
@@ -259,6 +265,39 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
 
     /// <summary>Called by the view once it has applied the pending term selection. (#87)</summary>
     public void ClearPendingSelectedTerms() => _pendingSelectedTerms = null;
+
+    private string? _restoredQuery;
+    private List<string>? _restoredSelectedTerms;
+
+    /// <summary>
+    /// Called once the startup index build has finished. If it indexed books, the search restored at startup
+    /// ran against the index as it was before, so run it again and re-apply the saved term selection. Only
+    /// while the query is still the restored one: a search the reader has typed since is left alone. (#1049)
+    /// </summary>
+    public async Task RerunRestoredSearchAfterIndexBuildAsync(bool indexChanged)
+    {
+        if (PrepareRerunAfterIndexBuild(indexChanged))
+            await ExecuteSearchAsync();
+    }
+
+    /// <summary>
+    /// The decision half of <see cref="RerunRestoredSearchAfterIndexBuildAsync"/>, separate so it can be tested
+    /// without running a search: re-arms the saved term selection and says whether to search again. The
+    /// restored copy is used at most once.
+    /// </summary>
+    public bool PrepareRerunAfterIndexBuild(bool indexChanged)
+    {
+        var query = _restoredQuery;
+        var terms = _restoredSelectedTerms;
+        _restoredQuery = null;
+        _restoredSelectedTerms = null;
+
+        if (!indexChanged || string.IsNullOrWhiteSpace(query) || SearchText != query)
+            return false;
+
+        _pendingSelectedTerms = terms is { Count: > 0 } ? new List<string>(terms) : null;
+        return true;
+    }
 
     private void SetupFontAndScriptHandlers()
     {

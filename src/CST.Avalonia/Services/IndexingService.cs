@@ -121,8 +121,11 @@ namespace CST.Avalonia.Services
             }
         }
 
+        public bool LastBuildIndexedBooks { get; private set; }
+
         public async Task BuildIndexAsync(IProgress<IndexingProgress> progress)
         {
+            LastBuildIndexedBooks = false;
             try
             {
                 _logger.LogInformation("BuildIndexAsync() started");
@@ -175,6 +178,7 @@ namespace CST.Avalonia.Services
                 _logger.LogInformation("Starting indexing process for {Count} books", changedBooks.Count);
                 await PerformIndexingAsync(changedBooks, progress);
                 IndexIpeStamp.Write(_indexDirectory); // (#1049)
+                LastBuildIndexedBooks = changedBooks.Count > 0;
 
                 // Save file dates after successful indexing
                 _logger.LogInformation("Saving file dates after successful indexing...");

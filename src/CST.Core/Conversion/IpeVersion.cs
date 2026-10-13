@@ -4,7 +4,7 @@ namespace CST.Conversion
     /// The version of the IPE encoding. Anything that stores IPE must record the version it was written with
     /// and rebuild or migrate when it differs. Two places do (#1049): the search index records the version that
     /// built it and is rebuilt when it differs (IndexIpeStamp), and application-state.json's stored search
-    /// terms are rewritten by the state file's 1.0 -> 2 migration (UpgradeFromV1).
+    /// terms and hit-position words are rewritten by the state file's 1.0 -> 2 migration (UpgradeFromV1).
     ///
     /// <para>IPE packs the alphabet into consecutive code points, so adding a letter in its alphabetical place
     /// renumbers every letter after it. An index built with an older IPE still opens, but its terms no longer

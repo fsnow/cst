@@ -62,8 +62,14 @@ public static class ApplicationStateValidator
             if (sd?.SelectedTerms != null)
                 sd.SelectedTerms = sd.SelectedTerms.Select(CST.Conversion.IpeVersion.UpgradeFromV1).ToList();
             foreach (var bw in state.BookWindows ?? new List<BookWindowState>())
+            {
                 if (bw?.SearchTerms != null)
                     bw.SearchTerms = bw.SearchTerms.Select(CST.Conversion.IpeVersion.UpgradeFromV1).ToList();
+                // Each saved hit position also carries its word in IPE.
+                foreach (var pos in bw?.SearchPositions ?? new List<TermPosition>())
+                    if (pos?.Word != null)
+                        pos.Word = CST.Conversion.IpeVersion.UpgradeFromV1(pos.Word);
+            }
             v = state.Version = "2";
             notes.Add("migrated state 1.0 -> 2: search terms rewritten in IPE version 2");
         }

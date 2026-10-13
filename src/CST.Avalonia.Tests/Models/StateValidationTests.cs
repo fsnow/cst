@@ -535,7 +535,11 @@ public class StateValidationTests
         const string buddhoV1 = "\u00E0\u00C5\u00DB\u00DC\u00C8";
         var state = new ApplicationState { Version = "1.0" };
         state.SearchDialog.SelectedTerms = new() { dhammaV1, buddhoV1 };
-        state.BookWindows.Add(new BookWindowState { SearchTerms = new() { dhammaV1 } });
+        state.BookWindows.Add(new BookWindowState
+        {
+            SearchTerms = new() { dhammaV1 },
+            SearchPositions = new() { new TermPosition { Position = 3, Word = buddhoV1 } },
+        });
 
         ApplicationStateValidator.Migrate(state);
 
@@ -543,6 +547,7 @@ public class StateValidationTests
         var buddho = CST.Conversion.Deva2Ipe.Convert("\u092C\u0941\u0926\u094D\u0927\u094B");
         Assert.Equal(new[] { dhamma, buddho }, state.SearchDialog.SelectedTerms);
         Assert.Equal(new[] { dhamma }, state.BookWindows[0].SearchTerms);
+        Assert.Equal(buddho, state.BookWindows[0].SearchPositions[0].Word);
         Assert.Equal("2", state.Version);
     }
 

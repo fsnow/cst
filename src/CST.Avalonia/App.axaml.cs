@@ -702,6 +702,12 @@ public partial class App : Application
                 await indexingService.BuildIndexAsync(progress);
                 Log.Information("indexingService.BuildIndexAsync() completed");
 
+                // The search pane restored its query before this build; if the build changed the index, run
+                // that search again so its results and saved term selection come from the new index. (#1049)
+                var searchVm = ServiceProvider?.GetService<SearchViewModel>();
+                if (searchVm != null)
+                    await searchVm.RerunRestoredSearchAfterIndexBuildAsync(indexingService.LastBuildIndexedBooks);
+
                 Log.Information("Indexing service initialized successfully");
             }
             else
