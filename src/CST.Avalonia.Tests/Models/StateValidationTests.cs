@@ -502,7 +502,7 @@ public class StateValidationTests
         Assert.False(fs.TryGetFont(Script.Ipe, out _));
     }
 
-    // ---- 1.0 -> 1.1: IPE version 2 (#1049) ----
+    // ---- 1.0 -> 2: IPE version 2 (#1049) ----
 
     // Version-1 IPE codes in alphabetical order, and the Devanagari letter each encodes.
     private static readonly (char V1, string Deva)[] V1Letters =
@@ -543,11 +543,11 @@ public class StateValidationTests
         var buddho = CST.Conversion.Deva2Ipe.Convert("\u092C\u0941\u0926\u094D\u0927\u094B");
         Assert.Equal(new[] { dhamma, buddho }, state.SearchDialog.SelectedTerms);
         Assert.Equal(new[] { dhamma }, state.BookWindows[0].SearchTerms);
-        Assert.Equal("1.1", state.Version);
+        Assert.Equal("2", state.Version);
     }
 
     [Fact]
-    public void Migrate_1_1_LeavesSearchTermsAlone()
+    public void Migrate_2_LeavesSearchTermsAlone()
     {
         var dhamma = CST.Conversion.Deva2Ipe.Convert("\u0927\u092E\u094D\u092E");
         var state = new ApplicationState(); // a new state is already the current version

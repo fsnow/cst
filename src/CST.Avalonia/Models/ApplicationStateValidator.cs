@@ -15,7 +15,9 @@ public static class ApplicationStateValidator
     /// Current on-disk state schema version. Bump this and add an ordered step in <see cref="Migrate"/> when a
     /// breaking schema change needs older files transformed.
     /// </summary>
-    public const string CurrentVersion = "1.1";
+    // Whole numbers from 2 on. fsnow, 2026-10-13: "I am fine with the app state file using whole numbers, so
+    // 2 instead of 1.1". CompareVersions orders "1.0" < "2".
+    public const string CurrentVersion = "2";
 
     // Model defaults, kept here so sanitization restores the same values the constructors use.
     private const double MainW = 1400, MainH = 900;
@@ -52,7 +54,7 @@ public static class ApplicationStateValidator
 
         // --- ordered migration steps go here as the schema evolves.
 
-        // 1.0 -> 1.1: IPE version 2 (#1049). The search terms the state keeps are IPE, so rewrite them from
+        // 1.0 -> 2: IPE version 2 (#1049). The search terms the state keeps are IPE, so rewrite them from
         // version 1; the remap is exact. Without this a restored search-term selection matches nothing once.
         if (v == "1.0")
         {
@@ -62,8 +64,8 @@ public static class ApplicationStateValidator
             foreach (var bw in state.BookWindows ?? new List<BookWindowState>())
                 if (bw?.SearchTerms != null)
                     bw.SearchTerms = bw.SearchTerms.Select(CST.Conversion.IpeVersion.UpgradeFromV1).ToList();
-            v = state.Version = "1.1";
-            notes.Add("migrated state 1.0 -> 1.1: search terms rewritten in IPE version 2");
+            v = state.Version = "2";
+            notes.Add("migrated state 1.0 -> 2: search terms rewritten in IPE version 2");
         }
 
         if (IsNewerThanSupported(state))

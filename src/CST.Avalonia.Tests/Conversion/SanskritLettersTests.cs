@@ -48,7 +48,6 @@ public class SanskritLettersTests
     {
         [Script.Gurmukhi] = "\u090B\u0943\u0937",
         [Script.Thai] = "\u0903",
-        [Script.Myanmar] = "\u0914\u094C",
     };
 
     private sealed record Pair(Script Script, Func<string, string> To, Func<string, string> ToRef,
@@ -117,6 +116,12 @@ public class SanskritLettersTests
         // Tibetan: ra + reversed gi gu; subjoined ra after a consonant.
         Assert.Equal("\u0F62\u0F80", Deva2Tibt.Convert("\u090B"));
         Assert.Equal("\u0F40\u0FB2\u0F80", Deva2Tibt.Convert("\u0915\u0943"));
+        // Myanmar: au is the o sign plus asat, with tall aa where o has it; independent au is its own letter.
+        // The Myanmar convention, as Aksharamukha writes it (checked 2026-10-13: ko, kau, po, pau).
+        Assert.Equal("\u1000\u1031\u102C\u103A", Deva2Mymr.Convert("\u0915\u094C"));
+        Assert.Equal("\u1015\u1031\u102B\u103A", Deva2Mymr.Convert("\u092A\u094C"));
+        Assert.Equal("\u102A", Deva2Mymr.Convert("\u0914"));
+        Assert.Equal("\u1000\u1031\u102C", Deva2Mymr.Convert("\u0915\u094B")); // o unchanged
         // Khmer: coeng + the vocalic r letter.
         Assert.Equal("\u1780\u17D2\u17AB", Deva2Khmr.Convert("\u0915\u0943"));
     }

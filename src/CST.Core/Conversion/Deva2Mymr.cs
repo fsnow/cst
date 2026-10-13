@@ -64,6 +64,9 @@ namespace CST.Conversion
             deva2Mymr['\u090B'] = '\u1052'; // vocalic r (#1049)
             deva2Mymr['\u0943'] = '\u1056'; // vocalic r (#1049)
             deva2Mymr['\u0948'] = '\u1032'; // ai (#1049)
+            // au: the o sign plus asat, the Myanmar convention (as Aksharamukha writes it); the tall-aa rule
+            // applies to its aa as it does to o's (#1049)
+            deva2Mymr['\u094C'] = "\u1031\u102C\u103A";
             deva2Mymr['\u0936'] = '\u1050'; // palatal sa (#1049)
             deva2Mymr['\u0937'] = '\u1051'; // retroflex sa (#1049)
             deva2Mymr['\u0910'] = "\u1021\u1032"; // ai (#1049)
@@ -79,6 +82,7 @@ namespace CST.Conversion
             deva2Mymr['\u090A'] = '\u1026'; // uu
             deva2Mymr['\u090F'] = '\u1027'; // e
             deva2Mymr['\u0913'] = '\u1029'; // o
+            deva2Mymr['\u0914'] = '\u102A'; // au (#1049)
 
             // dependent vowel signs
             deva2Mymr['\u093E'] = '\u102C'; // aa

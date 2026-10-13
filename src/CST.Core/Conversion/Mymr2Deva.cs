@@ -79,6 +79,7 @@ namespace CST.Conversion
             mymr2Deva['\u1026'] = '\u090A'; // uu
             mymr2Deva['\u1027'] = '\u090F'; // e
             mymr2Deva['\u1029'] = '\u0913'; // o
+            mymr2Deva['\u102A'] = '\u0914'; // au (#1049)
 
             // dependent vowel signs
             mymr2Deva['\u102C'] = '\u093E'; // aa
@@ -160,6 +161,11 @@ namespace CST.Conversion
                     k = EmitDeva(buf, k, (char)0x0906, ref prevC2Index, ref prevC1, ref prevC2);
                     i++; continue;
                 }
+                if (c == 0x1031 && nextIsAa && i + 2 < n && str[i + 2] == 0x103A) // e + aa + asat -> au (#1049)
+                {
+                    k = EmitDeva(buf, k, (char)0x094C, ref prevC2Index, ref prevC1, ref prevC2);
+                    i += 2; continue;
+                }
                 if (c == 0x1031 && nextIsAa)
                 {
                     k = EmitDeva(buf, k, (char)0x094B, ref prevC2Index, ref prevC1, ref prevC2);
@@ -238,6 +244,9 @@ namespace CST.Conversion
 
             // independent "a" plus dependent sign ai = independent ai (#1049)
             str = str.Replace("\u1021\u1032", "\u0910");
+
+            // dependent e plus sign aa plus asat = dependent au, before the o rule and the halant rule (#1049)
+            str = str.Replace("\u1031\u102C\u103A", "\u094C");
 
             // dependent e plus dependent sign aa = dependent o
 			str = str.Replace("\u1031\u102C", "\u094B");

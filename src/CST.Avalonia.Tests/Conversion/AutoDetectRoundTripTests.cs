@@ -79,7 +79,6 @@ public class AutoDetectRoundTripTests
     private static readonly Dictionary<Script, char[]> KnownPassThrough = new()
     {
         [Script.Gurmukhi] = new[] { '\u090B', '\u0943', '\u0937' },  // vocalic r, retroflex sa
-        [Script.Myanmar] = new[] { '\u0914', '\u094C' },               // au
         [Script.Thai] = new[] { '\u0903' },                            // visarga
     };
 
