@@ -139,6 +139,9 @@ namespace CST.Conversion
         // no stylesheet modifications, capitalization, etc.
         public static string ConvertReference(string devStr)
         {
+            // A visible halant (no consonant after it) is the asat, not the stacking virama. (#1048)
+            devStr = Halant.VisibleVirama.Replace(devStr, "\u103A");
+
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
             {
@@ -182,7 +185,7 @@ namespace CST.Conversion
             // use great sa for ssa
             mya = mya.Replace("\u101E\u1039\u101E", "\u103F");
 
-            // fix the rendering of n overdot, adding asat / killer
+            // fix the rendering of n overdot before a consonant (kinzi), adding asat / killer
             mya = mya.Replace("\u1004\u1039", "\u1004\u103A\u1039");
 
             return mya;
@@ -208,6 +211,12 @@ namespace CST.Conversion
                 if (c == 0x200C || c == 0x200D) // ZWNJ / ZWJ -> removed (virama maps to a real Myanmar char)
                     continue;
 
+                if (c == 0x094D && Halant.IsVisibleAt(devStr, i)) // visible halant -> asat (#1048)
+                {
+                    k = Emit(buf, k, (char)0x103A);
+                    continue;
+                }
+
                 string? m = (c < MapLen) ? map[c] : null;
                 if (m == null)
                 {
@@ -218,12 +227,6 @@ namespace CST.Conversion
                     for (int j = 0; j < m.Length; j++)
                         k = Emit(buf, k, m[j]);
                 }
-            }
-
-            // n-overdot + virama at end of text also gets the asat/killer (the global Replace matches at EOS)
-            if (k >= 2 && buf[k - 1] == 0x1039 && buf[k - 2] == 0x1004)
-            {
-                buf[k] = (char)0x1039; buf[k - 1] = (char)0x103A; k++;
             }
 
             return new string(buf, 0, k);

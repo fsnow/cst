@@ -86,6 +86,7 @@ namespace CST.Conversion
             khmerChar2Dev['\u17C4'] = "\u094B"; // o
 
             khmerChar2Dev['\u17D2'] = "\u094D"; // virama
+            khmerChar2Dev['\u17D1'] = "\u094D"; // viriam: the visible halant (#1048)
 
             // numerals
             khmerChar2Dev['\u17E0'] = "\u0966";
@@ -132,8 +133,9 @@ namespace CST.Conversion
         }
 
         /// <summary>
-        /// FROZEN reference implementation - the correctness oracle for the optimized Convert(). Do NOT change;
-        /// tests assert Convert == ConvertReference over the corpus. (#86)
+        /// FROZEN reference implementation - the correctness oracle for the optimized Convert(). Do NOT change it
+        /// to match Convert; tests assert Convert == ConvertReference over the corpus. (#86) A deliberate behaviour
+        /// change goes into both, as #1048 (visible halant) did.
         /// </summary>
         public static string ConvertReference(string khmerStr)
         {

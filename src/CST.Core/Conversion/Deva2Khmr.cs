@@ -135,10 +135,14 @@ namespace CST.Conversion
 
         /// <summary>
         /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
-        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// optimized Convert(). Do NOT change it to match Convert; tests assert Convert == ConvertReference over
+        /// the corpus. (#86) A deliberate behaviour change goes into both, as #1048 (visible halant) did.
         /// </summary>
         public static string ConvertReference(string devStr)
         {
+            // A visible halant (no consonant after it) is the viriam, not the subscript-forming coeng. (#1048)
+            devStr = Halant.VisibleVirama.Replace(devStr, "\u17D1");
+
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
             {
@@ -169,6 +173,12 @@ namespace CST.Conversion
                 char c = devStr[i];
                 if (c == 0x200C || c == 0x200D) // ZWNJ / ZWJ -> removed (map to "" in the reference)
                     continue;
+
+                if (c == 0x094D && Halant.IsVisibleAt(devStr, i)) // visible halant -> viriam (#1048)
+                {
+                    buf[k++] = (char)0x17D1;
+                    continue;
+                }
 
                 string? m = (c < MapLen) ? map[c] : null;
                 if (m == null) buf[k++] = c; // pass through (danda, Latin, punctuation, etc.)

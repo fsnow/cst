@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace CST.Conversion
 {
@@ -154,6 +155,14 @@ namespace CST.Conversion
                     i++; continue;
                 }
 
+                // asat not followed by the stacking virama is a visible halant; before U+1039 it is the
+                // kinzi's killer and is dropped. (#1048)
+                if (c == 0x103A && next != 0x1039)
+                {
+                    k = EmitDeva(buf, k, (char)0x094D, ref prevC2Index, ref prevC1, ref prevC2);
+                    continue;
+                }
+
                 string? m = (c < MapLen) ? map[c] : null;
                 if (m == null) k = EmitDeva(buf, k, c, ref prevC2Index, ref prevC1, ref prevC2);
                 else for (int j = 0; j < m.Length; j++) k = EmitDeva(buf, k, m[j], ref prevC2Index, ref prevC1, ref prevC2);
@@ -205,7 +214,8 @@ namespace CST.Conversion
 
         /// <summary>
         /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
-        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// optimized Convert(). Do NOT change it to match Convert; tests assert Convert == ConvertReference over
+        /// the corpus. (#86) A deliberate behaviour change goes into both, as #1048 (visible halant) did.
         /// </summary>
         public static string ConvertReference(string str)
         {
@@ -217,6 +227,9 @@ namespace CST.Conversion
 
             // dependent e plus dependent sign aa = dependent o
 			str = str.Replace("\u1031\u102C", "\u094B");
+
+            // asat not followed by the stacking virama is a visible halant (#1048)
+            str = Regex.Replace(str, "\u103A(?!\u1039)", "\u094D");
 
             StringBuilder sb = new StringBuilder();
 			foreach (char c in str.ToCharArray())
