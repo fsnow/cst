@@ -36,6 +36,7 @@ namespace CST.Conversion
             thai2Dev["\u0E40\u0E2D"] = "\u090F"; // e
             thai2Dev["\u0E42\u0E2D"] = "\u0913"; // o
             thai2Dev["\u0E44\u0E2D"] = "\u0910"; // ai (#1049)
+            thai2Dev["\u0E40\u0E2D\u0E32"] = "\u0914"; // au: matched before e (#1049)
 
             // velar stops
             thaiChar2Dev['\u0E01'] = "\u0915"; // ka
@@ -98,6 +99,7 @@ namespace CST.Conversion
             thaiChar2Dev['\uFFF1'] = "\u094B"; // placeholder for dependent o (was before consonant in Thai)
             thaiChar2Dev['\u0E44'] = "\u0948"; // ai (#1049)
             thaiChar2Dev['\uFFF2'] = "\u0948"; // placeholder for dependent ai (#1049)
+            thaiChar2Dev['\uFFF3'] = "\u094C"; // placeholder for dependent au (#1049)
 
             thaiChar2Dev['\u0E3A'] = "\u094D"; // virama
 
@@ -134,6 +136,8 @@ namespace CST.Conversion
             // Pre-processing (identical to the reference): split i+niggahita, then move the e/o pre-vowels into
             // placeholders so independent vs dependent vowels round-trip correctly.
             thaiStr = thaiStr.Replace("\u0E36", "\u0E34\u0E4D");
+            // au (#1049): e + consonant + aa, before the e rule takes the e
+            thaiStr = Regex.Replace(thaiStr, "\u0E40([\u0E01-\u0E2C\u0E2E])\u0E32", "$1\uFFF3");
             thaiStr = Regex.Replace(thaiStr, "\u0E40([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF0");
             thaiStr = Regex.Replace(thaiStr, "\u0E42([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF1");
             thaiStr = Regex.Replace(thaiStr, "\u0E44([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF2"); // ai (#1049)
@@ -143,6 +147,20 @@ namespace CST.Conversion
             while (i < thaiStr.Length)
             {
                 bool matched = false;
+
+                // (#1049) independent au: the e...aa frame around the a carrier, before e claims the e
+                if (i + 2 < thaiStr.Length && thaiStr[i] == '\u0E40' && thaiStr[i + 1] == '\u0E2D' && thaiStr[i + 2] == '\u0E32')
+                {
+                    sb.Append('\u0914'); i += 3;
+                    continue;
+                }
+                // (#1049) the vocalic r letter after a consonant is the vocalic r sign (Pali has no consonant + independent vocalic r)
+                if (thaiStr[i] == '\u0E24')
+                {
+                    bool afterConsonant = sb.Length > 0 && sb[sb.Length - 1] >= '\u0915' && sb[sb.Length - 1] <= '\u0939';
+                    sb.Append(afterConsonant ? '\u0943' : '\u090B'); i++;
+                    continue;
+                }
                 char first = thaiStr[i];
 
                 // \u0E40/\u0E42 + consonant + \u0E2D (the independent-vowel patterns the regexes deliberately left in place)
@@ -182,7 +200,7 @@ namespace CST.Conversion
                     else
                     {
                         string? cm = (c < ThaiLen) ? thaiCharMap[c]
-                                     : (c == '\uFFF0' ? "\u0947" : c == '\uFFF1' ? "\u094B" : c == '\uFFF2' ? "\u0948" : null);
+                                     : (c == '\uFFF0' ? "\u0947" : c == '\uFFF1' ? "\u094B" : c == '\uFFF2' ? "\u0948" : c == '\uFFF3' ? "\u094C" : null);
                         if (cm != null) { sb.Append(cm); i++; }
                         else { sb.Append(c); i++; } // pass through
                     }
@@ -207,6 +225,8 @@ namespace CST.Conversion
             // Placeholder U+FFF0 represents "dependent e that was before consonant in Thai"
             // Exclude \u0E2D because \u0E40\u0E2D is independent vowel e, not consonant+vowel
             // Also exclude if consonant is followed by \u0E2D (independent vowel follows)
+            // au (#1049): e + consonant + aa, before the e rule takes the e
+            thaiStr = Regex.Replace(thaiStr, "\u0E40([\u0E01-\u0E2C\u0E2E])\u0E32", "$1\uFFF3");
             thaiStr = Regex.Replace(thaiStr, "\u0E40([\u0E01-\u0E2C\u0E2E])(?!\u0E2D)", "$1\uFFF0");
 
             // Replace \u0E42 + consonant (not \u0E2D, not followed by \u0E2D) with consonant + placeholder
@@ -222,6 +242,20 @@ namespace CST.Conversion
             while (i < thaiStr.Length)
             {
                 bool matched = false;
+
+                // (#1049) independent au: the e...aa frame around the a carrier, before e claims the e
+                if (i + 2 < thaiStr.Length && thaiStr[i] == '\u0E40' && thaiStr[i + 1] == '\u0E2D' && thaiStr[i + 2] == '\u0E32')
+                {
+                    sb.Append('\u0914'); i += 3;
+                    continue;
+                }
+                // (#1049) the vocalic r letter after a consonant is the vocalic r sign (Pali has no consonant + independent vocalic r)
+                if (thaiStr[i] == '\u0E24')
+                {
+                    bool afterConsonant = sb.Length > 0 && sb[sb.Length - 1] >= '\u0915' && sb[sb.Length - 1] <= '\u0939';
+                    sb.Append(afterConsonant ? '\u0943' : '\u090B'); i++;
+                    continue;
+                }
 
                 // Check for \u0E40 or \u0E42 followed by consonant (not moved by preprocessing)
                 // This happens when consonant is followed by \u0E2D (independent vowel)

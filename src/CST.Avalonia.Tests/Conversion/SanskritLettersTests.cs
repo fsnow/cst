@@ -37,6 +37,9 @@ public class SanskritLettersTests
         "\u0915\u094D\u0937",                          // ksa: conjunct ending in the retroflex sibilant
         "\u0936\u094D\u0930",                          // shra: conjunct starting with the palatal sibilant
         "\u0937\u094D\u091F",                          // sta
+        "\u0935\u0943\u0915\u094D\u0937",              // vrksa: vocalic r sign mid-word (Thai: vrksa)
+        "\u0915\u094D\u0937\u094C",                    // ksau: au after a conjunct
+        "\u0915\u094C\u0915\u093E",                    // kauka: au then aa on the next syllable
         "\u092D\u0942\u0930\u094D\u092D\u0941\u0935\u0903 \u0938\u094D\u0935\u0903", // bhur bhuvah svah (s0202t)
     };
 
@@ -44,10 +47,8 @@ public class SanskritLettersTests
     private static readonly Dictionary<Script, string> KeptDevanagari = new()
     {
         [Script.Gurmukhi] = "\u090B\u0943\u0937",
-        [Script.Thai] = "\u0943\u0903\u0914\u094C",
-        [Script.Tibetan] = "\u090B\u0943",
+        [Script.Thai] = "\u0903",
         [Script.Myanmar] = "\u0914\u094C",
-        [Script.Khmer] = "\u0943",
     };
 
     private sealed record Pair(Script Script, Func<string, string> To, Func<string, string> ToRef,
@@ -103,6 +104,21 @@ public class SanskritLettersTests
         foreach (var deva in Cases)
             Assert.True(Deva2Ipe.Convert(deva) == Any2Ipe.Convert(p.To(deva)),
                 $"{script} {Cp(deva)} -> [{Cp(p.To(deva))}]: Any2Ipe read it back differently");
+    }
+
+    [Fact]
+    public void NativeSpellings_ExactCodePoints()
+    {
+        // fsnow, 2026-10-13: "use the native spellings" for the letters these scripts write by convention.
+        // Thai: the vocalic r sign is the vocalic r letter after the consonant; au is the e...aa frame.
+        Assert.Equal("\u0E27\u0E24\u0E01\u0E3A\u0E29", Deva2Thai.Convert("\u0935\u0943\u0915\u094D\u0937"));
+        Assert.Equal("\u0E40\u0E01\u0E32", Deva2Thai.Convert("\u0915\u094C"));
+        Assert.Equal("\u0E40\u0E2D\u0E32", Deva2Thai.Convert("\u0914"));
+        // Tibetan: ra + reversed gi gu; subjoined ra after a consonant.
+        Assert.Equal("\u0F62\u0F80", Deva2Tibt.Convert("\u090B"));
+        Assert.Equal("\u0F40\u0FB2\u0F80", Deva2Tibt.Convert("\u0915\u0943"));
+        // Khmer: coeng + the vocalic r letter.
+        Assert.Equal("\u1780\u17D2\u17AB", Deva2Khmr.Convert("\u0915\u0943"));
     }
 
     [Fact]

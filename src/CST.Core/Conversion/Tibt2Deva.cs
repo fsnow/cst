@@ -35,6 +35,8 @@ namespace CST.Conversion
             tibt2Deva["\u0F68\u0F7C"] = "\u0913"; // o
             tibt2Deva["\u0F68\u0F7B"] = "\u0910"; // ai (#1049)
             tibt2Deva["\u0F68\u0F7D"] = "\u0914"; // au (#1049)
+            tibt2Deva["\u0F62\u0F80"] = "\u090B"; // vocalic r: ra + reversed gi gu (#1049)
+            tibt2Deva["\u0FB2\u0F80"] = "\u0943"; // vocalic r sign: subjoined ra + reversed gi gu (#1049)
 
             // velar stops
             tibtChar2Deva['\u0F40'] = "\u0915"; // ka

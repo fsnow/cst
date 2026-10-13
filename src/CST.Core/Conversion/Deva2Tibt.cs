@@ -78,6 +78,8 @@ namespace CST.Conversion
             deva2Tibt['\u0948'] = '\u0F7B'; // ai (#1049)
             deva2Tibt['\u094C'] = '\u0F7D'; // au (#1049)
             deva2Tibt['\u0936'] = '\u0F64'; // palatal sa (#1049)
+            deva2Tibt['\u090B'] = "\u0F62\u0F80"; // vocalic r: ra + reversed gi gu (#1049)
+            deva2Tibt['\u0943'] = "\u0FB2\u0F80"; // vocalic r sign: subjoined ra + reversed gi gu (#1049)
             deva2Tibt['\u0937'] = '\u0F65'; // retroflex sa (#1049)
             deva2Tibt['\u0910'] = "\u0F68\u0F7B"; // ai (#1049)
             deva2Tibt['\u0914'] = "\u0F68\u0F7D"; // au (#1049)

@@ -79,6 +79,7 @@ namespace CST.Conversion
             dev2Khmer['\u094C'] = '\u17C5'; // au (#1049)
             dev2Khmer['\u0914'] = '\u17B3'; // au (#1049)
             dev2Khmer['\u0936'] = '\u179D'; // palatal sa (#1049)
+            dev2Khmer['\u0943'] = "\u17D2\u17AB"; // vocalic r sign: coeng + independent vocalic r (#1049)
             dev2Khmer['\u0937'] = '\u179E'; // retroflex sa (#1049)
             dev2Khmer['\u0939'] = '\u17A0'; // ha
             dev2Khmer['\u0933'] = '\u17A1'; // l underdot a

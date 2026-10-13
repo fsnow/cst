@@ -11,9 +11,11 @@ namespace CST.Avalonia.Models;
 public class ApplicationState
 {
     /// <summary>
-    /// File format version for backward compatibility and migrations
+    /// File format version for backward compatibility and migrations. A new state is the current version:
+    /// with a stale default, a fresh install's IPE-version-2 search terms would be saved labelled 1.0 and
+    /// rewritten again by the 1.0 -> 1.1 step on the next launch. (#1049)
     /// </summary>
-    public string Version { get; set; } = "1.0";
+    public string Version { get; set; } = ApplicationStateValidator.CurrentVersion;
     
     /// <summary>
     /// Top-level properties this build does not know about, carried through a round-trip. (#883)
