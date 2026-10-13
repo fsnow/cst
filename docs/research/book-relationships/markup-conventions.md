@@ -43,6 +43,17 @@ Marking a section up made three changes:
 3. **Its closing colophon `<p rend="centre">` became `<trailer rend="centre">`**, the last element
    before `</div>`.
 
+Why each change was made [fsnow, 2026-10-12]: "when I added the markup, the <head> elements were
+important because they drive the chapter list dropdown. The <trailer> elements matter for "structural
+correctness" but have no particular function. Whether trailer or p they render as whatever style is in
+the "rend" attribute."
+
+**`rend` values are source data, not markup choices.** [fsnow, 2026-10-12] "Note that rend comes
+directly from the source text files, which were marked up with numerical codes corresponding to para
+styles. I didn't change any of these". So every `rend` on a `<head>` or `<trailer>` is the paragraph style
+that the source gave that line. An unusual `rend` (below) is a fact about the source text, not an
+inconsistency in the div markup.
+
 Colophons of units that did *not* get a div stay as `<p rend="centre">`. Examples are bhāṇavāra ends
 and the sīla sections inside a sutta: `s0101t` has nine of them inside `dn1_1`. `subhead` paragraphs are
 never divs.
@@ -87,8 +98,13 @@ There are seven opening sections in the corpus (ganthārambha / nidāna, with id
 | `s0301t.tik.xml` | `sn1_0` | `<head rend="subsubhead">` | yes |
 
 The "in the chapter list" column follows from `ChapterListsService`'s rule (listed when the div's type
-is in `ChapterListTypes` and it has a `.//head`). It has not been checked in the app. Which of the two
-treatments is intended is fsnow's call.
+is in `ChapterListTypes` and it has a `.//head`). It has not been checked in the app.
+
+[fsnow, 2026-10-12] "I see inconsistencies in my markup -- I think you already noticed these -- like
+for example the "0" section has a <head> in the DN1 Atthakatha, but not in mul or tika." [observed] The
+DN1 mūla (`s0101m`) has no `_0` div at all, because it has no ganthārambha: it opens on the Brahmajāla
+(`dn1_1`). So the head/no-head split here is between the aṭṭhakathā (`s0101a`) and the ṭīkā (`s0101t`).
+Which treatment the markup should standardise on is fsnow's call.
 
 Every opening div keeps the title's `subsubhead` rend, whether it is a `<p>` or a `<head>`.
 
@@ -126,6 +142,8 @@ the page turn actually is.
 | partial | 1 | `s0404a`. AN8 is fully marked. AN9–11 have their book divs, and their headings and colophons were converted to `<head>`/`<trailer>`, but the vagga and paṇṇāsaka divs were never added. This leaves runs of `</trailer><head rend="chapter">` with no `</div><div>` between them: 22 of the file's 36 trailers close nothing. |
 | unmarked | 139 | Plain `<p>` throughout. |
 
+[fsnow, 2026-10-12] "s0404a is where I stopped the work I guess and need to pick up there." So `s0404a` (AN9–11) is where the 2007–08 markup work resumes.
+
 [suggestion] The partial state suggests an order of work: first convert the headings and colophons,
 then add the divs. `s0404a` is where that work stopped.
 
@@ -158,16 +176,20 @@ aṭṭhakathās and ṭīkās, the AN aṭṭhakathās, and every mūla file. W
 sections that end in something other than a trailer are ones whose last element is a verse or a
 numbered paragraph. These look like texts with no colophon at that point.
 
-Nothing in the app reads `<trailer>` differently from `<p rend="centre">` today. It matters only as a
-convention for the markup work to follow.
+Nothing in the app reads `<trailer>` differently from `<p rend="centre">` today [observed], which matches
+its purpose: fsnow added it for "structural correctness", not for any function (quoted above). So the
+eleven files with `<p>` colophons are inconsistent in form only. Nothing is broken in them.
 
 Two trailers have `rend="bodytext"` instead of `centre`: `an1_6` in `s0401m` (अच्छरासङ्घातवग्गो छट्ठो।)
-and `kn20_5` in `s0520m` (पञ्चमा भूमि।).
+and `kn20_5` in `s0520m` (पञ्चमा भूमि।). Both styles come from the source text (see above).
 
 ### Book-level `<head>` rend
 Book divs use `<head rend="book">`, with two exceptions:
 - `vin5` in `vin02m4`: `rend="title"` (१. भिक्खुविभङ्गो);
 - `vin2_5` in `vin02m1`: a `type="subbook"` div whose head is `rend="book"` (भिक्खुनीविभङ्गो).
+
+As with the trailers, the `rend` values are the source's. What was chosen in the markup is the div
+structure: `vin5` is a book div whose heading the source styles as a title.
 
 ### Closing matter of a nikāya or book
 Material after the last section sits in different places:

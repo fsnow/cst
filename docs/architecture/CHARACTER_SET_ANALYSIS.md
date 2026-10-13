@@ -10,7 +10,7 @@
 
 The CST (Chaṭṭha Saṅgāyana Tipiṭaka) texts were finalized and published in print in Devanagari script during the 1993-1995 period at the Vipassana Research Institute (VRI). At that time, 140 books were published representing "pure" Pali canonical texts. Later, approximately 80 additional post-canonical books were added to the electronic edition, primarily files with the "e" prefix.
 
-The original texts were typed in India using Aalekh, an early DOS-based Devanagari word processor with proprietary encoding. Around 2007, these texts were converted from Aalekh's encoding to Unicode Devanagari
+The original texts were typed in India using Aalekh, an early DOS-based Devanagari word processor with proprietary encoding. In early 2007, these texts were converted from Aalekh's encoding to Unicode Devanagari.
 
 ### The Problem
 
@@ -99,7 +99,7 @@ When CST4 was developed in 2007, the encoding architecture (IPE - Internal Phone
 This project represents multiple layers of digital archaeology:
 
 1. **Text History**: Pali texts typed in India in the early 1990s using DOS-based Aalekh software
-2. **First Conversion**: Aalekh proprietary encoding → Unicode Devanagari (circa 2007)
+2. **First Conversion**: Aalekh proprietary encoding → Unicode Devanagari (early 2007)
 3. **Systematic Cleanup**: Removal of Sanskrit characters like sibilants during conversion
 4. **Current Analysis**: Identifying what survived 30+ years and multiple format conversions
 

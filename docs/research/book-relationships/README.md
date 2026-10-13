@@ -48,7 +48,7 @@ All from 2026-10-09 unless dated otherwise.
 
 ### Background: how the XML became the only master
 These are fsnow's account (2026-10-10), not measurements:
-- The XML used to have a parallel **text version**. That was essentially the original VRI-typed files, converted by fsnow from the Aalekh word-processor encoding to Devanagari Unicode. `aalekh2uni` is still in the repo's `conversion scripts/` [observed].
+- The XML used to have a parallel **text version**. That was essentially the original VRI-typed files, converted by fsnow in early 2007 from the Aalekh word-processor encoding to Devanagari Unicode. `aalekh2uni` in `VipassanaTech/tipitaka-xml`'s `conversion scripts/` is **not** that converter. [fsnow, 2026-10-12] "aalekh2uni.dpr is not my converter. It is one that was written by someone before me and was known to be wrong."
 - VRI made each correction in both versions.
 - One of Len Aye's goals for the site rewrite was to retire the text version, so that the XML would be the single master copy.
 
@@ -170,10 +170,16 @@ No conclusion changes. The lower Jātaka and Vinaya figures were mostly endings.
 - **Vimānavatthu and Petavatthu** (`s0506a`, `s0507a`): 89% hit, 2–4% control. For each story, the commentary first quotes the verses under the mūla's numbers (`hangnum`). It then explains them in body paragraphs that start again from the story's first verse number. So each number is visited twice, and the file is not monotonic.
 - **Jātaka** (`s0513a*`, `s0514a*`): 69–92%.
 - **Suttanipāta** (`s0505a`): 43% overall, against a 5% control, because of **a numbering slip in the mūla**.
-  - `s0505m` numbers ¶274 twice. These are the Sūcilomasutta's verses, numbered 273, 274, 274, 275; the second 274 sits on Myanmar page 0.0321.
-  - From there to the end of the book, about 880 paragraphs, each mūla number is one lower than the number the commentary uses for the same verse.
+  - `s0505m` numbers ¶274 twice. These are the Sūcilomasutta's verses, numbered 273, 274, 274, 275. The second 274 ("स्नेहजा अत्तसम्भूता …", Myanmar page 0.0321) should be 275.
+  - From there to the end of the book, each mūla number is one lower than the number the commentary uses for the same verse. That is 882 paragraphs. There is no later jump or duplicate that brings them back into step.
   - With that offset, the commentary hits 24–30 of every 30 blocks (`drift.py`). Before ¶274 it hits 94% unshifted.
-  - This affects both paragraph Go To and linking. The fix would be a corpus correction through Brihas, after a check against the print edition.
+  - Both files end at ¶1156 only by coincidence. The last verse ("असंहीरं असङ्कुप्पं …") is mūla ¶1155 and commentary ¶1156. The mūla's ¶1156 is the closing summary verse naming the suttas, which the commentary does not number. Correctly numbered, the mūla would end at ¶1157.
+  - The fix is one renumbering in `s0505m`: the second 274 becomes 275, and every later number goes up by one.
+  - **Reported** [fsnow, 2026-10-12]: "I sent a short email to help@Tipitaka.org about the SN para numbering issue." Tracked at [VipassanaTech/tipitaka-xml#2723](https://github.com/VipassanaTech/tipitaka-xml/issues/2723).
+  - **Workaround, conditional on the reader's copy** [fsnow, 2026-10-12]: "in our implementation we will want to have a check where we look for the max para number in Suttanipata and only workaround the issue if it isn't fixed yet (in that user's text)."
+    - [observed] Today the mūla's highest number is 1156. Correctly numbered, it would be 1157.
+    - [suggestion] The workaround maps commentary ¶*n* ≥ 274 to mūla ¶*n*−1.
+    - [fsnow, 2026-10-12] "Let's assume that they will fix the issue correctly by renumbering all after 274". So the check is max ¶ = 1156: if it is, the copy is unfixed and the workaround applies.
 - **Udāna** (`s0503a`): confirmed. The *n*+5 control hits 89%, because each mūla paragraph is a whole sutta full of stock phrases, so `content.py --best` asks which base paragraph shares the most lemmas. For all 80 commentary paragraphs it is the one with the same number, where chance is 1.2%.
 - A commentary can quote another text with that text's own numbers. `s0503a` quotes verses numbered from 1, which reads as a restart.
 
