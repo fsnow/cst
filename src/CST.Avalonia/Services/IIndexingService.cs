@@ -27,5 +27,12 @@ namespace CST.Avalonia.Services
         /// refreshed when the index changes, so it never serves stale term vectors after a re-index (SRCH-6).
         /// </summary>
         DirectoryReader? GetIndexReader();
+
+        /// <summary>
+        /// Raised just before the index files are deleted for a rebuild from scratch (an IPE-version change or a
+        /// corrupt index). Anything holding a reader must release it here: on Windows an open reader's files
+        /// cannot be deleted, and the rebuild then fails writing over them. (#1054)
+        /// </summary>
+        event EventHandler? IndexResetting;
     }
 }

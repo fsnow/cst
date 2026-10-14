@@ -44,13 +44,40 @@ public class SearchService : ISearchService
         _indexingService = indexingService;
         _scriptService = scriptService;
         _settingsService = settingsService;
+        _indexingService.IndexResetting += OnIndexResetting;
+    }
+
+    // A rebuild from scratch is about to delete the index files. Let go of them now: on Windows an open reader's
+    // files cannot be deleted, the rebuild then fails writing over them, and searches fail until a restart.
+    // IndexReaderFreshness (#1052) still reopens the reader afterwards; this makes the deletion possible at all.
+    // (#1054)
+    private void OnIndexResetting(object? sender, EventArgs e)
+    {
+        ReleaseReader();
+        _logger.LogInformation("Released the index reader for a rebuild from scratch");
+    }
+
+    // Drop our OWNER ref rather than force-Dispose: an in-flight search holds its own ref, keeps reading, and
+    // closes the reader when it DecRefs. The FSDirectory is left with the reader it backs - disposing it under
+    // an in-flight search is the race #313 A4-16 removed - and the next AcquireReader opens a fresh one.
+    private void ReleaseReader()
+    {
+        lock (_readerLock)
+        {
+            _indexReader?.DecRef();
+            _indexReader = null;
+            _readerCommitStamp = null;
+            _directory = null;
+            _directoryPath = null;
+            _searchCache.Clear();
+        }
     }
 
     // Returns a reference-counted DirectoryReader; the caller MUST release it with DecRef() in a
     // finally. Reference counting (Lucene IncRef/DecRef) lets a mid-session re-index open a fresh
     // reader without disposing one an in-flight search is still enumerating (which threw
     // AlreadyClosedException) - the old reader closes only once its last in-flight search DecRefs. (SRCH-2)
-    private DirectoryReader AcquireReader()
+    internal DirectoryReader AcquireReader()
     {
         lock (_readerLock)
         {
@@ -1195,18 +1222,8 @@ public class SearchService : ISearchService
 
     public void Dispose()
     {
-        lock (_readerLock)
-        {
-            // Release our OWNER ref rather than force-Dispose: a force-Dispose closes the reader (and the
-            // FSDirectory inputs an in-flight pool-thread search opened from it) out from under that search,
-            // throwing ObjectDisposedException in the shutdown window. DecRef instead — the reader (and its
-            // directory handles) closes once the last in-flight search DecRefs its own ref. The FSDirectory is
-            // left to be reclaimed with the reader it backs; disposing it here, under in-flight searches, is the
-            // very race. (#313 A4-16)
-            _indexReader?.DecRef();
-            _indexReader = null;
-            _directory = null;
-        }
+        _indexingService.IndexResetting -= OnIndexResetting;
+        ReleaseReader();
     }
 }
 
