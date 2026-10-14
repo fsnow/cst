@@ -19,6 +19,7 @@ namespace CST.Avalonia.Services
         private BookIndexerAsync? _bookIndexer;
         private string _indexDirectory = string.Empty;
         private DirectoryReader? _indexReader;
+        private DateTime? _readerCommitStamp;   // the commit _indexReader was opened on (#1052)
         private FSDirectory? _directory;
         private string? _directoryPath;
         private readonly object _readerLock = new object();
@@ -304,7 +305,7 @@ namespace CST.Avalonia.Services
             {
                 try
                 {
-                    if (_indexReader == null || !_indexReader.IsCurrent())
+                    if (_indexReader == null || _directory == null || IndexReaderFreshness.IsStale(_indexReader, _directory, _readerCommitStamp))
                     {
                         if (!System.IO.Directory.Exists(_indexDirectory))
                         {
@@ -324,6 +325,7 @@ namespace CST.Avalonia.Services
                         var newReader = DirectoryReader.Open(_directory);
                         _indexReader?.DecRef();   // release the owner ref; closes once in-flight callers DecRef too
                         _indexReader = newReader;
+                        _readerCommitStamp = IndexReaderFreshness.CommitStamp(newReader, _directory);   // (#1052)
                         _logger.LogDebug("Opened fresh index reader for highlighting ({DocCount} docs)", _indexReader.NumDocs);
                     }
                     _indexReader.IncRef();   // hand out a counted reference; caller DecRefs in a finally
