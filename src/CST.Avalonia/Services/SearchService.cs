@@ -27,6 +27,7 @@ public class SearchService : ISearchService
     private readonly IScriptService _scriptService;
     private readonly ISettingsService _settingsService;
     private DirectoryReader? _indexReader;
+    private DateTime? _readerCommitStamp;   // the commit _indexReader was opened on (#1052)
     private FSDirectory? _directory;
     private string? _directoryPath;
     private const int SearchCacheMaxEntries = 50;
@@ -53,7 +54,7 @@ public class SearchService : ISearchService
     {
         lock (_readerLock)
         {
-            if (_indexReader == null || !_indexReader.IsCurrent())
+            if (_indexReader == null || _directory == null || IndexReaderFreshness.IsStale(_indexReader, _directory, _readerCommitStamp))
             {
                 var indexPath = _settingsService.Settings.IndexDirectory;
                 if (string.IsNullOrEmpty(indexPath))
@@ -74,6 +75,7 @@ public class SearchService : ISearchService
                 var newReader = DirectoryReader.Open(_directory);
                 _indexReader?.DecRef();   // release our owner ref; closes once in-flight searches DecRef too
                 _indexReader = newReader;
+                _readerCommitStamp = IndexReaderFreshness.CommitStamp(newReader, _directory);   // (#1052)
                 _logger.LogInformation("Opened index reader with {DocCount} documents", _indexReader.NumDocs);
 
                 // The index changed: drop cached search results so we never serve stale hits.
