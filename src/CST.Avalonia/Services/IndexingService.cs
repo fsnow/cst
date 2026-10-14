@@ -22,6 +22,8 @@ namespace CST.Avalonia.Services
         private DateTime? _readerCommitStamp;   // the commit _indexReader was opened on (#1052)
         private FSDirectory? _directory;
         private string? _directoryPath;
+
+        public event EventHandler? IndexResetting;
         private readonly object _readerLock = new object();
 
         public string IndexDirectory => _indexDirectory;
@@ -108,10 +110,18 @@ namespace CST.Avalonia.Services
                && System.IO.Directory.GetFiles(_indexDirectory).Length > 0;
 
         // Delete the contents of a corrupt index so it can be rebuilt from scratch. Closes any open reader
-        // first so the files aren't held. (SRCH-11)
+        // first so the files aren't held (SRCH-11) - this service's own, and every other holder's via
+        // IndexResetting (#1054).
         private void DeleteCorruptIndex()
         {
             Dispose(); // release _indexReader / _directory handles
+
+            // [observed] Merlin, 2026-10-14: the search service's reader, opened by a search restored at
+            // startup, kept 20 segment files undeletable on Windows, and the rebuild then failed with
+            // "Cannot overwrite: _48.fdt" - the new index reuses the old segment names. (#1054)
+            try { IndexResetting?.Invoke(this, EventArgs.Empty); }
+            catch (Exception ex) { _logger.LogWarning(ex, "A reader holder failed to release the index before the rebuild"); }
+
             if (!System.IO.Directory.Exists(_indexDirectory))
                 return;
 
