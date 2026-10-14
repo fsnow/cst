@@ -221,6 +221,7 @@ namespace CST.Conversion
                         }
                         else if (c >= '0' && c <= '9')
                         {
+                            if (lastWasConsonant) sb.Append('\u094D'); // visible halant (#1048)
                             lastWasConsonant = false;
                         }
                         sb.Append(devaOutput);
@@ -228,6 +229,7 @@ namespace CST.Conversion
                     }
                     else
                     {
+                        if (lastWasConsonant) sb.Append('\u094D'); // visible halant (#1048)
                         sb.Append(c); // pass through
                         i++;
                         lastWasConsonant = false;
@@ -235,6 +237,7 @@ namespace CST.Conversion
                 }
             }
 
+            if (lastWasConsonant) sb.Append('\u094D'); // a final consonant is a visible halant (#1048)
             return sb.ToString();
         }
 
@@ -406,6 +409,7 @@ namespace CST.Conversion
                         // Numerals
                         else if (c >= '0' && c <= '9')
                         {
+                            if (lastWasConsonant) sb.Append('\u094D'); // visible halant (#1048)
                             lastWasConsonant = false;
                         }
 
@@ -414,7 +418,9 @@ namespace CST.Conversion
                     }
                     else
                     {
-                        // Pass through unmapped characters (punctuation, spaces, etc.)
+                        // Pass through unmapped characters (punctuation, spaces, etc.). A consonant before one has no
+                        // vowel: the inherent a is always written, so this is a visible halant, as in Latin. (#1048)
+                        if (lastWasConsonant) sb.Append('\u094D');
                         sb.Append(c);
                         i++;
                         lastWasConsonant = false; // Reset on non-mapped characters
@@ -422,6 +428,7 @@ namespace CST.Conversion
                 }
             }
 
+            if (lastWasConsonant) sb.Append('\u094D'); // a final consonant is a visible halant (#1048)
             return sb.ToString();
         }
 

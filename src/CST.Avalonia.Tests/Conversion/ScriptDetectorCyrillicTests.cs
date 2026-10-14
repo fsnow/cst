@@ -30,8 +30,10 @@ public class ScriptDetectorCyrillicTests
     [Fact]
     public void Any2Deva_ConvertsCyrillicSyllable()
     {
-        // Cyrl2Deva maps U+0434 (Cyrillic de) + U+0307 (combining dot-above) to Devanagari 'ta' (U+0924).
-        Assert.Equal("\u0924", Any2Deva.Convert("\u0434\u0307"));
+        // Cyrl2Deva maps U+0434 (Cyrillic de) + U+0307 (combining dot-above) to Devanagari t; the a after it is
+        // the inherent a, so the syllable is 'ta' (U+0924). Without the a it is t with a visible halant (#1048).
+        Assert.Equal("\u0924", Any2Deva.Convert("\u0434\u0307\u0430"));
+        Assert.Equal("\u0924\u094D", Any2Deva.Convert("\u0434\u0307"));
     }
 
     [Fact]
@@ -39,7 +41,7 @@ public class ScriptDetectorCyrillicTests
     {
         // The Cyrillic 'ta' syllable and the Devanagari 'ta' must produce the same IPE term (so a Cyrillic
         // query would hit the same index entries). Before the fix the Cyrillic form misrouted to Latin.
-        Assert.Equal(Any2Ipe.Convert("\u0924"), Any2Ipe.Convert("\u0434\u0307"));
+        Assert.Equal(Any2Ipe.Convert("\u0924"), Any2Ipe.Convert("\u0434\u0307\u0430"));
     }
 
     [Fact]
