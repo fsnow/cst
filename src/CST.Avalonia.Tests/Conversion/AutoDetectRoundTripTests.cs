@@ -20,7 +20,8 @@ namespace CST.Avalonia.Tests.Conversion;
 ///
 /// <para>The word lists are read from <c>src/CST.ScriptValidation/</c>, so there is one copy:
 /// <c>syllable-test-words.txt</c> has a word for every unique syllable in the corpus,
-/// <c>vowel-test-words.txt</c> a word for every vowel-hiatus combination.</para>
+/// <c>vowel-test-words.txt</c> a word for every vowel-hiatus combination, <c>sanskrit-test-words.txt</c>
+/// real and synthetic words for the Sanskrit letters added to IPE 2 (#1049).</para>
 /// </summary>
 public class AutoDetectRoundTripTests
 {
@@ -45,8 +46,9 @@ public class AutoDetectRoundTripTests
         var misses = new List<string>();
         foreach (var deva in words)
         {
-            // Latin writes the diphthongs ai / au the same as the Pali hiatus a + i / a + u, and reads them
-            // back as the hiatus. fsnow, 2026-10-13: "Keep Pali as is". (#1049)
+            // Latin writes the diphthongs ai / au the same as a + i / a + u, and reads them back as the two
+            // vowels. fsnow, 2026-10-13: "Keep Pali as is"; 2026-10-14: ""ai" and "au" are not roundtrippable
+            // as we are favoring that as a sandhi boundary combination". (#1049)
             if (script == Script.Latin && deva.IndexOfAny(Diphthongs) >= 0)
                 continue;
             var ipe1 = ScriptConverter.Convert(deva, Script.Devanagari, Script.Ipe);
@@ -116,7 +118,7 @@ public class AutoDetectRoundTripTests
     {
         var dir = FindScriptValidationDir();
         var words = new List<string>();
-        foreach (var name in new[] { "syllable-test-words.txt", "vowel-test-words.txt" })
+        foreach (var name in new[] { "syllable-test-words.txt", "vowel-test-words.txt", "sanskrit-test-words.txt" })
             words.AddRange(File.ReadAllText(Path.Combine(dir, name))
                 .Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries));
         return words.Distinct(StringComparer.Ordinal).ToList();
