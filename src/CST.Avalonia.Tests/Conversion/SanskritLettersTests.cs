@@ -41,6 +41,13 @@ public class SanskritLettersTests
         "\u0915\u094D\u0937\u094C",                    // ksau: au after a conjunct
         "\u0915\u094C\u0915\u093E",                    // kauka: au then aa on the next syllable
         "\u092D\u0942\u0930\u094D\u092D\u0941\u0935\u0903 \u0938\u094D\u0935\u0903", // bhur bhuvah svah (s0202t)
+        "\u0915\u090B",                                // ka + independent vocalic r (hiatus)
+        "\u0915\u0910",                                // ka + independent ai (Cyrillic: inherent a, then ai)
+        "\u0915\u0914",                                // ka + independent au
+        "\u0905\u0910",                                // independent a + independent ai
+        "\u0905\u0914",                                // independent a + independent au
+        "\u0936\u0902",                                // sham: niggahita after a sibilant
+        "\u0937\u0903",                                // ssah
     };
 
     // The Devanagari letters each script keeps, because it has no letter of its own for them.
@@ -54,6 +61,7 @@ public class SanskritLettersTests
 
     private static readonly Pair[] Pairs =
     {
+        new(Script.Cyrillic,  Deva2Cyrl.Convert, Deva2Cyrl.ConvertReference, Cyrl2Deva.Convert, Cyrl2Deva.ConvertReference),
         new(Script.Bengali,   Deva2Beng.Convert, Deva2Beng.ConvertReference, Beng2Deva.Convert, Beng2Deva.ConvertReference),
         new(Script.Gujarati,  Deva2Gujr.Convert, Deva2Gujr.ConvertReference, Gujr2Deva.Convert, Gujr2Deva.ConvertReference),
         new(Script.Gurmukhi,  Deva2Guru.Convert, Deva2Guru.ConvertReference, Guru2Deva.Convert, Guru2Deva.ConvertReference),
@@ -126,6 +134,24 @@ public class SanskritLettersTests
         Assert.Equal("\u1000\u1031\u102C", Deva2Mymr.Convert("\u0915\u094B")); // o unchanged
         // Khmer: coeng + the vocalic r letter.
         Assert.Equal("\u1780\u17D2\u17AB", Deva2Khmr.Convert("\u0915\u0943"));
+        // Cyrillic (2026-10-14; fsnow: "I accept all of your proposals"): vocalic r and visarga with this scheme's
+        // dot below, sha / ssa as sh with and without acute, ai / au as a + short i / short u.
+        Assert.Equal("\u0433\u0440\u0323\u0434\u0307\u0430\u0445\u0323", Deva2Cyrl.Convert("\u0915\u0943\u0924\u0903"));
+        Assert.Equal("\u0432\u0430\u0439\u0448\u0301\u044F\u0430\u0445\u0323", Deva2Cyrl.Convert("\u0935\u0948\u0936\u094D\u092F\u0903"));
+        Assert.Equal("\u0433\u0430\u045E\u0448\u0430", Deva2Cyrl.Convert("\u0915\u094C\u0937"));
+        Assert.Equal("\u0433\u0430\u0430\u0439", Deva2Cyrl.Convert("\u0915\u0910")); // ka + independent ai
+    }
+
+    [Fact]
+    public void Cyrillic_E_IsE_NotZe()
+    {
+        // #1059: e is U+044D. Before, it was U+0437 (ze), which is still read back as e.
+        Assert.Equal("\u0431\u0445\u0438\u0433\u043A\u0430\u0432\u044D", Deva2Cyrl.Convert("\u092D\u093F\u0915\u094D\u0916\u0935\u0947"));
+        Assert.Equal("\u044D\u0432\u0430\u043C\u0323", Deva2Cyrl.ConvertReference("\u090F\u0935\u0902"));
+        foreach (var old in new[] { "\u0431\u0445\u0438\u0433\u043A\u0430\u0432\u0437", "\u0437\u0432\u0430\u043C\u0323" })
+            Assert.Equal(Cyrl2Deva.ConvertReference(old), Cyrl2Deva.Convert(old));
+        Assert.Equal("\u092D\u093F\u0915\u094D\u0916\u0935\u0947", Cyrl2Deva.Convert("\u0431\u0445\u0438\u0433\u043A\u0430\u0432\u0437"));
+        Assert.Equal("\u090F\u0935\u0902", Cyrl2Deva.Convert("\u0437\u0432\u0430\u043C\u0323"));
     }
 
     [Fact]

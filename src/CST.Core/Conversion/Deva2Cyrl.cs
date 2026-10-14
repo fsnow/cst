@@ -74,8 +74,11 @@ namespace CST.Conversion
             deva2Cyrl['\u0908'] = "\u0438\u0439"; // ii
             deva2Cyrl['\u0909'] = '\u0443'; // u
             deva2Cyrl['\u090A'] = "\u0443\u0443"; // uu
-            deva2Cyrl['\u090F'] = '\u0437'; // e
+            deva2Cyrl['\u090F'] = '\u044D'; // e: e (U+044D), not ze (U+0437) (#1059)
             deva2Cyrl['\u0913'] = '\u043E'; // o
+            deva2Cyrl['\u090B'] = "\u0440\u0323"; // vocalic r (#1049)
+            deva2Cyrl['\u0910'] = "\u0430\u0439"; // ai: short i marks the second half of the diphthong (#1049)
+            deva2Cyrl['\u0914'] = "\u0430\u045E"; // au: short u (U+045E), the parallel of ai (#1049)
 
             // dependent vowel signs
             deva2Cyrl['\u093E'] = "\u0430\u0430"; // aa
@@ -83,8 +86,18 @@ namespace CST.Conversion
             deva2Cyrl['\u0940'] = "\u0438\u0439"; // ii
             deva2Cyrl['\u0941'] = '\u0443'; // u
             deva2Cyrl['\u0942'] = "\u0443\u0443"; // uu
-            deva2Cyrl['\u0947'] = '\u0437'; // e
+            deva2Cyrl['\u0947'] = '\u044D'; // e (#1059)
             deva2Cyrl['\u094B'] = '\u043E'; // o
+            deva2Cyrl['\u0943'] = "\u0440\u0323"; // vocalic r (#1049)
+            deva2Cyrl['\u0948'] = "\u0430\u0439"; // ai (#1049)
+            deva2Cyrl['\u094C'] = "\u0430\u045E"; // au (#1049)
+
+            // Sanskrit letters (#1049). fsnow, 2026-10-14: "I accept all of your proposals": the spellings
+            // shared by Aksharamukha's Russian Cyrillic and the Russian BBT scheme, fitted to this scheme's
+            // dot marks; ai and au as the diphthongs ai / au, which do not collide with a + i / a + u.
+            deva2Cyrl['\u0903'] = "\u0445\u0323"; // visarga
+            deva2Cyrl['\u0936'] = "\u0448\u0301"; // sha (palatal)
+            deva2Cyrl['\u0937'] = '\u0448'; // ssa (retroflex)
 
             // various signs
             deva2Cyrl['\u094D'] = ""; // virama
@@ -152,11 +165,14 @@ namespace CST.Conversion
         {
             // Insert Cyrillic 'a' after all consonants that are not followed by virama, dependent vowel or cyrillic a
             // (This still works after we inserted ZWJ in the Devanagari. The ZWJ goes after virama.)
-            // Niggahita and visarga follow the inherent a, so they do not suppress it: sujalam is
-            // "суж̇аалам̣", not "суж̇аалм̣". (#1057)
+            // Niggahita and visarga follow the inherent a, so they do not suppress it: the final a of
+            // sujalam is written before its niggahita, as in CST4 and Tipitaka.org. (#1057)
             devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
             devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
             // TODO: figure out how to backtrack so this replace doesn't have to be done twice
+
+            // and after a consonant at the end of the string, as Deva2Latn does (never met in the books) (#1049)
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])$", "$1\u0430", RegexOptions.Compiled);
 
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())

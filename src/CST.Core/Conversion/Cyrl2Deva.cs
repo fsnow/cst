@@ -54,6 +54,14 @@ namespace CST.Conversion
             cyrl2Dev["\u0438\u0439"] = "\u0908"; // ii (independent) / U+0940 (dependent)
             cyrl2Dev["\u0443\u0443"] = "\u090A"; // uu (independent) / U+0942 (dependent)
 
+            // Sanskrit letters (#1049). Vocalic r, ai and au are vowels like the pairs above: dependent after a
+            // consonant, else independent. Visarga is a mark like niggahita. Sha is a consonant.
+            cyrl2Dev["\u0440\u0323"] = "\u090B"; // vocalic r / U+0943
+            cyrl2Dev["\u0430\u0439"] = "\u0910"; // ai / U+0948
+            cyrl2Dev["\u0430\u045E"] = "\u0914"; // au / U+094C
+            cyrl2Dev["\u0445\u0323"] = "\u0903"; // visarga
+            cyrl2Dev["\u0448\u0301"] = "\u0936"; // sha (palatal)
+
             // Single-character consonants (velar stops)
             cyrlChar2Dev['\u0433'] = "\u0915"; // ka
             cyrlChar2Dev['\u043A'] = "\u0916"; // kha
@@ -81,12 +89,14 @@ namespace CST.Conversion
             cyrlChar2Dev['\u0432'] = "\u0935"; // va
             cyrlChar2Dev['\u0441'] = "\u0938"; // sa
             cyrlChar2Dev['\u0445'] = "\u0939"; // ha
+            cyrlChar2Dev['\u0448'] = "\u0937"; // ssa (retroflex) (#1049)
 
             // Independent vowels (single chars)
             cyrlChar2Dev['\u0430'] = "\u0905"; // a (will be context-dependent)
             cyrlChar2Dev['\u0438'] = "\u0907"; // i
             cyrlChar2Dev['\u0443'] = "\u0909"; // u
-            cyrlChar2Dev['\u0437'] = "\u090F"; // e
+            cyrlChar2Dev['\u044D'] = "\u090F"; // e (#1059)
+            cyrlChar2Dev['\u0437'] = "\u090F"; // e as written before #1059, still read
             cyrlChar2Dev['\u043E'] = "\u0913"; // o
 
             // Numerals (ASCII)
@@ -126,6 +136,14 @@ namespace CST.Conversion
                 char c0 = cyrlStr[i];
                 bool starter = c0 < MapLen && multiStarter[c0]; // can this char begin a multi-char key?
 
+                if (InherentAThenDiphthong(cyrlStr, i) is string diph) // (#1049)
+                {
+                    if (!lastWasConsonant) sb.Append('\u0905');
+                    sb.Append(diph);
+                    i += 3; lastWasConsonant = false;
+                    continue;
+                }
+
                 // 4-char (none exist today, but kept to mirror the reference precedence exactly)
                 if (starter && i + 3 < cyrlStr.Length)
                 {
@@ -144,10 +162,10 @@ namespace CST.Conversion
                     string threeChar = cyrlStr.Substring(i, 3);
                     if (cyrl2Dev.TryGetValue(threeChar, out string? devaOutput))
                     {
-                        bool isNiggahita = (devaOutput == "\u0902");
-                        if (lastWasConsonant && !isNiggahita) sb.Append('\u094D');
+                        bool isMark = IsMark(devaOutput);
+                        if (lastWasConsonant && !isMark) sb.Append('\u094D');
                         sb.Append(devaOutput);
-                        i += 3; lastWasConsonant = !isNiggahita; matched = true;
+                        i += 3; lastWasConsonant = !isMark; matched = true;
                     }
                 }
 
@@ -157,24 +175,19 @@ namespace CST.Conversion
                     string twoChar = cyrlStr.Substring(i, 2);
                     if (cyrl2Dev.TryGetValue(twoChar, out string? devaOutput))
                     {
-                        if (twoChar == "\u0430\u0430" || twoChar == "\u0438\u0439" || twoChar == "\u0443\u0443")
+                        if (DependentVowel(twoChar) is string dependent)
                         {
-                            // after a consonant these are dependent long vowels, else independent
-                            if (lastWasConsonant)
-                            {
-                                if (twoChar == "\u0430\u0430") devaOutput = "\u093E";
-                                else if (twoChar == "\u0438\u0439") devaOutput = "\u0940";
-                                else devaOutput = "\u0942";
-                            }
+                            // after a consonant these are dependent vowel signs, else independent
+                            if (lastWasConsonant) devaOutput = dependent;
                             sb.Append(devaOutput);
                             i += 2; matched = true; lastWasConsonant = false;
                         }
                         else
                         {
-                            bool isNiggahita = (devaOutput == "\u0902");
-                            if (lastWasConsonant && !isNiggahita) sb.Append('\u094D');
+                            bool isMark = IsMark(devaOutput);
+                            if (lastWasConsonant && !isMark) sb.Append('\u094D');
                             sb.Append(devaOutput);
-                            i += 2; matched = true; lastWasConsonant = !isNiggahita;
+                            i += 2; matched = true; lastWasConsonant = !isMark;
                         }
                     }
                 }
@@ -190,13 +203,13 @@ namespace CST.Conversion
                             if (lastWasConsonant) { i++; lastWasConsonant = false; continue; } // inherent 'a'
                             lastWasConsonant = false;
                         }
-                        else if (c == '\u0438' || c == '\u0443' || c == '\u0437' || c == '\u043E') // \u0438 \u0443 \u0437 \u043E
+                        else if (c == '\u0438' || c == '\u0443' || c == '\u044D' || c == '\u0437' || c == '\u043E')
                         {
                             if (lastWasConsonant)
                             {
                                 if (c == '\u0438') devaOutput = "\u093F"; // dependent i
                                 else if (c == '\u0443') devaOutput = "\u0941"; // dependent u
-                                else if (c == '\u0437') devaOutput = "\u0947"; // dependent e
+                                else if (c == '\u044D' || c == '\u0437') devaOutput = "\u0947"; // dependent e (#1059)
                                 else devaOutput = "\u094B"; // dependent o
                             }
                             lastWasConsonant = false;
@@ -239,6 +252,16 @@ namespace CST.Conversion
             {
                 bool matched = false;
 
+                // a, then an independent ai or au (#1049)
+                if (InherentAThenDiphthong(cyrlStr, i) is string diph)
+                {
+                    if (!lastWasConsonant) sb.Append('\u0905'); // independent a; after a consonant it is inherent
+                    sb.Append(diph);
+                    i += 3;
+                    lastWasConsonant = false;
+                    continue;
+                }
+
                 // Try 4-character mappings first (\u0434\u0307\u0323\u0445)
                 if (i + 3 < cyrlStr.Length)
                 {
@@ -265,11 +288,11 @@ namespace CST.Conversion
                     {
                         string devaOutput = cyrl2Dev[threeChar];
 
-                        // Check if this is niggahita (NOT a consonant - no virama needed)
-                        bool isNiggahita = (devaOutput == "\u0902");
+                        // Niggahita and visarga are marks, not consonants: no virama needed
+                        bool isMark = IsMark(devaOutput);
 
-                        // If last was a consonant and this is not niggahita, add virama for cluster
-                        if (lastWasConsonant && !isNiggahita)
+                        // If last was a consonant and this is not a mark, add virama for cluster
+                        if (lastWasConsonant && !isMark)
                         {
                             sb.Append('\u094D'); // virama
                         }
@@ -277,7 +300,7 @@ namespace CST.Conversion
                         i += 3;
 
                         // Update lastWasConsonant state
-                        lastWasConsonant = !isNiggahita; // false for niggahita, true for consonants
+                        lastWasConsonant = !isMark; // false for marks, true for consonants
                         matched = true;
                     }
                 }
@@ -290,16 +313,15 @@ namespace CST.Conversion
                     {
                         string devaOutput = cyrl2Dev[twoChar];
 
-                        // Handle double-letter vowels: check if last was consonant
-                        if (twoChar == "\u0430\u0430" || twoChar == "\u0438\u0439" || twoChar == "\u0443\u0443")
+                        // Handle two-character vowels: check if last was consonant
+                        string? dependent = DependentVowel(twoChar);
+                        if (dependent != null)
                         {
                             if (lastWasConsonant)
                             {
-                                // COMMON CASE: After consonant \u2192 dependent long vowel
-                                // "\u0430\u0430" \u2192 dependent \u0101 (U+093E), "\u0438\u0439" \u2192 dependent \u012B (U+0940), "\u0443\u0443" \u2192 dependent \u016B (U+0942)
-                                if (twoChar == "\u0430\u0430") devaOutput = "\u093E"; // dependent long \u0101
-                                else if (twoChar == "\u0438\u0439") devaOutput = "\u0940"; // dependent long \u012B
-                                else if (twoChar == "\u0443\u0443") devaOutput = "\u0942"; // dependent long \u016B
+                                // COMMON CASE: After consonant \u2192 dependent vowel sign
+                                // (long aa, ii, uu; and vocalic r, ai, au for #1049)
+                                devaOutput = dependent;
 
                                 sb.Append(devaOutput);
                                 i += 2;
@@ -317,12 +339,12 @@ namespace CST.Conversion
                         }
                         else
                         {
-                            // Check if this is niggahita (NOT a consonant - no virama needed)
-                            bool isNiggahita = (devaOutput == "\u0902");
+                            // Niggahita and visarga are marks, not consonants: no virama needed
+                            bool isMark = IsMark(devaOutput);
 
                             // Aspirates (\u0433\u0445, \u0436\u0445, \u0434\u0445, \u0431\u0445) and other 2-char consonants
-                            // If last was a consonant and this is not niggahita, add virama for cluster
-                            if (lastWasConsonant && !isNiggahita)
+                            // If last was a consonant and this is not a mark, add virama for cluster
+                            if (lastWasConsonant && !isMark)
                             {
                                 sb.Append('\u094D'); // virama
                             }
@@ -331,7 +353,7 @@ namespace CST.Conversion
                             matched = true;
 
                             // Update lastWasConsonant state
-                            lastWasConsonant = !isNiggahita; // false for niggahita, true for consonants
+                            lastWasConsonant = !isMark; // false for marks, true for consonants
                         }
                     }
                 }
@@ -358,15 +380,15 @@ namespace CST.Conversion
                             // Otherwise it's independent vowel 'a'
                             lastWasConsonant = false;
                         }
-                        // Single vowels (\u0438, \u0443, \u0437, \u043E)
-                        else if (c == '\u0438' || c == '\u0443' || c == '\u0437' || c == '\u043E')
+                        // Single vowels (\u0438, \u0443, \u044D or \u0437, \u043E)
+                        else if (c == '\u0438' || c == '\u0443' || c == '\u044D' || c == '\u0437' || c == '\u043E')
                         {
                             if (lastWasConsonant)
                             {
                                 // Use dependent vowel form
                                 if (c == '\u0438') devaOutput = "\u093F"; // dependent i
                                 else if (c == '\u0443') devaOutput = "\u0941"; // dependent u
-                                else if (c == '\u0437') devaOutput = "\u0947"; // dependent e
+                                else if (c == '\u044D' || c == '\u0437') devaOutput = "\u0947"; // dependent e (#1059)
                                 else if (c == '\u043E') devaOutput = "\u094B"; // dependent o
                             }
                             lastWasConsonant = false;
@@ -403,13 +425,37 @@ namespace CST.Conversion
             return sb.ToString();
         }
 
+        // The two-character vowels and their dependent forms. (#1049 adds vocalic r, ai and au.)
+        private static string? DependentVowel(string twoChar) => twoChar switch
+        {
+            "\u0430\u0430" => "\u093E",
+            "\u0438\u0439" => "\u0940",
+            "\u0443\u0443" => "\u0942",
+            "\u0440\u0323" => "\u0943",
+            "\u0430\u0439" => "\u0948",
+            "\u0430\u045E" => "\u094C",
+            _ => null,
+        };
+
+        // An a followed by an independent ai or au is written aa + short i / short u, which would otherwise read
+        // as long aa + a stray letter. Short i / u never follow aa otherwise. The first a is a consonant's inherent
+        // a, or an independent a when no consonant precedes it. (#1049)
+        private static string? InherentAThenDiphthong(string s, int i)
+        {
+            if (i + 2 >= s.Length || s[i] != '\u0430' || s[i + 1] != '\u0430') return null;
+            return s[i + 2] == '\u0439' ? "\u0910" : s[i + 2] == '\u045E' ? "\u0914" : null;
+        }
+
+        // Marks that follow a vowel and are not consonants: niggahita and visarga (#1049).
+        private static bool IsMark(string deva) => deva == "\u0902" || deva == "\u0903";
+
         private static bool IsCyrillicConsonant(char c)
         {
             // Check if character is a Cyrillic consonant (\u0433, \u043A, \u0436, \u0447, \u0434, \u0442, \u0431, \u043F, \u043D, \u043C, \u044F, \u0440, \u043B, \u0432, \u0441, \u0445)
             return c == '\u0433' || c == '\u043A' || c == '\u0436' || c == '\u0447' ||
                    c == '\u0434' || c == '\u0442' || c == '\u0431' || c == '\u043F' ||
                    c == '\u043D' || c == '\u043C' || c == '\u044F' || c == '\u0440' ||
-                   c == '\u043B' || c == '\u0432' || c == '\u0441' || c == '\u0445';
+                   c == '\u043B' || c == '\u0432' || c == '\u0441' || c == '\u0445' || c == '\u0448';
         }
 
         private static bool IsDevanagariConsonant(char c)
