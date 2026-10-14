@@ -67,7 +67,9 @@ Commands:
   extract, e               Extract syllable test words from corpus
 
 Options for 'validate':
-  -f, --full-corpus        Use full corpus instead of syllable-test-words.txt
+  -f, --full-corpus        Use full corpus instead of the curated word lists
+  --xml-dir <path>         Corpus XML directory for --full-corpus
+                           (default: ~/Library/Application Support/CSTReader/xml)
   -h, --help               Show help for validate command
 
 Options for 'compare':
@@ -90,7 +92,7 @@ Options for 'extract':
 
 Examples:
   dotnet run validate
-  dotnet run validate --full-corpus
+  dotnet run -- validate --full-corpus
   dotnet run compare thai
   dotnet run compare myanmar --word ကမ္မ
   dotnet run analyze छेदनवधबन्धनविपरामोसआलोपसहसाकारा
@@ -104,6 +106,8 @@ Examples:
         bool useFullCorpus = false;
         bool showHelp = false;
         string? outputFile = null;
+        string xmlDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library", "Application Support", "CSTReader", "xml");
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -116,6 +120,11 @@ Examples:
                 outputFile = args[i + 1];
                 i++;
             }
+            else if (args[i] == "--xml-dir" && i + 1 < args.Length)
+            {
+                xmlDir = args[i + 1];
+                i++;
+            }
         }
 
         if (showHelp)
@@ -125,14 +134,17 @@ Usage: dotnet run validate [OPTIONS]
 
 Options:
   -f, --full-corpus    Test using full corpus (all words from 217 XML files)
-                       Default: Use syllable-test-words.txt only
+                       Default: the curated lists (syllable-, vowel- and
+                       sanskrit-test-words.txt)
+  --xml-dir <path>     Corpus XML directory for --full-corpus
+                       Default: ~/Library/Application Support/CSTReader/xml
   -o, --output <path>  Save HTML report to file
                        Default: reports/validation-report-YYYYMMDD-HHMMSS.html
   -h, --help           Show this help message
 
 Examples:
-  dotnet run validate                          # Test using syllable-test-words.txt
-  dotnet run validate -f                       # Test using full corpus
+  dotnet run validate                          # Test using the curated lists
+  dotnet run -- validate -f                    # Test using full corpus (-- keeps -f from dotnet run)
   dotnet run validate -o reports/report.html   # Save report to custom file
 ");
             return 0;
@@ -145,7 +157,7 @@ Examples:
             outputFile = $"reports/validation-report-{timestamp}.html";
         }
 
-        QuickTest.Run(useFullCorpus, outputFile);
+        QuickTest.Run(useFullCorpus, outputFile, xmlDir);
         return 0;
     }
 

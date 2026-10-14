@@ -7,7 +7,7 @@ using CST.Conversion;
 
 public class QuickTest
 {
-    public static void Run(bool useFullCorpus = false, string? outputFile = null)
+    public static void Run(bool useFullCorpus = false, string? outputFile = null, string? xmlDir = null)
     {
         Console.WriteLine("\n=== CST Script Validation Tool ===\n");
 
@@ -18,12 +18,12 @@ public class QuickTest
         {
             Console.WriteLine("Data source: Full corpus (all words from 217 XML files)");
             dataSource = "Full corpus (all words from 217 XML files)";
-            testWords = LoadFullCorpus();
+            testWords = LoadFullCorpus(xmlDir!);
         }
         else
         {
-            Console.WriteLine("Data source: syllable-test-words.txt + vowel-test-words.txt (curated test set)");
-            dataSource = "syllable-test-words.txt + vowel-test-words.txt (curated test set)";
+            Console.WriteLine("Data source: syllable-, vowel- and sanskrit-test-words.txt (curated test set)");
+            dataSource = "syllable-, vowel- and sanskrit-test-words.txt (curated test set)";
             testWords = LoadCuratedTestWords();
         }
 
@@ -45,11 +45,15 @@ public class QuickTest
     // etc.). The two files are complementary: syllable-test-words.txt covers every
     // unique syllable; vowel-test-words.txt covers every vowel-hiatus combination
     // found in the corpus (these expose transliteration ambiguities, e.g. Cyrillic).
+    // sanskrit-test-words.txt covers the Sanskrit letters added to IPE in version 2 (#1049):
+    // visarga, vocalic r, ai, au, sha and ssa. The corpus has few of them, so most of its
+    // words are real Sanskrit (e.g. the e0105n quotation, #1046) or synthetic.
     static List<string> LoadCuratedTestWords()
     {
         var words = new List<string>();
         words.AddRange(LoadWordsFile("syllable-test-words.txt", required: true));
         words.AddRange(LoadWordsFile("vowel-test-words.txt", required: false));
+        words.AddRange(LoadWordsFile("sanskrit-test-words.txt", required: false));
         // De-duplicate while preserving first-seen order.
         return words.Distinct().ToList();
     }
@@ -73,15 +77,13 @@ public class QuickTest
             .ToList();
     }
 
-    static List<string> LoadFullCorpus()
+    static List<string> LoadFullCorpus(string xmlDir)
     {
-        // Path to XML files directory
-        string xmlDir = "../../../../data/cscd-xml";  // Adjust path as needed
 
         if (!Directory.Exists(xmlDir))
         {
             Console.WriteLine($"ERROR: XML directory not found: {xmlDir}");
-            Console.WriteLine("Full corpus testing requires XML files.");
+            Console.WriteLine("Full corpus testing requires XML files. Use --xml-dir <path>.");
             Environment.Exit(1);
         }
 
@@ -94,7 +96,7 @@ public class QuickTest
         {
             try
             {
-                string xmlContent = File.ReadAllText(xmlFile);
+                string xmlContent = File.ReadAllText(xmlFile);  // detects the corpus's UTF-16 BOM
                 // Extract words using simple regex (you may need more sophisticated extraction)
                 var matches = System.Text.RegularExpressions.Regex.Matches(xmlContent, @"[\u0900-\u097F]+");
                 foreach (System.Text.RegularExpressions.Match match in matches)
@@ -128,10 +130,14 @@ public class QuickTest
         public Script Script { get; set; }
         public int Successes { get; set; }
         public int Failures { get; set; }
+        public int Skipped { get; set; }
         public int Total { get; set; }
-        public double SuccessRate => (Successes * 100.0) / Total;
+        public double SuccessRate => (Successes * 100.0) / (Total - Skipped);
         public List<FailureDetails> FailedWords { get; set; } = new();
     }
+
+    // The Devanagari ai and au, independent and as vowel signs.
+    static readonly char[] Diphthongs = { '\u0910', '\u0914', '\u0948', '\u094C' };
 
     static List<ScriptValidationResult> RunValidation(List<string> testWords)
     {
@@ -157,6 +163,15 @@ public class QuickTest
 
             foreach (var word in testWords)
             {
+                // Latin writes the diphthongs ai / au the same as a + i / a + u, which it favours as a sandhi
+                // boundary combination, so a diphthong reads back as two vowels. fsnow, 2026-10-14: ""ai" and
+                // "au" are not roundtrippable as we are favoring that as a sandhi boundary combination". (#1049)
+                if (targetScript == Script.Latin && word.IndexOfAny(Diphthongs) >= 0)
+                {
+                    result.Skipped++;
+                    continue;
+                }
+
                 // Test round-trip: Deva → IPE → TargetScript → IPE → TargetScript
                 try
                 {
@@ -208,6 +223,8 @@ public class QuickTest
             Console.WriteLine($"Results:");
             Console.WriteLine($"  Successes: {result.Successes:N0}");
             Console.WriteLine($"  Failures:  {result.Failures:N0}");
+            if (result.Skipped > 0)
+                Console.WriteLine($"  Skipped:   {result.Skipped:N0} (ai / au: not round-trippable in Latin)");
             Console.WriteLine($"  Success rate: {result.SuccessRate:F2}%");
 
             if (result.Failures > 0)
