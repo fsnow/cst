@@ -19,9 +19,10 @@ namespace CST.Avalonia.Tests.Conversion;
 /// <para>Every case runs through both the fast <c>Convert</c> and the frozen <c>ConvertReference</c>, in both
 /// directions. The Tipitaka.org converters are the reference versions, so a fix has to be right there too.</para>
 ///
-/// <para>Cyrillic is excluded. Its transliteration is a known legacy scheme that does not round-trip (see
-/// <see cref="AutoDetectRoundTripTests"/>), and it drops the halant on the way back. Whether to change that is
-/// open on #1048.</para>
+/// <para>Cyrillic writes the inherent a out, so like Latin it shows a visible halant as the bare consonant,
+/// and reads a consonant with no vowel after it as one. fsnow, 2026-10-14: "step 1 yes" ... "(like Latin)".
+/// A halant directly before an independent vowel is not recoverable in either, nor in IPE, which encodes
+/// it the same as the vowel sign. fsnow: "#2 is a known limitation".</para>
 /// </summary>
 public class VisibleHalantTests
 {
@@ -43,7 +44,7 @@ public class VisibleHalantTests
     };
 
     // A halant directly before an independent vowel (corpus forms from the grammars). The Indic scripts keep it;
-    // Latin is phonetic and has no mark for it, so ṅ + u reads back as ṅu (see
+    // Latin and Cyrillic are phonetic and have no mark for it, so ṅ + u reads back as ṅu (see
     // HalantBeforeIndependentVowel_IsPhoneticInLatin).
     public static readonly string[] BeforeVowelCases =
     {
@@ -64,10 +65,11 @@ public class VisibleHalantTests
         Script Script, Func<string, string> To, Func<string, string> ToRef,
         Func<string, string> Back, Func<string, string> BackRef, string? VisibleSign);
 
-    // VisibleSign: the script's visible halant. Null for Latin, which writes the bare consonant.
+    // VisibleSign: the script's visible halant. Null for Latin and Cyrillic, which write the bare consonant.
     private static readonly Pair[] Pairs =
     {
         new(Script.Bengali,   Deva2Beng.Convert, Deva2Beng.ConvertReference, Beng2Deva.Convert, Beng2Deva.ConvertReference, "\u09CD"),
+        new(Script.Cyrillic,  Deva2Cyrl.Convert, Deva2Cyrl.ConvertReference, Cyrl2Deva.Convert, Cyrl2Deva.ConvertReference, null),
         new(Script.Gujarati,  Deva2Gujr.Convert, Deva2Gujr.ConvertReference, Gujr2Deva.Convert, Gujr2Deva.ConvertReference, "\u0ACD"),
         new(Script.Gurmukhi,  Deva2Guru.Convert, Deva2Guru.ConvertReference, Guru2Deva.Convert, Guru2Deva.ConvertReference, "\u0A4D"),
         new(Script.Kannada,   Deva2Knda.Convert, Deva2Knda.ConvertReference, Knda2Deva.Convert, Knda2Deva.ConvertReference, "\u0CCD"),
@@ -92,7 +94,7 @@ public class VisibleHalantTests
     public void VisibleHalant_ShowsTheVisibleSign_AndRoundTrips_OnBothPaths(Script script)
     {
         var p = For(script);
-        var cases = script == Script.Latin ? HalantCases : HalantCases.Concat(BeforeVowelCases);
+        var cases = IsPhonetic(script) ? HalantCases : HalantCases.Concat(BeforeVowelCases);
         foreach (var deva in cases)
         {
             var fast = p.To(deva);
@@ -177,6 +179,21 @@ public class VisibleHalantTests
     }
 
     [Fact]
+    public void Cyrillic_WritesTheBareConsonant_AndReadsItBack()
+    {
+        // yad: ya + d with no a after it
+        const string yad = "\u044F\u0430\u0434\u0307\u0323";
+        Assert.Equal(yad, Deva2Cyrl.Convert("\u092F\u0926\u094D"));
+        foreach (var conv in new Func<string, string>[] { Cyrl2Deva.Convert, Cyrl2Deva.ConvertReference })
+        {
+            Assert.Equal("\u092F\u0926\u094D", conv(yad));
+            Assert.Equal("\u092F\u0926\u094D \u092F\u0926", conv(yad + " " + yad + "\u0430")); // halant, then inherent a
+            Assert.Equal("\u092F\u0926\u094D\u0964", conv(yad + "\u0964"));                     // before a danda
+            Assert.Equal("\u092F\u0926\u094D\u0967", conv(yad + "1"));                           // before a digit
+        }
+    }
+
+    [Fact]
     public void HalantBeforeIndependentVowel_IsPhoneticInLatin()
     {
         // gak antā is written gakantā: the same sounds, which is what Latin display needs. Reading it back
@@ -229,7 +246,7 @@ public class VisibleHalantTests
         var misses = new List<string>();
         foreach (var deva in words)
         {
-            if (script == Script.Latin && HalantBeforeVowel.IsMatch(deva))
+            if (IsPhonetic(script) && HalantBeforeVowel.IsMatch(deva))
                 continue; // phonetic in Latin, see HalantBeforeIndependentVowel_IsPhoneticInLatin
             var fast = p.To(deva);
             if (fast != p.ToRef(deva)) { misses.Add($"fast!=ref {Cp(deva)}"); continue; }
@@ -239,6 +256,9 @@ public class VisibleHalantTests
         }
         Assert.True(misses.Count == 0, $"{script}: {misses.Count} of {words.Count}:\n" + string.Join("\n", misses.Take(20)));
     }
+
+    // Scripts that write the halant as the bare consonant and cannot mark one before an independent vowel.
+    private static bool IsPhonetic(Script s) => s is Script.Latin or Script.Cyrillic;
 
     private static readonly Regex HalantBeforeVowel = new("\u094D[\u0904-\u0914]");
 
