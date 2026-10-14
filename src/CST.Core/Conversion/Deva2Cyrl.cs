@@ -150,11 +150,12 @@ namespace CST.Conversion
         /// </summary>
         public static string ConvertReference(string devStr)
         {
-            // Insert Cyrillic 'a' after all consonants that are not followed by virama, dependent vowel, combining marks, or cyrillic a
+            // Insert Cyrillic 'a' after all consonants that are not followed by virama, dependent vowel or cyrillic a
             // (This still works after we inserted ZWJ in the Devanagari. The ZWJ goes after virama.)
-            // Exclude U+0900-U+0903 (combining marks: inverted breve, candrabindu, anusvara/niggahita, visarga)
-            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u0900-\u0903\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
-            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u0900-\u0903\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
+            // Niggahita and visarga follow the inherent a, so they do not suppress it: sujalam is
+            // "суж̇аалам̣", not "суж̇аалм̣". (#1057)
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
             // TODO: figure out how to backtrack so this replace doesn't have to be done twice
 
             StringBuilder sb = new StringBuilder();
@@ -197,12 +198,12 @@ namespace CST.Conversion
                     buf[k++] = c; // pass through
                 }
 
-                // consonant carries inherent Cyrillic 'a' (U+0430) unless the next char is a combining mark
-                // (U+0900-U+0903), a dependent vowel sign or the virama (U+093E-U+094D)
+                // consonant carries inherent Cyrillic 'a' (U+0430) unless the next char is a dependent vowel
+                // sign or the virama (U+093E-U+094D). Niggahita and visarga follow the a. (#1057)
                 if (c >= 0x0915 && c <= 0x0939)
                 {
                     char next = (i + 1 < n) ? devStr[i + 1] : '\0';
-                    bool suppress = (next >= 0x0900 && next <= 0x0903) || (next >= 0x093E && next <= 0x094D);
+                    bool suppress = next >= 0x093E && next <= 0x094D;
                     if (!suppress)
                         buf[k++] = (char)0x0430;
                 }
