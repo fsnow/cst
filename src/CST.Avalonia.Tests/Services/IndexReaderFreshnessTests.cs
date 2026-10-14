@@ -25,21 +25,22 @@ public class IndexReaderFreshnessTests : IDisposable
         try { System.IO.Directory.Delete(_path, recursive: true); } catch { }
     }
 
-    // The same build procedure each time, as the app's rebuild repeats its first build.
+    // The same build procedure each time, as the app's rebuild repeats its first build: IndexingService's
+    // DeleteCorruptIndex deletes the index FILES (the directory stays), then BookIndexer opens a writer in
+    // CREATE_OR_APPEND mode and commits once.
     private void BuildFromScratch(string word)
     {
-        if (System.IO.Directory.Exists(_path)) System.IO.Directory.Delete(_path, recursive: true);
+        if (System.IO.Directory.Exists(_path))
+            foreach (var file in System.IO.Directory.GetFiles(_path)) File.Delete(file);
         using var dir = FSDirectory.Open(_path);
         var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, new WhitespaceAnalyzer(LuceneVersion.LUCENE_48))
         {
-            OpenMode = OpenMode.CREATE
+            OpenMode = OpenMode.CREATE_OR_APPEND
         };
         using var writer = new IndexWriter(dir, config);
         for (var i = 0; i < 3; i++)
-        {
             writer.AddDocument(new Document { new TextField("text", word + i, Field.Store.NO) });
-            writer.Commit();
-        }
+        writer.Commit();
     }
 
     [Fact]

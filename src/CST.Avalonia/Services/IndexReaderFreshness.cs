@@ -18,7 +18,7 @@ namespace CST.Avalonia.Services;
 /// </summary>
 public static class IndexReaderFreshness
 {
-    /// <summary>The identity of the commit a reader was opened on: its segments file's last write time.</summary>
+    /// <summary>A proxy for the identity of the commit a reader was opened on: its segments file's last write time.</summary>
     public static DateTime? CommitStamp(DirectoryReader reader, global::Lucene.Net.Store.Directory directory)
     {
         if (directory is not FSDirectory fs) return null;
