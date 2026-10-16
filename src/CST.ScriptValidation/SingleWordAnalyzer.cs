@@ -37,6 +37,7 @@ namespace CST.ScriptValidation
             Script.Latin,
             Script.Malayalam,
             Script.Myanmar,
+            Script.Odia,
             Script.Sinhala,
             Script.Telugu,
             Script.Thai,

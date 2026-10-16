@@ -20,6 +20,8 @@ public class Any2DevaTests
     [Theory]
     [InlineData(0x0915, Script.Devanagari)] // Devanagari ka
     [InlineData(0x0985, Script.Bengali)]    // Bengali a
+    [InlineData(0x0B05, Script.Odia)]      // Odia a
+    [InlineData(0x0B71, Script.Odia)]      // Odia wa (va)
     [InlineData(0x0D85, Script.Sinhala)]    // Sinhala a
     [InlineData('a', Script.Latin)]
     public void GetScript_ClassifiesScripts(int codepoint, Script expected)

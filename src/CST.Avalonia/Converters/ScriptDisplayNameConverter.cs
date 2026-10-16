@@ -28,6 +28,7 @@ public class ScriptDisplayNameConverter : IValueConverter
                 Script.Khmer => "Khmer",
                 Script.Malayalam => "Malayalam",
                 Script.Myanmar => "Myanmar",
+                Script.Odia => "Odia",
                 Script.Latin => "Roman", // CST4 uses "Roman" instead of "Latin"
                 Script.Sinhala => "Sinhala",
                 Script.Telugu => "Telugu",

@@ -23,6 +23,7 @@ namespace CST.Conversion
             [(Script.Devanagari, Script.Latin)] = Deva2Latn.Convert,
             [(Script.Devanagari, Script.Malayalam)] = Deva2Mlym.Convert,
             [(Script.Devanagari, Script.Myanmar)] = Deva2Mymr.Convert,
+            [(Script.Devanagari, Script.Odia)] = Deva2Orya.Convert,
             [(Script.Devanagari, Script.Sinhala)] = Deva2Sinh.Convert,
             [(Script.Devanagari, Script.Telugu)] = Deva2Telu.Convert,
             [(Script.Devanagari, Script.Thai)] = Deva2Thai.Convert,
@@ -37,6 +38,7 @@ namespace CST.Conversion
             [(Script.Kannada, Script.Devanagari)] = Knda2Deva.Convert,
             [(Script.Malayalam, Script.Devanagari)] = Mlym2Deva.Convert,
             [(Script.Myanmar, Script.Devanagari)] = Mymr2Deva.Convert,
+            [(Script.Odia, Script.Devanagari)] = Orya2Deva.Convert,
             [(Script.Sinhala, Script.Devanagari)] = Sinh2Deva.Convert,
             [(Script.Thai, Script.Devanagari)] = Thai2Deva.Convert,
             [(Script.Khmer, Script.Devanagari)] = Khmr2Deva.Convert,
@@ -61,6 +63,7 @@ namespace CST.Conversion
             [Script.Kannada] = Knda2Deva.Convert,
             [Script.Malayalam] = Mlym2Deva.Convert,
             [Script.Myanmar] = Mymr2Deva.Convert,
+            [Script.Odia] = Orya2Deva.Convert,
             [Script.Sinhala] = Sinh2Deva.Convert,
             [Script.Thai] = Thai2Deva.Convert,
             [Script.Khmer] = Khmr2Deva.Convert,
@@ -125,6 +128,8 @@ namespace CST.Conversion
                 return Deva2Mlym.ConvertBook(str);
             else if (outputScript == Script.Myanmar)
                 return Deva2Mymr.ConvertBook(str);
+            else if (outputScript == Script.Odia)
+                return Deva2Orya.ConvertBook(str);
             else if (outputScript == Script.Sinhala)
                 return Deva2Sinh.ConvertBook(str);
             else if (outputScript == Script.Telugu)
@@ -202,6 +207,8 @@ namespace CST.Conversion
 					return "mlym";
 				case Script.Myanmar:
 					return "mymr";
+				case Script.Odia:
+					return "orya";
 				case Script.Sinhala:
 					return "sinh";
 				case Script.Telugu:

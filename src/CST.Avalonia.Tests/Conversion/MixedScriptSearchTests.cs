@@ -69,6 +69,7 @@ public class MixedScriptSearchTests
     [InlineData(Script.Thai)]
     [InlineData(Script.Sinhala)]
     [InlineData(Script.Myanmar)]
+    [InlineData(Script.Odia)]
     public void EvamMeSutam_WholePhraseInEachScript_NormalizesToSameIpe(Script script)
     {
         var ipe = Latn2Ipe.Convert(EvamMeSutam);

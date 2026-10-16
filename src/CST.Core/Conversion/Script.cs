@@ -16,6 +16,7 @@ namespace CST.Conversion
         Latin,
         Malayalam,
         Myanmar,
+        Odia,
         Sinhala,
         Telugu,
         Thai,

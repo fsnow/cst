@@ -451,6 +451,7 @@ namespace CST.Avalonia.Models
                 ["Khmer"] = new ScriptFontSetting { FontFamily = "", FontSize = 13 },
                 ["Malayalam"] = new ScriptFontSetting { FontFamily = "", FontSize = 13 },
                 ["Myanmar"] = new ScriptFontSetting { FontFamily = "", FontSize = 13 },
+                ["Odia"] = new ScriptFontSetting { FontFamily = "", FontSize = 13 },
                 ["Sinhala"] = new ScriptFontSetting { FontFamily = "", FontSize = 13 },
                 ["Telugu"] = new ScriptFontSetting { FontFamily = "", FontSize = 13 },
                 ["Thai"] = new ScriptFontSetting { FontFamily = "", FontSize = 13 },

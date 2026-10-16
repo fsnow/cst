@@ -95,6 +95,7 @@ public class ScriptService : IScriptService
         Script.Khmer,
         Script.Malayalam,
         Script.Myanmar,
+        Script.Odia,
         Script.Sinhala,
         Script.Telugu,
         Script.Thai,
@@ -134,6 +135,7 @@ public class ScriptService : IScriptService
             Script.Khmer => "Khmer",
             Script.Malayalam => "Malayalam",
             Script.Myanmar => "Myanmar",
+            Script.Odia => "Odia",
             Script.Latin => "Roman", // CST4 uses "Roman" instead of "Latin"
             Script.Sinhala => "Sinhala",
             Script.Telugu => "Telugu",

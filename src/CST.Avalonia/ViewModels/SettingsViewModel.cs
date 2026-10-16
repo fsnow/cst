@@ -921,6 +921,7 @@ namespace CST.Avalonia.ViewModels
                 "Khmer" => Script.Khmer,
                 "Malayalam" => Script.Malayalam,
                 "Myanmar" => Script.Myanmar,
+                "Odia" => Script.Odia,
                 "Roman" => Script.Latin, // CST4 uses "Roman" instead of "Latin"
                 "Latin" => Script.Latin,
                 "Sinhala" => Script.Sinhala,

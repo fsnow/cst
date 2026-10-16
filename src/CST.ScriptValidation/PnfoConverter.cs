@@ -190,6 +190,7 @@ try {
             CST.Conversion.Script.Kannada => "Knda",
             CST.Conversion.Script.Malayalam => "Mlym",
             CST.Conversion.Script.Myanmar => "Mymr",
+            CST.Conversion.Script.Odia => "Orya",
             CST.Conversion.Script.Sinhala => "Sinh",
             CST.Conversion.Script.Thai => "Thai",
             CST.Conversion.Script.Tibetan => "Tibt",

@@ -38,6 +38,9 @@ public static class BookFontDefaults
         [Script.Khmer]      = "\"Khmer Mondulkiri U OT ls\", KhmerOS",
         [Script.Malayalam]  = "Kartika",
         [Script.Myanmar]    = "Padauk,Tharlon,Myanmar1",
+        // Odia: the stack in Tipitaka.org's tipitaka-orya.css (VipassanaTech/tipitaka-xml#2728) - Windows, then
+        // macOS, then fonts that may be installed on either.
+        [Script.Odia]       = "Kalinga, \"Nirmala UI\", \"Oriya Sangam MN\", \"Oriya MN\", \"Noto Sans Oriya\", \"Anek Odia\", \"Arial Unicode MS\"",
         [Script.Sinhala]    = "UN-Abhaya,KaputaUnicode",
         [Script.Telugu]     = "Gautami",
         [Script.Thai]       = "CordaliaUPC",

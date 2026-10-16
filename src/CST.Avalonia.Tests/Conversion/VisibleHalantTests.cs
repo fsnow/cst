@@ -77,6 +77,7 @@ public class VisibleHalantTests
         new(Script.Latin,     Deva2Latn.Convert, Deva2Latn.ConvertReference, Latn2Deva.Convert, Latn2Deva.ConvertReference, null),
         new(Script.Malayalam, Deva2Mlym.Convert, Deva2Mlym.ConvertReference, Mlym2Deva.Convert, Mlym2Deva.ConvertReference, "\u0D4D"),
         new(Script.Myanmar,   Deva2Mymr.Convert, Deva2Mymr.ConvertReference, Mymr2Deva.Convert, Mymr2Deva.ConvertReference, "\u103A"),
+        new(Script.Odia,     Deva2Orya.Convert, Deva2Orya.ConvertReference, Orya2Deva.Convert, Orya2Deva.ConvertReference, "\u0B4D"),
         new(Script.Sinhala,   Deva2Sinh.Convert, Deva2Sinh.ConvertReference, Sinh2Deva.Convert, Sinh2Deva.ConvertReference, "\u0DCA"),
         new(Script.Telugu,    Deva2Telu.Convert, Deva2Telu.ConvertReference, Telu2Deva.Convert, Telu2Deva.ConvertReference, "\u0C4D"),
         new(Script.Thai,      Deva2Thai.Convert, Deva2Thai.ConvertReference, Thai2Deva.Convert, Thai2Deva.ConvertReference, "\u0E3A"),

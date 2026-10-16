@@ -4,7 +4,7 @@ CST Reader is a cross-platform application for reading and searching the Pāli T
 
 **Status: 5.0.0-beta.8 (October 2026).** CST 5 matches or exceeds CST4 in features, apart from interface localization (see [Known Gaps](#known-gaps)). It adds an AI Assistant you can ask about the text you are reading, with your choice of AI provider; Beta 8 keeps your conversations with it, and Digital Pāḷi Dictionary entries now show the word's root.
 
-CST Reader presents the Tipiṭaka **in Pāli**, rendered in 14 scripts. It does not include translations of the texts; the built-in dictionaries give the meaning of individual words. If you connect an AI model, the optional [AI Assistant](#ai) can translate a passage you select — a translation written by that model on request, not one supplied with the app.
+CST Reader presents the Tipiṭaka **in Pāli**, rendered in 15 scripts. It does not include translations of the texts; the built-in dictionaries give the meaning of individual words. If you connect an AI model, the optional [AI Assistant](#ai) can translate a passage you select — a translation written by that model on request, not one supplied with the app.
 
 ## Download
 
@@ -23,15 +23,15 @@ Get the [latest release](https://github.com/fsnow/cst/releases/latest):
 - **Dark Mode**: across all panels and book content, including search highlights recoloured for dark backgrounds
 
 ### Text Display & Scripts
-- **Multi-Script Support**: the texts in 14 scripts, for both display and search input (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
+- **Multi-Script Support**: the texts in 15 scripts, for both display and search input (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Odia, Sinhala, Telugu, Thai, Tibetan)
 - **Global and Per-Tab Script Selection**: changing the script re-renders every open book; each tab also remembers its own setting
 - **Fonts**: a font per script, for book text and for the interface
 - **Find and Zoom**: Find in Page (⌘/Ctrl+F) within the book you are reading, and text zoom remembered per script
-- **Script Conversion Quality**: lossless round-trip conversion for 13 of the 14 scripts, verified by a validation framework. The Cyrillic exceptions are inherent to that transliteration scheme — it cannot distinguish certain vowel sequences — not a converter defect.
+- **Script Conversion Quality**: lossless round-trip conversion for 14 of the 15 scripts, verified by a validation framework. The Cyrillic exceptions are inherent to that transliteration scheme — it cannot distinguish certain vowel sequences — not a converter defect.
 
 ### Search
 - **Full-Text Search**: Lucene.NET 4.8+ with position-based indexing across all 217 texts
-- **Query Types**: exact, phrase (quoted), proximity (all-within-a-window), mixed/multiple-phrase, wildcard (`*`/`?`) and regular-expression — all working across the 14 scripts
+- **Query Types**: exact, phrase (quoted), proximity (all-within-a-window), mixed/multiple-phrase, wildcard (`*`/`?`) and regular-expression — all working across the 15 scripts
 - **Two-Color Highlighting**: distinct colors for the match anchor vs. the remaining matched words, with occurrence-by-occurrence navigation
 - **Filtering**: limit a search by Piṭaka (Vinaya, Sutta, Abhidhamma) and commentary level (Mūla, Aṭṭhakathā, Ṭīkā); results list each matching word and each book with its count
 

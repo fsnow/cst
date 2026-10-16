@@ -63,6 +63,7 @@ namespace CST.Conversion
             Script.Kannada => Knda2Deva.Convert(str),
             Script.Malayalam => Mlym2Deva.Convert(str),
             Script.Myanmar => Mymr2Deva.Convert(str),
+            Script.Odia => Orya2Deva.Convert(str),
             Script.Sinhala => Sinh2Deva.Convert(str),
             Script.Thai => Thai2Deva.Convert(str),
             Script.Khmer => Khmr2Deva.Convert(str),
