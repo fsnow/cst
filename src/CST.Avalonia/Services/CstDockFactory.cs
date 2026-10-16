@@ -2137,21 +2137,26 @@ namespace CST.Avalonia.Services
                 // SplitToWindow calls RemoveDockable before re-adding to the new window, and a cross-dock
                 // MoveDockable does the same. Deleting the saved state here meant every float and every drag
                 // between splits destroyed it. A real close arrives via CloseDockable instead. (#623)
-                var owner = dockable.Owner as IDock;
-                var wasActive = owner != null && ReferenceEquals(owner.ActiveDockable, dockable);
-                var removedIndex = owner?.VisibleDockables?.IndexOf(dockable) ?? -1;
-
-                base.RemoveDockable(dockable, collapse);
-
                 // Dock makes the tab to the LEFT active, which is Welcome when the removed tab sat right after
                 // it - even with books open to its right. Welcome cannot be closed, so the next ⌘W did nothing.
                 // [fsnow]: "A close should then select any other open book, not Welcome". (#1066)
-                if (wasActive && owner?.VisibleDockables != null &&
-                    NextActiveInsteadOfWelcome(owner.VisibleDockables, removedIndex, owner.ActiveDockable,
-                        d => d is WelcomeViewModel) is { } instead)
+                // Chosen BEFORE the removal: Dock then sees the removed tab is no longer active and keeps our
+                // choice, so Welcome is never activated in between - which would attach its browser, note it
+                // in the #621 history and save the layout with Welcome selected, all for one tick. (review)
+                if (dockable.Owner is IDock { VisibleDockables: { } siblings } owner &&
+                    ReferenceEquals(owner.ActiveDockable, dockable))
                 {
-                    owner.ActiveDockable = instead;
+                    var removedIndex = siblings.IndexOf(dockable);
+                    var remaining = siblings.Where(d => !ReferenceEquals(d, dockable)).ToList();
+                    var dockWouldChoose = remaining.Count > 0 ? remaining[removedIndex > 0 ? removedIndex - 1 : 0] : null;
+                    if (NextActiveInsteadOfWelcome(remaining, removedIndex, dockWouldChoose, d => d is WelcomeViewModel)
+                        is { } instead)
+                    {
+                        owner.ActiveDockable = instead;
+                    }
                 }
+
+                base.RemoveDockable(dockable, collapse);
             }
             else
             {

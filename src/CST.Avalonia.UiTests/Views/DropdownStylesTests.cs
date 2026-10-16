@@ -50,6 +50,10 @@ public class DropdownStylesTests
             Assert.True(combo.IsDropDownOpen, "Precondition: the dropdown is open.");
 
             var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+            // Headless hit-testing reads the last COMPOSED frame, and Pump only runs jobs and layout. Without a
+            // frame the click can hit nothing - which passed alone and failed once other tests ran first
+            // (review of #1068).
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             window.MouseDown(point, MouseButton.Left);
             window.MouseUp(point, MouseButton.Left);
             StyleProbe.Pump(window);
