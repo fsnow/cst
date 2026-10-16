@@ -1,0 +1,22 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The click that closes an open dropdown also reaches whatever is under it. (#1067)
+
+         [fsnow]: "some double clicks on the tree did not work". With a book's chapter list open, a
+         double-click on the book tree opened nothing: Avalonia's default spends the first click on closing
+         the list (light dismiss), so the tree saw only the second click. Asked whether to pass the click
+         through for the chapter list only, for every dropdown, or to keep the macOS behaviour of consuming
+         it: "all dropdowns".
+
+         The popups are the Fluent templates' PART_Popup; DropdownStylesTests checks that these selectors
+         reach them, since a selector that matches nothing fails silently. -->
+    <Style Selector="ComboBox /template/ Popup#PART_Popup">
+        <Setter Property="OverlayDismissEventPassThrough" Value="True" />
+    </Style>
+
+    <Style Selector="AutoCompleteBox /template/ Popup#PART_Popup">
+        <Setter Property="OverlayDismissEventPassThrough" Value="True" />
+    </Style>
+
+</Styles>

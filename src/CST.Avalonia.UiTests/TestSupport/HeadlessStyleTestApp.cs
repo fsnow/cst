@@ -25,7 +25,7 @@ namespace CST.Avalonia.UiTests.TestSupport;
 /// appearance the reviewer happened to be running.</para>
 ///
 /// <para><b>What it loads, and why exactly this.</b> <see cref="FluentTheme"/>, Dock's Fluent theme and
-/// the app's own <c>DockStyles.axaml</c>, mirroring <c>App.axaml</c>'s <c>Application.Styles</c>. Fluent
+/// the app's own <c>DockStyles.axaml</c> and <c>DropdownStyles.axaml</c>, mirroring <c>App.axaml</c>'s <c>Application.Styles</c>. Fluent
 /// supplies the control templates whose named parts the selectors reach into (a missing template makes
 /// every such assertion vacuous rather than red); Dock's theme supplies the <c>DockApplicationAccent*</c>
 /// brushes, which are defined in no other loaded resource dictionary. Deliberately NOT loaded: the app's
@@ -58,6 +58,7 @@ public class HeadlessStyleTestApp : Application
         Styles.Add(new FluentTheme());
         Styles.Add(LoadStyle("avares://Dock.Avalonia.Themes.Fluent/DockFluentTheme.axaml"));
         Styles.Add(LoadStyle("avares://CST.Avalonia/Styles/DockStyles.axaml"));
+        Styles.Add(LoadStyle("avares://CST.Avalonia/Styles/DropdownStyles.axaml"));
     }
 
     // StyleInclude resolves Source against a base URI. Every source here is absolute, so the base is

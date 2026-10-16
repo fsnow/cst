@@ -2137,6 +2137,25 @@ namespace CST.Avalonia.Services
                 // SplitToWindow calls RemoveDockable before re-adding to the new window, and a cross-dock
                 // MoveDockable does the same. Deleting the saved state here meant every float and every drag
                 // between splits destroyed it. A real close arrives via CloseDockable instead. (#623)
+                // Dock makes the tab to the LEFT active, which is Welcome when the removed tab sat right after
+                // it - even with books open to its right. Welcome cannot be closed, so the next ⌘W did nothing.
+                // [fsnow]: "A close should then select any other open book, not Welcome". (#1066)
+                // Chosen BEFORE the removal: Dock then sees the removed tab is no longer active and keeps our
+                // choice, so Welcome is never activated in between - which would attach its browser, note it
+                // in the #621 history and save the layout with Welcome selected, all for one tick. (review)
+                if (dockable.Owner is IDock { VisibleDockables: { } siblings } owner &&
+                    ReferenceEquals(owner.ActiveDockable, dockable))
+                {
+                    var removedIndex = siblings.IndexOf(dockable);
+                    var remaining = siblings.Where(d => !ReferenceEquals(d, dockable)).ToList();
+                    var dockWouldChoose = remaining.Count > 0 ? remaining[removedIndex > 0 ? removedIndex - 1 : 0] : null;
+                    if (NextActiveInsteadOfWelcome(remaining, removedIndex, dockWouldChoose, d => d is WelcomeViewModel)
+                        is { } instead)
+                    {
+                        owner.ActiveDockable = instead;
+                    }
+                }
+
                 base.RemoveDockable(dockable, collapse);
             }
             else
@@ -2158,6 +2177,25 @@ namespace CST.Avalonia.Services
             ScheduleEmptyFloatingWindowCheck();
         }
 
+
+        /// <summary>
+        /// What a dock should show after its active tab was removed, when Dock's own choice landed on Welcome:
+        /// the nearest other tab, looking left first as Dock does, then right. Null to keep Dock's choice -
+        /// it was not Welcome, or nothing else is open. (#1066)
+        /// </summary>
+        internal static IDockable? NextActiveInsteadOfWelcome(IList<IDockable> remaining, int removedIndex,
+            IDockable? chosen, Func<IDockable, bool> isWelcome)
+        {
+            if (chosen == null || !isWelcome(chosen) || removedIndex < 0) return null;
+
+            bool Eligible(IDockable d) => !isWelcome(d) && d is not ISplitter;
+
+            for (var i = Math.Min(removedIndex - 1, remaining.Count - 1); i >= 0; i--)
+                if (Eligible(remaining[i])) return remaining[i];
+            for (var i = Math.Max(removedIndex, 0); i < remaining.Count; i++)
+                if (Eligible(remaining[i])) return remaining[i];
+            return null;
+        }
 
         // Initialize host window support for floating windows
         public override void InitLayout(IDockable layout)
