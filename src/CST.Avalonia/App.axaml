@@ -165,6 +165,7 @@
         <FluentTheme />
         <StyleInclude Source="avares://Dock.Avalonia.Themes.Fluent/DockFluentTheme.axaml" />
         <StyleInclude Source="avares://CST.Avalonia/Styles/DockStyles.axaml" />
+        <StyleInclude Source="avares://CST.Avalonia/Styles/DropdownStyles.axaml" />
 
         <!-- Attach ControlRecycling to all DockControl instances -->
         <Style Selector="DockControl">
