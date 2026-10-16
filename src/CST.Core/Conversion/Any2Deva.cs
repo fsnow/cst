@@ -51,6 +51,8 @@ namespace CST.Conversion
                 return Mlym2Deva.Convert(str);
             else if (script == Script.Myanmar)
                 return Mymr2Deva.Convert(str);
+            else if (script == Script.Odia)
+                return Orya2Deva.Convert(str);
             else if (script == Script.Sinhala)
                 return Sinh2Deva.Convert(str);
             else if (script == Script.Thai)

@@ -4,7 +4,7 @@ This project validates round-trip conversions for all Pali scripts supported by 
 
 ## Overview
 
-The CST (Chaṭṭha Saṅgāyana Tipiṭaka) project supports 14 different scripts for displaying Pali texts. This validation tool ensures that text can be converted between scripts without data loss. It tests round-trip conversion through the Ideal Pali Encoding (IPE) format:
+The CST (Chaṭṭha Saṅgāyana Tipiṭaka) project supports 15 different scripts for displaying Pali texts. This validation tool ensures that text can be converted between scripts without data loss. It tests round-trip conversion through the Ideal Pali Encoding (IPE) format:
 
 ```
 Devanagari → IPE → Target Script → IPE → Target Script
@@ -22,7 +22,7 @@ cd src/CST.ScriptValidation
 dotnet run validate
 ```
 
-This tests ~2,600 carefully selected words — `syllable-test-words.txt` (every unique syllable pattern), `vowel-test-words.txt` (every vowel-hiatus combination) and `sanskrit-test-words.txt` (the Sanskrit letters of IPE 2) — across all 14 scripts.
+This tests ~2,600 carefully selected words — `syllable-test-words.txt` (every unique syllable pattern), `vowel-test-words.txt` (every vowel-hiatus combination) and `sanskrit-test-words.txt` (the Sanskrit letters of IPE 2) — across all 15 scripts.
 
 ### Full Corpus Validation Mode
 Test using all unique Devanagari tokens from the 217 XML files (about 973,000):
@@ -97,7 +97,7 @@ a real, correct corpus word for one unique vowel-hiatus pattern:
 - Independent vowel + independent vowel (e.g. अआ, एओ)
 - Runs of 2+ independent vowels, and the niggahita variants of the above
 
-These patterns expose transliteration-scheme ambiguities: 13 of 14 scripts round-trip them
+These patterns expose transliteration-scheme ambiguities: 14 of 15 scripts round-trip them
 losslessly, but **Cyrillic** cannot disambiguate several (a scheme limitation, not a bug).
 
 ### Sanskrit Test Words (`sanskrit-test-words.txt`)
@@ -126,11 +126,11 @@ However, it:
 
 ## Supported Scripts
 
-All 14 scripts are validated by round-trip conversion (Deva → IPE → Script → IPE → Script):
+All 15 scripts are validated by round-trip conversion (Deva → IPE → Script → IPE → Script):
 
-- Bengali, Cyrillic, Devanagari, Gujarati, Gurmukhi, Kannada, Khmer, Latin, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan
+- Bengali, Cyrillic, Devanagari, Gujarati, Gurmukhi, Kannada, Khmer, Latin, Malayalam, Myanmar, Odia, Sinhala, Telugu, Thai, Tibetan
 
-13 of 14 round-trip the curated set losslessly. **Cyrillic** has a small number of failures
+14 of 15 round-trip the curated set losslessly. **Cyrillic** has a small number of failures
 (~0.8%) on vowel-hiatus and consonant + аа patterns — an inherent limitation of the current
 Cyrillic transliteration scheme, not a converter bug.
 

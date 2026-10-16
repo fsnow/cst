@@ -32,6 +32,8 @@ namespace CST.Conversion
                 script = Script.Gurmukhi;
             else if (ccode >= 0x0A80 && ccode <= 0x0AFF)
                 script = Script.Gujarati;
+            else if (ccode >= 0x0B00 && ccode <= 0x0B7F)
+                script = Script.Odia;
             else if (ccode >= 0x0C00 && ccode <= 0x0C7F)
                 script = Script.Telugu;
             else if (ccode >= 0x0C80 && ccode <= 0x0CFF)

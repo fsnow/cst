@@ -35,9 +35,14 @@ public class BookFontTests
     }
 
     [Fact]
-    public void TheDefaultsCoverTheFourteenScriptsTheStylesheetsDid()
+    public void EveryReadableScriptHasADefault()
     {
-        Assert.Equal(14, BookFontDefaults.All.Count);
+        // The fourteen scripts the stylesheets covered, plus Odia. Counted from the enum, so a script added
+        // later fails here until it has a stack of its own instead of silently borrowing Latin's.
+        var readable = Enum.GetValues<Script>().Where(s => s != Script.Unknown && s != Script.Ipe).ToList();
+        Assert.Equal(readable.Count, BookFontDefaults.All.Count);
+        foreach (var script in readable)
+            Assert.True(BookFontDefaults.Has(script), $"No book font stack of its own for {script}.");
     }
 
     [Fact]

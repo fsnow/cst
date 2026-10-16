@@ -69,6 +69,7 @@ public class SanskritLettersTests
         new(Script.Khmer,     Deva2Khmr.Convert, Deva2Khmr.ConvertReference, Khmr2Deva.Convert, Khmr2Deva.ConvertReference),
         new(Script.Malayalam, Deva2Mlym.Convert, Deva2Mlym.ConvertReference, Mlym2Deva.Convert, Mlym2Deva.ConvertReference),
         new(Script.Myanmar,   Deva2Mymr.Convert, Deva2Mymr.ConvertReference, Mymr2Deva.Convert, Mymr2Deva.ConvertReference),
+        new(Script.Odia,     Deva2Orya.Convert, Deva2Orya.ConvertReference, Orya2Deva.Convert, Orya2Deva.ConvertReference),
         new(Script.Sinhala,   Deva2Sinh.Convert, Deva2Sinh.ConvertReference, Sinh2Deva.Convert, Sinh2Deva.ConvertReference),
         new(Script.Telugu,    Deva2Telu.Convert, Deva2Telu.ConvertReference, Telu2Deva.Convert, Telu2Deva.ConvertReference),
         new(Script.Thai,      Deva2Thai.Convert, Deva2Thai.ConvertReference, Thai2Deva.Convert, Thai2Deva.ConvertReference),

@@ -19,6 +19,7 @@ public class StateValidationTests
     [InlineData(Script.Devanagari, "Devanagari")]
     [InlineData(Script.Latin, "Latin")]
     [InlineData(Script.Myanmar, "Myanmar")]
+    [InlineData(Script.Odia, "Odia")]
     public void ScriptKeys_Of_IsEnumName(Script script, string expected)
         => Assert.Equal(expected, ScriptKeys.Of(script));
 

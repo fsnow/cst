@@ -203,6 +203,7 @@ except Exception as e:
             CST.Conversion.Script.Kannada => "Kannada",
             CST.Conversion.Script.Malayalam => "Malayalam",
             CST.Conversion.Script.Myanmar => "Burmese",
+            CST.Conversion.Script.Odia => "Oriya",
             CST.Conversion.Script.Sinhala => "Sinhala",
             CST.Conversion.Script.Thai => "Thai",
             CST.Conversion.Script.Tibetan => "Tibetan",

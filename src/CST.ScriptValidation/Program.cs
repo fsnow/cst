@@ -170,8 +170,8 @@ Usage: dotnet run compare <script> [OPTIONS]
 
 Arguments:
   <script>             Script to test: bengali, cyrillic, gujarati, gurmukhi,
-                       kannada, khmer, latin, malayalam, myanmar, sinhala,
-                       telugu, thai, tibetan
+                       kannada, khmer, latin, malayalam, myanmar, odia,
+                       sinhala, telugu, thai, tibetan
 
 Options:
   --word <word>        Test a specific Devanagari word
@@ -202,6 +202,7 @@ Examples:
             case "latin": targetScript = Script.Latin; break;
             case "malayalam": targetScript = Script.Malayalam; break;
             case "myanmar": targetScript = Script.Myanmar; break;
+            case "oriya": case "odia": targetScript = Script.Odia; break;
             case "sinhala": targetScript = Script.Sinhala; break;
             case "telugu": targetScript = Script.Telugu; break;
             case "thai": targetScript = Script.Thai; break;

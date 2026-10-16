@@ -68,6 +68,10 @@ public class ConverterEquivalenceTests
         => AssertEquivalentOverCorpus("Deva2Mlym", Deva2Mlym.Convert, Deva2Mlym.ConvertReference);
 
     [Fact]
+    public void Deva2Orya_FastMatchesReference()
+        => AssertEquivalentOverCorpus("Deva2Orya", Deva2Orya.Convert, Deva2Orya.ConvertReference);
+
+    [Fact]
     public void Deva2Sinh_FastMatchesReference()
         => AssertEquivalentOverCorpus("Deva2Sinh", Deva2Sinh.Convert, Deva2Sinh.ConvertReference);
 
@@ -84,6 +88,10 @@ public class ConverterEquivalenceTests
     [Fact]
     public void Telu2Deva_FastMatchesReference()
         => AssertEquivalentOverCorpus("Telu2Deva", Telu2Deva.Convert, Telu2Deva.ConvertReference, Deva2Telu.Convert);
+
+    [Fact]
+    public void Orya2Deva_FastMatchesReference()
+        => AssertEquivalentOverCorpus("Orya2Deva", Orya2Deva.Convert, Orya2Deva.ConvertReference, Deva2Orya.Convert);
 
     [Fact]
     public void Gujr2Deva_FastMatchesReference()
