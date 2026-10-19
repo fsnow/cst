@@ -42,7 +42,11 @@ All from 2026-10-09 unless dated otherwise.
   6. chapter lists where relevant.
 
   The epic's comments are the authoritative wording.
-- **Corpus XML changes.** These go through Brihas (VRI). See #452/#453.
+- **Corpus XML changes.** Text corrections go through Brihas (VRI). See #452/#453.
+- **Structural markup goes straight to a PR.** [fsnow, 2026-10-19] "We will go straight to PR on
+  Tipitaka-xml". The decisions and tools for adding markup are in
+  [markup-conventions.md](markup-conventions.md#adding-markup). The first PR is
+  VipassanaTech/tipitaka-xml#2729 (the four AN ṭīkās and AN9–11 of `s0404a`).
 - **Scope of the corpus.** [fsnow, 2026-10-10] "for our purposes here we only care about “deva master”". `deva master/` in `VipassanaTech/tipitaka-xml` is what CST Reader downloads (`Settings.XmlRepositoryPath`) [observed]. The 14 script folders beside it don't matter here.
 - **Other consumers of the markup.** [fsnow, 2026-10-10] "Since the master files have a mix of markup styles, with div, head, trailer, or only p, so I assume that everything they have written handles both cases." This is his assumption about VRI's tipitaka.org code, which Len Aye recently rewrote. It has not been verified.
 
@@ -327,5 +331,5 @@ Each is fsnow's call unless marked otherwise.
 3. Should the model describe the corpus **as it is**, or as it will be once the markup is resumed?
 4. ~~Does any work and commentary correlate by something other than paragraph number?~~ Answered: [fsnow, 2026-10-11] "as you said above, “With some books it needs a section added”. that's what I was referring to." The different way outside the four nikāyas is a section-qualified paragraph number, not a different system.
 5. For the paragraph-navigation decision, should "consecutive" be judged **per file or per work segment**?
-6. **How should markup be done:** by hand, as in 2007, or proposed by an agent for review? And does structural markup go through Brihas like text corrections (#452), or by another route?
+6. ~~**How should markup be done:** by hand, as in 2007, or proposed by an agent for review? And does structural markup go through Brihas like text corrections (#452), or by another route?~~ Answered: proposed by an agent with `scripts/markup.py`, reviewed by fsnow as a diff in a local clone, then a PR to tipitaka-xml. [fsnow, 2026-10-19] "I want to do that work here on Kestrel so that it is easy for me to review the diffs before anything is PR'ed", and "We will go straight to PR on Tipitaka-xml".
 7. Which **section levels** belong in the chapter list? It shows exactly the types in `ChapterListTypes`.
