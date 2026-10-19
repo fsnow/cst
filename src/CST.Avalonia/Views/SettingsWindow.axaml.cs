@@ -86,12 +86,16 @@ namespace CST.Avalonia.Views
                 var width = saved.Width;
                 var height = saved.Height;
 
-                var work = (owner?.Screens?.ScreenFromWindow(owner) ?? owner?.Screens?.Primary)?.WorkingArea;
-                if (work.HasValue)
+                // The SCREEN's own scaling, which is what its WorkingArea is expressed in - as the main window
+                // clamps (SimpleTabbedWindow, #428). This used the owner's RenderScaling, and the two differ: on
+                // a Retina Mac the screen reported its work area at 1x while the window rendered at 2x, so every
+                // open was clamped to half the screen and a taller saved size never came back.
+                var screen = owner?.Screens?.ScreenFromWindow(owner) ?? owner?.Screens?.Primary;
+                if (screen != null)
                 {
-                    var scale = owner?.RenderScaling ?? 1.0;
-                    width = Math.Min(width, work.Value.Width / scale);
-                    height = Math.Min(height, work.Value.Height / scale);
+                    var scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
+                    width = Math.Min(width, screen.WorkingArea.Width / scale);
+                    height = Math.Min(height, screen.WorkingArea.Height / scale);
                 }
 
                 Width = Math.Max(width, MinWidth);
