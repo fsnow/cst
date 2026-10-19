@@ -15,7 +15,7 @@ namespace CST.Avalonia.Services.Platform
     /// <para>Windows previously had no script-aware path at all: the picker offered every installed font for
     /// all 14 scripts, with no per-script default. Since most installed fonts cannot draw Sinhala or Myanmar,
     /// the list actively misled - the entries that work were indistinguishable from the ones that produce
-    /// tofu, in an application whose whole promise is those 14 scripts.</para>
+    /// tofu, in an application whose whole promise is its scripts.</para>
     ///
     /// <para><b>Managed, not DirectWrite.</b> The 2025 design for this called for DirectWrite COM interop -
     /// several hundred lines of P/Invoke - because Avalonia offered nothing equivalent at the time. It does
