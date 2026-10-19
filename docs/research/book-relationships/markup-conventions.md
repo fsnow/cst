@@ -4,7 +4,8 @@ This document describes the `<div>` markup that fsnow added by hand in 2007–08
 **[observed]**: read from the downloaded corpus, with a file to check it against. The exceptions are the
 [fsnow] decisions, which are quoted, and the [suggestion]s, which are marked. It records what the
 existing markup *does*. It is the starting specification for resuming the work, but it is not a set of
-rules until fsnow adopts it. Measurements come from `scripts/markup_profile.py`, run 2026-10-10.
+rules until fsnow adopts it. Measurements come from `scripts/markup_profile.py`, run 2026-10-10. The
+decisions taken when the work resumed in October 2026 are in [Adding markup](#adding-markup).
 
 > [fsnow, 2026-10-09] "The structural markup that is there was done by me in 2007 - 2008, manually, and
 > stopped arbitrarily when I ran out of time to develop CST4. The app's downloaded copy *is* the master
@@ -104,7 +105,17 @@ is in `ChapterListTypes` and it has a `.//head`). It has not been checked in the
 for example the "0" section has a <head> in the DN1 Atthakatha, but not in mul or tika." [observed] The
 DN1 mūla (`s0101m`) has no `_0` div at all, because it has no ganthārambha: it opens on the Brahmajāla
 (`dn1_1`). So the head/no-head split here is between the aṭṭhakathā (`s0101a`) and the ṭīkā (`s0101t`).
-Which treatment the markup should standardise on is fsnow's call.
+
+**Decided: an opening section has a `<head>`.** [observed] All seven sit directly after their book's
+heading, so under the rule above none needed one for navigation. But the chapter list is also the reader's
+position readout. The current chapter is the last div anchor above the scroll position, and when that
+div is not in the list, `UpdateCurrentChapter` leaves the selection unchanged. So scrolling back up from
+the first section into a head-less opening section leaves the list showing the first section. This was
+read from the code, not tried in the app.
+
+[fsnow, 2026-10-19] "ok, let's go with "yes" on head for _0. Given the bug you found it sounds like we
+should fix the older ones too." `dn1_0` in `s0101t` and `mn1_0` in `s0201a` get their `<head>` in
+VipassanaTech/tipitaka-xml#2730.
 
 Every opening div keeps the title's `subsubhead` rend, whether it is a `<p>` or a `<head>`.
 
@@ -122,7 +133,8 @@ the status bar takes a section's page from it (#542).
 - **`kn11` in `s0510m2`** opens on `<p rend="centre">`.
 - **`kn18` in `s0518m`** (Milindapañha) has no `<head>` of its own. Its first child is the div
   `kn18_1`, which carries `<head rend="chapter">मिलिन्दपञ्हपाळि</head>`.
-- **`dn1_0` in `s0101t` and `mn1_0` in `s0201a`**, the two opening sections without a `<head>`.
+- **`dn1_0` in `s0101t` and `mn1_0` in `s0201a`**, the two opening sections without a `<head>`. They get
+  one in VipassanaTech/tipitaka-xml#2730 (see [Opening sections](#opening-sections)).
 
 ## Page turns
 
@@ -141,6 +153,9 @@ the page turn actually is.
 | book-only | 4 | `s0401t`–`s0404t` (the AN ṭīkās). Only `<div type="book">` and `<head rend="book">`; the sections inside are still `<p rend="chapter|title">` (18–59 per file). |
 | partial | 1 | `s0404a`. AN8 is fully marked. AN9–11 have their book divs, and their headings and colophons were converted to `<head>`/`<trailer>`, but the vagga and paṇṇāsaka divs were never added. This leaves runs of `</trailer><head rend="chapter">` with no `</div><div>` between them: 22 of the file's 36 trailers close nothing. |
 | unmarked | 139 | Plain `<p>` throughout. |
+
+This table is the corpus as measured on 2026-10-10. VipassanaTech/tipitaka-xml#2729 marks the four
+book-only files and completes `s0404a`. Once it is merged, those five files move to "marked".
 
 [fsnow, 2026-10-12] "s0404a is where I stopped the work I guess and need to pick up there." So `s0404a` (AN9–11) is where the 2007–08 markup work resumes.
 
@@ -224,7 +239,77 @@ These were found by the id check in `scripts/markup_profile.py`:
 
 [suggestion] A duplicate id gives two HTML anchors with the same name, so choosing the second entry in
 the chapter list probably lands on the first. This has not been checked in the app. Correcting these
-is a corpus change, and so goes through the same route as other XML changes (#452).
+is a corpus change: a PR to VipassanaTech/tipitaka-xml (see [Adding markup](#adding-markup)).
+
+## Adding markup
+
+The decisions taken when the markup work resumed, in October 2026. The first files done this way are the
+four AN ṭīkās and AN9–11 of `s0404a` (VipassanaTech/tipitaka-xml#2729).
+
+### Decisions
+
+- **Route.** [fsnow, 2026-10-19] "We will go straight to PR on Tipitaka-xml". The work is done in a local
+  clone so that fsnow can review the diffs before anything is PR'd: [fsnow] "I want to do that work here
+  on Kestrel so that it is easy for me to review the diffs before anything is PR'ed."
+- **Where to start.** [fsnow, 2026-10-19] "we will begin with the four AN ṭīkās. I would want you to study
+  the s01, s02, s03 books to understand the conventions." Then `s0404a` before `s0404t`, because `s0404t`
+  takes its ids from it: [fsnow] "ah, so we should do s0404a first".
+- **`rend` is never changed.** [fsnow, 2026-10-19] "always preserve the "rend" values that are there". A
+  `<p rend="X">` becomes `<head rend="X">` or `<trailer rend="X">`.
+- **Opening sections have a `<head>`.** See [Opening sections](#opening-sections).
+- **Closing lines go inside the div they close.** [fsnow, 2026-10-19] "I would think that I put the
+  nitthitos inside the divs." [observed] `scripts/closings.py` confirms it across all marked files. A
+  section's own closing line is inside it, as its last element. A parent's closing line is inside the
+  parent, after its last child. Only lines above the book's level (a nikāya's or a whole commentary's)
+  sit after the book div.
+  - The section's own closing line becomes its `<trailer>`. If several closing lines follow each other,
+    the last one is the trailer, as in `s0401a`.
+  - A closing line counts as the section's own only if it names the section. Colophons of smaller units (a
+    sutta, a group of suttas) stay `<p>`, as in the 2007 markup.
+  - A volume line ("पठमो भागो निट्ठितो।") that ends a book becomes the book's trailer, as in `s0513m`.
+    [fsnow, 2026-10-19] "agree".
+- **Ids come from the text the commentary follows.** A ṭīkā takes the aṭṭhakathā's ids, and the
+  aṭṭhakathā takes the mūla's, so the same id names the same section at every level. Where a commentary
+  skips a vagga, the ids follow the printed numbers (`s0401t` goes from `an1_8` to `an1_10`).
+- **A note on a skipped section.** Some commentaries cover a whole vagga in one numbered paragraph, e.g.
+  `८१-८२. नवमे वग्गे नत्थि वत्तब्बं।` in `s0401t`, under that vagga's paragraph numbers.
+  - If it covers one section, or several at the same level, it gets the first one's id, with no `<head>`
+    and no trailer. [fsnow, 2026-10-19] "an1_9 and an1_11" (`an1_11` covers vaggas 11 and 12).
+  - If it covers sections at more than one level, it gets no div. [fsnow, 2026-10-19] "divless", for
+    `s0403t`'s ¶231–302, which covers the end of the 5th paṇṇāsaka and the vagga after it.
+    `s0404t`'s ¶81–626 has the same shape and is treated the same way.
+  - A vagga whose only content is such a note keeps its heading, and the note is its content.
+- **A section with no closing line** ends at its last element and has no trailer.
+
+### Tools
+
+`scripts/markup.py` adds divs and changes nothing else. Every result passes a **strip check** before it is
+written: with all `<div>`/`</div>` lines removed and `<head>`/`<trailer>` turned back into `<p>`, the
+original and the result must be identical, line for line. It also keeps the BOM, UTF-16 LE and CRLF, and
+checks that ids are unique, that `n` equals `id`, and that every id extends its parent's.
+
+- `scripts/mark_an.py TARGET TEMPLATE[,TEMPLATE…] [--write]` marks up an Aṅguttara book from an already
+  marked one, matching headings by name. It prints a review table: each section's heading and closing
+  line, and anything left between sections. It writes only with `--write`. Decisions about notes, and the
+  rare closing line that names its section differently, are listed in the script with the quotes above.
+- `scripts/mark_s0401t.py` is the first file's own script.
+- `scripts/outline.py`, `scripts/closings.py` and `scripts/opening_sections.py` are the studies behind the
+  decisions.
+
+They read and write the tipitaka-xml clone's `deva master` (default
+`~/github/VipassanaTech/tipitaka-xml/deva master`; override with `TIPITAKA_XML_MASTER`), never the app's
+`xml` folder.
+
+### Reviewing a diff
+
+Git treats the UTF-16 files as binary. In the clone, two local settings make `git diff` readable:
+
+```bash
+echo '*.xml diff=utf16' >> .git/info/attributes
+git config diff.utf16.textconv "iconv -f UTF-16LE -t UTF-8"
+```
+
+VS Code's diff view reads the UTF-16 files directly.
 
 ## What the app does with the markup
 
