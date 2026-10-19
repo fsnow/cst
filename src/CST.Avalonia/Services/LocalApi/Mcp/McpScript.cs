@@ -4,7 +4,7 @@ using CST.Conversion;
 namespace CST.Avalonia.Services.LocalApi.Mcp
 {
     /// <summary>
-    /// Agent-facing output scripts — the corpus's 14 scripts + Latin. Excludes the internal IPE font encoding
+    /// Agent-facing output scripts — every reading script, Latin included. Excludes the internal IPE font encoding
     /// and the auto-detect sentinel, so the MCP tool schema advertises a closed <c>enum</c> (findable by a
     /// small model) instead of a bare string. Member names match <see cref="Script"/> exactly.
     /// </summary>

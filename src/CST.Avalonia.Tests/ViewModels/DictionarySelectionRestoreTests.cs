@@ -82,7 +82,7 @@ public class DictionarySelectionRestoreTests
     ///
     /// <para>DPPN distinguishes its homographs by NUMBER — "Nālandā 1", "Nālandāsutta 1". The display
     /// pipeline converts those digits into the reading script, and IPE carries a Devanāgarī digit through
-    /// unchanged while a Latin one stays ASCII, so the keys differ in 11 of the 14 scripts. The earlier
+    /// unchanged while a Latin one stays ASCII, so the keys differed in 11 of the 14 scripts there were before Odia. The earlier
     /// script-change test passed only because its headword had no number — the feature's own motivating
     /// data was the case it did not cover.</para>
     ///

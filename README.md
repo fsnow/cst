@@ -135,7 +135,7 @@ src/CST.Core/              # Script conversion, book catalog, passage reading, s
 src/CST.Lucene/            # Search engine library
 src/CST.Lexicon/           # Dictionary asset format
 src/CST.Lemma/             # Lemma / morphology support
-src/CST.ScriptValidation/  # Round-trip validation harness for the 14 script converters
+src/CST.ScriptValidation/  # Round-trip validation harness for the script converters
 src/CST.CharacterAnalysis/ # Finds characters in the corpus outside the standard Pāli set
 docs/                      # Architecture, features, research, release process
 ```

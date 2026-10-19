@@ -287,8 +287,8 @@ namespace CST.Avalonia.ViewModels
             var fontSettings = _settingsService.Settings.FontSettings;
             
             // Alphabetical. The dictionary's insertion order put Latin first and the rest in a sequence
-            // nobody could predict, which was tolerable in a 4-row box and is not in a list showing all
-            // fourteen — with more names visible, a findable order matters more than a privileged one.
+            // nobody could predict, which was tolerable in a 4-row box and is not in a list showing every
+            // script — with more names visible, a findable order matters more than a privileged one.
             foreach (var kvp in fontSettings.ScriptFonts.OrderBy(k => k.Key, StringComparer.CurrentCulture))
             {
                 var vm = new ScriptFontSettingViewModel
@@ -324,7 +324,7 @@ namespace CST.Avalonia.ViewModels
 
             // Open on the script the app is CURRENTLY displaying, not a hardcoded Latin. Someone reading in
             // Devanagari who opens Settings is almost certainly there to adjust Devanagari; making them
-            // find it in a fourteen-item list first is friction with no upside. Falls back to Latin, then
+            // find it in a fifteen-item list first is friction with no upside. Falls back to Latin, then
             // to whatever exists, so an unknown or missing script cannot leave nothing selected.
             var currentScript = (App.ServiceProvider?.GetService(typeof(IScriptService)) as IScriptService)?.CurrentScript;
             var currentScriptName = currentScript.HasValue ? ScriptKeys.Of(currentScript.Value) : null;

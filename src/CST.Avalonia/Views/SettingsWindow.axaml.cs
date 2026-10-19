@@ -89,7 +89,7 @@ namespace CST.Avalonia.Views
                 // The SCREEN's own scaling, which is what its WorkingArea is expressed in - as the main window
                 // clamps (SimpleTabbedWindow, #428). This used the owner's RenderScaling, and the two differ: on
                 // a Retina Mac the screen reported its work area at 1x while the window rendered at 2x, so every
-                // open was clamped to half the screen and a taller saved size never came back.
+                // open was clamped to half the work area and a taller saved size never came back.
                 var screen = owner?.Screens?.ScreenFromWindow(owner) ?? owner?.Screens?.Primary;
                 if (screen != null)
                 {

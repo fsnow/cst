@@ -466,7 +466,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     /// <c>Any2Ipe.Convert</c>.</b> DPPN distinguishes its homographs by NUMBER - "Nālandā 1", "Nālandā 2",
     /// "Nālandāsutta 1" - which is exactly the case #935 was filed about. The display pipeline converts
     /// those digits into the reading script, and IPE carries a Devanāgarī digit through unchanged while a
-    /// Latin one stays ASCII. Measured: the key differs in 11 of the 14 scripts, so a reader who selected
+    /// Latin one stays ASCII. Measured before Odia was added: the key differed in 11 of the 14 scripts there were then, so a reader who selected
     /// "Nālandāsutta 1" in Devanāgarī and reopened in Latin silently got the first match instead.</para>
     ///
     /// <para>And the miss was not merely transient: the new selection is written straight back to state, so

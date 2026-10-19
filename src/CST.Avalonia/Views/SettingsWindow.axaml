@@ -202,7 +202,7 @@
                                         <!-- Script List -->
                                         <!-- No fixed Height: the Grid row sizes to the settings panel on
                                              the right, so the picker stretches to match it and shows as
-                                             many of the 14 scripts as the panel is tall, instead of
+                                             many of the scripts as the panel is tall, instead of
                                              four in a 200px box with empty space beneath. MinHeight
                                              keeps it usable if the right-hand panel ever shrinks. -->
                                         <ListBox Grid.Column="0"
@@ -220,7 +220,8 @@
                                             <!-- Compact rows: the template's own padding stacked on top
                                                  of the Fluent ListBoxItem default, making each script
                                                  ~3 lines tall. Trimmed so all fourteen fit without
-                                                 scrolling at the default dialog size. -->
+                                                 scrolling at the default dialog size. Not rechecked
+                                                 since Odia made fifteen. -->
                                             <ListBox.Styles>
                                                 <Style Selector="ListBoxItem" x:DataType="vm:ScriptFontSettingViewModel">
                                                     <Setter Property="Padding" Value="10,4"/>

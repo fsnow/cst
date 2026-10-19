@@ -1324,7 +1324,7 @@ namespace CST.Avalonia.ViewModels
                     xslTransform.Load(xslPath);
 
                     // #42: the face is injected rather than baked into a per-script stylesheet. One
-                    // stylesheet now serves all fourteen scripts — they differed only in this one line.
+                    // stylesheet now serves every script — they differed only in this one line.
                     //
                     // Taken from the value the caller recorded rather than resolved again here, so what was
                     // ATTEMPTED and what was APPLIED cannot disagree — resolving twice would let a settings
