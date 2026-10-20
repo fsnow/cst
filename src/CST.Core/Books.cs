@@ -979,7 +979,7 @@ namespace CST
 			book.BookType = BookType.Multi;
 			book.MulaIndex = 12; // 12 + 13 + 14
 			book.TikaIndex = 122;
-			book.ChapterListTypes = "book,pannasaka,vagga";
+			book.ChapterListTypes = "book,pannasaka,vagga,peyyala";
 			bookList.Add(book);
 
 			book = new Book();
