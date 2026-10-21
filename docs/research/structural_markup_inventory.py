@@ -1,83 +1,155 @@
 #!/usr/bin/env python3
-"""Regenerate STRUCTURAL_MARKUP_INVENTORY.md — scan corpus <div> coverage vs Books.cs ChapterListTypes.
+"""Regenerate STRUCTURAL_MARKUP_INVENTORY.md: the state of the structural <div> markup in every book, and how
+it compares with each book's ChapterListTypes in Books.cs.
 
-Usage: python3 structural_markup_inventory.py [XML_DIR]
-  XML_DIR defaults to $CST_XML_DIR, else the macOS app-support corpus path.
-Re-run after adding <div> structural markup to refresh the inventory.
+Usage:
+  python3 structural_markup_inventory.py [--xml-rev REV] [--books-rev REV]
+
+  --xml-rev REV    read "deva master" at REV in the tipitaka-xml clone ($TIPITAKA_XML_REPO, default
+                   ~/github/VipassanaTech/tipitaka-xml), e.g. a PR's commit. Without it, the corpus is read
+                   from $CST_XML_DIR or the app's download, as the other book-relationships scripts do.
+  --books-rev REV  read src/CST.Core/Books.cs at REV in this repo (e.g. a PR branch). Default: the working tree.
+
+The states and the canonical / añña division come from book-relationships/scripts (markup_profile.profile and
+corpus.books), so this inventory and those measurements cannot disagree. Every number below is computed.
 """
-import os, re, glob, collections, datetime, sys
+import argparse, collections, datetime, os, re, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
-XML  = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("CST_XML_DIR")
-        or os.path.expanduser("~/Library/Application Support/CSTReader/xml"))
-BOOKS = os.path.join(REPO, "src", "CST.Core", "Books.cs")
-OUT   = os.path.join(HERE, "STRUCTURAL_MARKUP_INVENTORY.md")
-dt = re.compile(r'<div\b[^>]*\btype="([^"]+)"')
+OUT = os.path.join(HERE, "STRUCTURAL_MARKUP_INVENTORY.md")
+sys.path.insert(0, os.path.join(HERE, "book-relationships", "scripts"))
+import corpus                      # noqa: E402
+from markup_profile import profile  # noqa: E402
 
-def rd(p):
-    b = open(p, "rb").read()
-    for e in ("utf-16", "utf-16-le", "utf-8"):
-        try: return b.decode(e)
-        except Exception: pass
-    return b.decode("utf-16-le", "ignore")
+TX_REPO = os.environ.get("TIPITAKA_XML_REPO") or os.path.expanduser("~/github/VipassanaTech/tipitaka-xml")
+STATES = ("marked", "partial", "book-only", "unmarked")
+NIKAYA = {"s01": "DN", "s02": "MN", "s03": "SN", "s04": "AN", "s05": "KN"}
+LAYERS = ("Mula", "Atthakatha", "Tika")
+LAYER_NAME = {"Mula": "mūla", "Atthakatha": "aṭṭhakathā", "Tika": "ṭīkā"}
 
-def fam(fn):
-    c = ("Vinaya" if fn.startswith("vin") else "Sutta" if fn.startswith("s0") else
-         "Abhidhamma" if fn.startswith("abh") else "Anya/other" if fn.startswith("e0") else "other")
-    l = next((v for k, v in ((".mul.", "Mula"), (".att.", "Atthakatha"),
-                             (".tik.", "Tika"), (".nrf.", "nrf")) if k in fn), "?")
-    return c, l
 
-src = open(BOOKS, encoding="utf-8").read(); declared = {}; cur = None
-for ln in src.splitlines():
-    m = re.search(r'\.FileName\s*=\s*"([^"]+)"', ln)
-    if m: cur = m.group(1); declared.setdefault(cur, ""); continue
-    m = re.search(r'\.ChapterListTypes\s*=\s*"([^"]*)"', ln)
-    if m and cur: declared[cur] = m.group(1)
+def git(repo, *args):
+    return subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True).stdout
 
-rows, typect, bycol, mism = [], collections.Counter(), collections.defaultdict(lambda: [0, 0]), []
-for f in sorted(glob.glob(os.path.join(XML, "*.xml"))):
-    fn = os.path.basename(f); types = collections.Counter(dt.findall(rd(f)))
-    has_book = "book" in types; c, l = fam(fn)
-    for t in types: typect[t] += 1
-    bycol[c][0 if has_book else 1] += 1
-    decl = set(x for x in declared.get(fn, "").split(",") if x); act = set(types)
-    missing = sorted(decl - act)
-    if missing: mism.append((fn, decl, act, missing))
-    rows.append((c, l, fn, "Y" if has_book else "N",
-                 " ".join(f"{k}×{v}" for k, v in types.most_common()) or "—",
-                 declared.get(fn, "") or "—",
-                 ("declares " + ",".join(missing) + " ABSENT in XML") if missing else ""))
 
-struct = sum(1 for r in rows if r[3] == "Y"); un = len(rows) - struct
-d = datetime.date.today().isoformat()
-o = []
-o.append("# Structural markup inventory — corpus `<div>` coverage\n")
-o.append(f"**Status:** research (ground truth for the book-mapping / navigation cluster: #24 Go To, #76 source-PDF cardinality, #174 book linking, #314 nav resolver, #187 agent navigation, and the #266 `bookCodes`). **Generated:** {d} by `structural_markup_inventory.py`.\n")
-o.append("## Background\n")
-o.append("The corpus TEI XML carries structural `<div type=\"…\">` markup (`book` / `vagga` / `samyutta` / …) in SOME books but not others. These divisions were added **by hand in 2007** to power the chapter-list feature; that work **stopped mid-corpus in 2008** (unfinished) and was never resumed. `bookCodes` (`Books.cs` + `MultiBookCodes`, #266) and the chapter list derive DIRECTLY from this markup, so their coverage IS this markup's coverage. Nobody had an inventory — this is it.\n")
-o.append("## Method\n")
-o.append("`structural_markup_inventory.py` scans all corpus XML files (UTF-16-LE) for `<div type>` elements and cross-references each book's *declared* `ChapterListTypes` in `src/CST.Core/Books.cs`. \"Structured\" = has at least one `<div type=\"book\">`. Re-run the script to refresh.\n")
-o.append(f"## Coverage summary\n\n**{struct} of {len(rows)} books are structured; {un} are unstructured.** The gaps are systematic:\n")
-o.append("\n| Collection | structured | unstructured |\n|---|---:|---:|")
-for c in ["Sutta", "Vinaya", "Abhidhamma", "Anya/other", "other"]:
-    s, u = bycol[c]; o.append(f"| {c} | {s} | {u} |")
-o.append("\nBy layer, it is a clean front-to-back trail that stops mid-canon:\n")
-o.append("- **Sutta Mūla 41/41** and **Sutta Ṭīkā 15/16** — fully done.")
-o.append("- **Sutta Aṭṭhakathā ~15/39** — about half, then stopped.")
-o.append("- **Vinaya** — only its 5 Mūla volumes; none of its commentary.")
-o.append("- **Abhidhamma 0/25, Anya/other 0/40, `.nrf` 0/28** — never reached.\n")
-o.append("This matches the account: the Sutta canon was marked first, the commentaries partway, and Abhidhamma + the extra texts not at all before the 2008 halt.\n")
-o.append("## Structural vocabulary present\n\n" + "  ".join(f"`{k}`({v})" for k, v in typect.most_common()) + "  — (count = #books containing that div type)\n")
-o.append("## Inconsistencies (declared a chapter type its XML lacks)\n\nOnly two; everything else is cleanly all-or-nothing:\n")
-for fn, decl, act, missing in mism:
-    o.append(f"- **`{fn}`** — declares `{','.join(sorted(decl))}`, XML has `{','.join(sorted(act)) or '(none)'}` → missing `{','.join(missing)}`.")
-o.append("\n## Implication for the book-mapping cluster\n")
-o.append("`bookCodes`, the chapter list, and the \"Go To by chapter\" hard cases all rest on this markup, so they are **~36% complete**, with the missing 64% falling entirely on **Abhidhamma, the Anya/other texts, all Vinaya commentary, and half the Sutta commentary**. Any relationship model built on `<div>` structure inherits those holes; \"Go To\" degrades to paragraph/page-only exactly there. Completing the 2007 markup (or deriving structure another way for the unmarked books) is the prerequisite for uniform chapter-level navigation across the corpus.\n")
-o.append("## Full per-book inventory\n\n| Collection | Layer | File | Structured | `<div type>` present | Declared `ChapterListTypes` | Note |\n|---|---|---|:--:|---|---|---|")
-order = {c: i for i, c in enumerate(["Vinaya", "Sutta", "Abhidhamma", "Anya/other", "other"])}
-for c, l, fn, st, types, decl, note in sorted(rows, key=lambda r: (order.get(r[0], 9), r[2])):
-    o.append(f"| {c} | {l} | `{fn}` | {st} | {types} | {decl} | {note} |")
-open(OUT, "w").write("\n".join(o) + "\n")
-print(f"wrote {OUT} — {len(rows)} rows, {struct} structured")
+def group(b):
+    if not b["canonical"]:
+        return "añña"
+    if b["pitaka"] == "Sutta":
+        return NIKAYA.get(b["file"][:3], "Sutta")
+    return b["pitaka"]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--xml-rev")
+    ap.add_argument("--books-rev")
+    a = ap.parse_args()
+
+    tmp = tempfile.mkdtemp()
+    if a.books_rev:
+        corpus.BOOKS_CS = os.path.join(tmp, "Books.cs")
+        open(corpus.BOOKS_CS, "wb").write(git(REPO, "show", f"{a.books_rev}:src/CST.Core/Books.cs"))
+    books = corpus.books()
+    if a.xml_rev:
+        corpus.XML_DIR = os.path.join(tmp, "xml")
+        os.makedirs(corpus.XML_DIR)
+        for b in books:
+            open(os.path.join(corpus.XML_DIR, b["file"]), "wb").write(
+                git(TX_REPO, "show", f"{a.xml_rev}:deva master/{b['file']}"))
+
+    rows = []
+    for b in books:
+        text = corpus.read_xml(b["file"])
+        p = profile(text)
+        types = collections.Counter(re.findall(r'<div\b[^>]*\btype="([^"]+)"', text))
+        declared = {t for t in b["chapter_list_types"].split(",") if t}
+        present = set(types)
+        rows.append(dict(b=b, state=p["state"], types=types, group=group(b),
+                         missing=sorted(declared - present),
+                         unlisted=sorted((present - {"book"}) - declared) if declared or present - {"book"} else []))
+
+    def source(rev, what):
+        return f"{what} at `{rev}`" if rev else f"{what} (working copy)"
+    today = datetime.date.today().isoformat()
+    o = []
+    o.append("# Structural markup inventory: corpus `<div>` coverage\n")
+    o.append(f"**Status:** research, part of the book-relationships epic (#422). **Generated:** {today} by "
+             f"`structural_markup_inventory.py`, from {source(a.xml_rev, 'tipitaka-xml `deva master`')} and "
+             f"{source(a.books_rev, '`Books.cs`')}.\n")
+    o.append("Related: [book-relationships/markup-conventions.md](book-relationships/markup-conventions.md) "
+             "describes the markup and records the decisions for adding it; "
+             "[book-relationships/README.md](book-relationships/README.md) is the epic's working doc.\n")
+
+    o.append("## Background\n")
+    o.append("[fsnow, 2026-10-09] \"The structural markup that is there was done by me in 2007 - 2008, manually, "
+             "and stopped arbitrarily when I ran out of time to develop CST4.\" The work resumed in October 2026, "
+             "starting with the Aṅguttara ṭīkās (VipassanaTech/tipitaka-xml#2729).\n")
+    o.append("[observed] The chapter list (`ChapterListsService`) shows the divs whose type is in the book's "
+             "`ChapterListTypes`, and `MultiBookCodes` (#266) reads a Multi book's sub-book codes from its book "
+             "divs. Both have only as much to work with as the markup provides.\n")
+
+    o.append("## Method\n")
+    o.append("Each of the 217 books in `Books.cs` is read and given one of four states, by "
+             "`markup_profile.profile` (book-relationships/scripts):\n")
+    o.append("| State | Meaning |\n|---|---|")
+    o.append("| marked | inner section divs, and every `<trailer>` closes a div |")
+    o.append("| partial | inner divs, but some `<trailer>`s close nothing: headings and colophons were converted "
+             "without all their divs |")
+    o.append("| book-only | the only divs are `type=\"book\"` |")
+    o.append("| unmarked | no divs |\n")
+    o.append("Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical files are `.nrf`. "
+             "Canonical books are split by piṭaka, and the Sutta piṭaka by nikāya; `Matn = Other` is añña.\n")
+
+    o.append("## Summary\n")
+    st = collections.Counter(r["state"] for r in rows)
+    o.append(f"**{st['marked']} of {len(rows)} books are marked**" +
+             "".join(f", {st[s]} {s}" for s in STATES[1:] if st[s]) + ".\n")
+    order = ["DN", "MN", "SN", "AN", "KN", "Vinaya", "Abhidhamma"]
+    o.append("| Group | Layer | " + " | ".join(STATES) + " | total |\n|---|---|" + "---:|" * (len(STATES) + 1))
+    for g in order:
+        for layer in LAYERS:
+            rs = [r for r in rows if r["group"] == g and r["b"]["matn"] == layer]
+            if not rs: continue
+            c = collections.Counter(r["state"] for r in rs)
+            o.append(f"| {g} | {LAYER_NAME[layer]} | " + " | ".join(str(c[s]) for s in STATES) + f" | {len(rs)} |")
+    rs = [r for r in rows if r["group"] == "añña"]
+    c = collections.Counter(r["state"] for r in rs)
+    o.append("| añña | | " + " | ".join(str(c[s]) for s in STATES) + f" | {len(rs)} |\n")
+
+    o.append("## Div types present\n")
+    typect = collections.Counter(t for r in rows for t in r["types"])
+    o.append("  ".join(f"`{k}` ({v})" for k, v in typect.most_common()) + " (number of books with that type)\n")
+
+    o.append("## Mismatches with `ChapterListTypes`\n")
+    miss = [r for r in rows if r["missing"]]
+    unl = [r for r in rows if r["unlisted"]]
+    o.append("**Declared but absent:** the book's `ChapterListTypes` names a type its XML has no div of. "
+             "Harmless, but the declaration promises something the book does not have.\n")
+    o.extend([f"- `{r['b']['file']}`: `{','.join(r['missing'])}`" for r in miss] or ["- none"])
+    o.append("\n**Present but not listed:** the XML has sections of a type its `ChapterListTypes` leaves out, so "
+             "the chapter list skips them.\n")
+    o.extend([f"- `{r['b']['file']}`: `{','.join(r['unlisted'])}`" for r in unl] or ["- none"])
+    o.append("")
+
+    o.append("## Priorities\n")
+    o.append("Not every unmarked book is meant to be marked. The epic's goal 6 (#422, 2026-07-31) is chapter "
+             "lists \"wherever that is correct and relevant\", and ranks the añña books \"likely never, and not "
+             "merely 'later'\"; the remaining canonical commentaries are \"to be judged on how much they are "
+             "actually cited\". The order of work is in "
+             "[markup-conventions.md](book-relationships/markup-conventions.md#adding-markup).\n")
+
+    o.append("## Per-book inventory\n")
+    o.append("| Group | Layer | File | State | `<div>` types | `ChapterListTypes` |\n|---|---|---|---|---|---|")
+    for r in sorted(rows, key=lambda r: ((order + ["añña"]).index(r["group"]), r["b"]["index"])):
+        b = r["b"]
+        o.append(f"| {r['group']} | {LAYER_NAME.get(b['matn'], '')} | `{b['file']}` | {r['state']} | "
+                 + (" ".join(f"{k}×{v}" for k, v in r["types"].most_common()) or "—")
+                 + f" | {b['chapter_list_types'] or '—'} |")
+    open(OUT, "w", encoding="utf-8").write("\n".join(o) + "\n")
+    print(f"wrote {OUT}: " + ", ".join(f"{s} {st[s]}" for s in STATES))
+
+
+if __name__ == "__main__":
+    main()
