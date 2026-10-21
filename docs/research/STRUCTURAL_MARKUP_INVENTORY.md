@@ -58,12 +58,17 @@ Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical
 
 ## Mismatches with `ChapterListTypes`
 
-**Declared but absent:** the book's `ChapterListTypes` names a type its XML has no div of. Harmless, but the declaration promises something the book does not have.
+**Declared but absent:** the book's `ChapterListTypes` names a type its XML has no div of. Harmless either way, but the two kinds mean different things.
+
+*Marked books that declare a type they lack.* The book has sections; the extra type has none to list.
+
+- `s0404a.att.xml`: declares `book,pannasaka,vagga,peyyala`, lacks `peyyala`
+- `s0403t.tik.xml`: declares `book,pannasaka,vagga,peyyala`, lacks `peyyala`
+- `s0404t.tik.xml`: declares `book,pannasaka,vagga,peyyala`, lacks `peyyala`
+
+*Unmarked books with a placeholder list.* The book has no divs yet, but `ChapterListTypes` already names the types its markup is expected to have, so its chapter list will appear once it is marked.
 
 - `abh01m.mul.xml`: `book,chapter`
-- `s0404a.att.xml`: `peyyala`
-- `s0403t.tik.xml`: `peyyala`
-- `s0404t.tik.xml`: `peyyala`
 
 **Present but not listed:** the XML has sections of a type its `ChapterListTypes` leaves out, so the chapter list skips them.
 
