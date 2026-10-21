@@ -125,9 +125,17 @@ def main():
     o.append("## Mismatches with `ChapterListTypes`\n")
     miss = [r for r in rows if r["missing"]]
     unl = [r for r in rows if r["unlisted"]]
-    o.append("**Declared but absent:** the book's `ChapterListTypes` names a type its XML has no div of. "
-             "Harmless, but the declaration promises something the book does not have.\n")
-    o.extend([f"- `{r['b']['file']}`: `{','.join(r['missing'])}`" for r in miss] or ["- none"])
+    extra = [r for r in miss if r["state"] != "unmarked"]
+    placeholder = [r for r in miss if r["state"] == "unmarked"]
+    o.append("**Declared but absent:** the book's `ChapterListTypes` names a type its XML has no div of. Harmless "
+             "either way, but the two kinds mean different things.\n")
+    o.append("*Marked books that declare a type they lack.* The book has sections; the extra type has none to "
+             "list.\n")
+    o.extend([f"- `{r['b']['file']}`: declares `{r['b']['chapter_list_types']}`, lacks `{','.join(r['missing'])}`"
+              for r in extra] or ["- none"])
+    o.append("\n*Unmarked books with a placeholder list.* The book has no divs yet, but `ChapterListTypes` already "
+             "names the types its markup is expected to have, so its chapter list will appear once it is marked.\n")
+    o.extend([f"- `{r['b']['file']}`: `{r['b']['chapter_list_types']}`" for r in placeholder] or ["- none"])
     o.append("\n**Present but not listed:** the XML has sections of a type its `ChapterListTypes` leaves out, so "
              "the chapter list skips them.\n")
     o.extend([f"- `{r['b']['file']}`: `{','.join(r['unlisted'])}`" for r in unl] or ["- none"])
