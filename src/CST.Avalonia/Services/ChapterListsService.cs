@@ -14,13 +14,33 @@ namespace CST.Avalonia.Services;
 /// <summary>
 /// Service for managing chapter lists data.
 /// Port of CST4's ChapterLists class with JSON storage and async support.
+///
+/// <para>Each cached list records what it was built from: the book's <c>ChapterListTypes</c> and its XML
+/// file's write time and length. A list whose source has changed since is rebuilt the next time it is asked
+/// for. Before this, a list was built once and kept for good, so a corrected book reached readers who had
+/// already opened it with its old chapter list - every markup change, and every <c>Books.cs</c> change to a
+/// book's types, would have been invisible to them. (#1075)</para>
 /// </summary>
 public class ChapterListsService
 {
+    /// <summary>One cached list and the source it was built from.</summary>
+    internal sealed class Entry
+    {
+        public string Types { get; set; } = "";
+        public long FileTicks { get; set; }
+        public long FileLength { get; set; }
+        public List<DivTag> Chapters { get; set; } = new();
+    }
+
+    /// <summary>The file's format. A file without it (the format before #1075) carries no source record, so
+    /// its lists cannot be checked and are rebuilt as each book is opened.</summary>
+    private const int FileFormat = 2;
+
     private readonly ILogger<ChapterListsService> _logger;
     private readonly ISettingsService? _settingsService;
     private readonly string _dataFilePath;
-    private Dictionary<int, List<DivTag>> _chapterLists;
+    private readonly string? _xmlDirectoryOverride;
+    private Dictionary<int, Entry> _chapterLists;
 
     // Guards _chapterLists and the JSON file. GetChapterList/Generate run inside Task.Run per book
     // (BookDisplayViewModel.LoadChaptersAsync), so a session restore of several chaptered books hit
@@ -32,12 +52,22 @@ public class ChapterListsService
     private readonly object _lock = new object();
 
     public ChapterListsService(ILogger<ChapterListsService> logger, ISettingsService? settingsService = null)
+        : this(logger, settingsService,
+               Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            AppConstants.AppDataDirectoryName, "chapter-lists.json"),
+               xmlDirectory: null)
+    {
+    }
+
+    /// <summary>For tests: an explicit cache file, and an XML directory in place of the settings'.</summary>
+    internal ChapterListsService(ILogger<ChapterListsService> logger, ISettingsService? settingsService,
+        string dataFilePath, string? xmlDirectory)
     {
         _logger = logger;
         _settingsService = settingsService;
-        _dataFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                                    AppConstants.AppDataDirectoryName, "chapter-lists.json");
-        _chapterLists = new Dictionary<int, List<DivTag>>();
+        _dataFilePath = dataFilePath;
+        _xmlDirectoryOverride = xmlDirectory;
+        _chapterLists = new Dictionary<int, Entry>();
 
         lock (_lock)
         {
@@ -61,19 +91,26 @@ public class ChapterListsService
                 _logger.LogInformation("Book {Index} ({FileName}): ChapterListTypes = '{ChapterListTypes}'", 
                                      bookIndex, book.FileName, book.ChapterListTypes ?? "(null)");
                 
-                // If the book has ChapterListTypes but no generated chapters, try generating them
-                if (!string.IsNullOrEmpty(book.ChapterListTypes) && !_chapterLists.ContainsKey(bookIndex))
+                // Build the list if there is none, or if what it was built from has changed. (#1075)
+                if (!string.IsNullOrEmpty(book.ChapterListTypes))
                 {
-                    _logger.LogInformation("Book has ChapterListTypes but no generated chapters. Generating now...");
                     var xmlDirectory = GetXmlDirectory();
-                    if (xmlDirectory != null)
+                    if (xmlDirectory == null)
                     {
+                        // Nothing to check against: serve whatever is cached rather than nothing.
+                        if (!_chapterLists.ContainsKey(bookIndex))
+                            _logger.LogWarning("Cannot generate chapters - no valid XML directory configured");
+                    }
+                    else if (!_chapterLists.TryGetValue(bookIndex, out var cached) || !IsCurrent(cached, book, xmlDirectory))
+                    {
+                        _logger.LogInformation("Chapter list for {FileName} is missing or out of date. Generating now...",
+                            book.FileName);
                         Generate(new List<int> { bookIndex }, xmlDirectory);
                     }
-                    else
-                    {
-                        _logger.LogWarning("Cannot generate chapters - no valid XML directory configured");
-                    }
+                }
+                else if (_chapterLists.Remove(bookIndex))
+                {
+                    SaveToFile();
                 }
             }
         }
@@ -82,13 +119,22 @@ public class ChapterListsService
             _logger.LogError(ex, "Error checking book {Index} for chapter data", bookIndex);
         }
 
-        return _chapterLists.TryGetValue(bookIndex, out var chapters) ? chapters : null;
+        return _chapterLists.TryGetValue(bookIndex, out var entry) ? entry.Chapters : null;
       }
     }
 
+    /// <summary>Whether a cached list was built from the book's current types and XML file.</summary>
+    private static bool IsCurrent(Entry entry, CST.Book book, string xmlDirectory)
+    {
+        if (entry.Types != book.ChapterListTypes) return false;
+        var file = new FileInfo(Path.Combine(xmlDirectory, book.FileName));
+        return file.Exists && entry.FileTicks == file.LastWriteTimeUtc.Ticks && entry.FileLength == file.Length;
+    }
+
     /// <summary>
-    /// Generates chapter lists for books that have changed.
-    /// Port of CST4's ChapterLists.Generate() method.
+    /// Generates the chapter lists of the given books, replacing whatever is cached for them.
+    /// Port of CST4's ChapterLists.Generate() method. <see cref="GetChapterList"/> calls it for a book whose
+    /// list is missing or out of date.
     /// </summary>
     public void Generate(List<int> changedBookIndices, string xmlDirectory)
     {
@@ -119,12 +165,25 @@ public class ChapterListsService
                 _logger.LogDebug("Processing book {FileName} with chapter types: {Types}", 
                                book.FileName, book.ChapterListTypes);
 
+                // The file's stamp is read BEFORE it is parsed. Read after, a file replaced mid-parse by the XML
+                // update would record the old chapters under the new file's stamp, and the list would stay stale
+                // for good; read before, the stamp is the old one and the next call rebuilds. (review of #1079)
+                var file = new FileInfo(Path.Combine(xmlDirectory, book.FileName));
+                var stampTicks = file.Exists ? file.LastWriteTimeUtc.Ticks : 0;
+                var stampLength = file.Exists ? file.Length : -1;
+
                 // Generate chapter list for this book
                 var chapterList = GenerateChapterListForBook(book, xmlDirectory);
                 
                 if (chapterList.Count > 0)
                 {
-                    _chapterLists[bookIndex] = chapterList;
+                    _chapterLists[bookIndex] = new Entry
+                    {
+                        Types = book.ChapterListTypes,
+                        FileTicks = stampTicks,
+                        FileLength = stampLength,
+                        Chapters = chapterList
+                    };
                     _logger.LogInformation("Generated {Count} chapters for book {FileName}", 
                                          chapterList.Count, book.FileName);
                 }
@@ -256,17 +315,19 @@ public class ChapterListsService
             if (File.Exists(_dataFilePath))
             {
                 string jsonContent = File.ReadAllText(_dataFilePath);
-                var data = JsonSerializer.Deserialize<Dictionary<string, List<DivTag>>>(jsonContent);
-                
-                if (data != null)
+                var data = JsonSerializer.Deserialize<CacheFile>(jsonContent);
+
+                if (data?.Format == FileFormat && data.Books != null)
                 {
                     // Convert string keys back to int keys
-                    _chapterLists = data.ToDictionary(
-                        kvp => int.Parse(kvp.Key), 
-                        kvp => kvp.Value
-                    );
-                    
+                    _chapterLists = data.Books.ToDictionary(kvp => int.Parse(kvp.Key), kvp => kvp.Value);
                     _logger.LogInformation("Loaded chapter lists for {Count} books", _chapterLists.Count);
+                }
+                else
+                {
+                    // The format before #1075: no record of what each list was built from, so none can be
+                    // trusted. Each book's list is rebuilt the first time it is opened.
+                    _logger.LogInformation("Chapter lists file has no source records - lists will be rebuilt as books open");
                 }
             }
             else
@@ -277,7 +338,7 @@ public class ChapterListsService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading chapter lists from file");
-            _chapterLists = new Dictionary<int, List<DivTag>>();
+            _chapterLists = new Dictionary<int, Entry>();
         }
     }
 
@@ -292,11 +353,12 @@ public class ChapterListsService
             Directory.CreateDirectory(Path.GetDirectoryName(_dataFilePath)!);
             
             // Convert int keys to string keys for JSON serialization
-            var data = _chapterLists.ToDictionary(
-                kvp => kvp.Key.ToString(), 
-                kvp => kvp.Value
-            );
-            
+            var data = new CacheFile
+            {
+                Format = FileFormat,
+                Books = _chapterLists.ToDictionary(kvp => kvp.Key.ToString(), kvp => kvp.Value)
+            };
+
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true
@@ -339,6 +401,9 @@ public class ChapterListsService
     /// </summary>
     private string? GetXmlDirectory()
     {
+        if (_xmlDirectoryOverride != null)
+            return Directory.Exists(_xmlDirectoryOverride) ? _xmlDirectoryOverride : null;
+
         // Use the XML directory from settings if available
         if (_settingsService?.Settings?.XmlBooksDirectory is string xmlDir && !string.IsNullOrEmpty(xmlDir))
         {
@@ -365,5 +430,12 @@ public class ChapterListsService
         // No valid XML directory configured
         _logger.LogWarning("No valid XML directory configured in settings");
         return null;
+    }
+
+    /// <summary>The cache file. <see cref="Format"/> is absent (0) in the format before #1075.</summary>
+    private sealed class CacheFile
+    {
+        public int Format { get; set; }
+        public Dictionary<string, Entry>? Books { get; set; }
     }
 }
