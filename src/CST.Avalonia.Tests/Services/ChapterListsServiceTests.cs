@@ -68,6 +68,23 @@ public class ChapterListsServiceTests : IDisposable
         Assert.Equal(new[] { "Book", "One", "Two" }, Headings(service));
     }
 
+    // A correction often keeps the file's length: in UTF-16 one letter for another is the same two bytes. Then
+    // only the write time says the file changed. (review of #1079: with the time check removed, every other
+    // test here still passed, because each of their edits also changed the length.)
+    [Fact]
+    public void A_list_is_rebuilt_when_only_the_write_time_shows_the_change()
+    {
+        WriteBook(0, "One");
+        var service = Service();
+        Assert.Equal(new[] { "Book", "One" }, Headings(service));
+        var length = new FileInfo(BookPath).Length;
+
+        WriteBook(1, "Two");
+        Assert.Equal(length, new FileInfo(BookPath).Length);   // premise: same length, new content
+
+        Assert.Equal(new[] { "Book", "Two" }, Headings(service));
+    }
+
     // The case readers hit: the book is updated while the app is closed.
     [Fact]
     public void A_list_saved_by_one_run_is_rebuilt_by_the_next_when_the_xml_changed_in_between()

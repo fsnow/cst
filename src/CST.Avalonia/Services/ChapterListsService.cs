@@ -132,8 +132,9 @@ public class ChapterListsService
     }
 
     /// <summary>
-    /// Generates chapter lists for books that have changed.
-    /// Port of CST4's ChapterLists.Generate() method.
+    /// Generates the chapter lists of the given books, replacing whatever is cached for them.
+    /// Port of CST4's ChapterLists.Generate() method. <see cref="GetChapterList"/> calls it for a book whose
+    /// list is missing or out of date.
     /// </summary>
     public void Generate(List<int> changedBookIndices, string xmlDirectory)
     {
@@ -164,17 +165,23 @@ public class ChapterListsService
                 _logger.LogDebug("Processing book {FileName} with chapter types: {Types}", 
                                book.FileName, book.ChapterListTypes);
 
+                // The file's stamp is read BEFORE it is parsed. Read after, a file replaced mid-parse by the XML
+                // update would record the old chapters under the new file's stamp, and the list would stay stale
+                // for good; read before, the stamp is the old one and the next call rebuilds. (review of #1079)
+                var file = new FileInfo(Path.Combine(xmlDirectory, book.FileName));
+                var stampTicks = file.Exists ? file.LastWriteTimeUtc.Ticks : 0;
+                var stampLength = file.Exists ? file.Length : -1;
+
                 // Generate chapter list for this book
                 var chapterList = GenerateChapterListForBook(book, xmlDirectory);
                 
                 if (chapterList.Count > 0)
                 {
-                    var file = new FileInfo(Path.Combine(xmlDirectory, book.FileName));
                     _chapterLists[bookIndex] = new Entry
                     {
                         Types = book.ChapterListTypes,
-                        FileTicks = file.LastWriteTimeUtc.Ticks,
-                        FileLength = file.Length,
+                        FileTicks = stampTicks,
+                        FileLength = stampLength,
                         Chapters = chapterList
                     };
                     _logger.LogInformation("Generated {Count} chapters for book {FileName}", 
