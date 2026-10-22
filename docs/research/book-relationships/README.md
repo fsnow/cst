@@ -32,7 +32,7 @@ All from 2026-10-09 unless dated otherwise.
 - **The structural markup.**
   - [fsnow] "The structural markup that is there was done by me in 2007 - 2008, manually, and stopped arbitrarily when I ran out of time to develop CST4. The app's downloaded copy *is* the master and I have no work on markup in progress."
   - [fsnow] "This would be the time that we prioritize that work".
-- **Opening sections and the chapter list.** [fsnow, 2026-10-10] "this was a choice, since the top entry in the chapter list also takes you to the top". He said this about `dn1_0` in `s0101t`, a div with no `<head>` that is missing from the chapter list. Five of the corpus's seven opening sections *do* have a `<head>` and are listed (see [markup-conventions.md](markup-conventions.md#opening-sections)), so which treatment is the convention is still open.
+- **Opening sections and the chapter list.** [fsnow, 2026-10-10] "this was a choice, since the top entry in the chapter list also takes you to the top". He said this about `dn1_0` in `s0101t`, a div with no `<head>` that is missing from the chapter list. Five of the corpus's seven opening sections *do* have a `<head>` and are listed (see [markup-conventions.md](markup-conventions.md#opening-sections)), [fsnow, 2026-10-19] "ok, let's go with "yes" on head for _0": every opening section has a `<head>`.
 - **The six goals of #422.** They are set out in the epic's comments of 2026-07-31; fsnow confirmed on 2026-10-09 that they are his. In short:
   1. book linking;
   2. anchors unique within a file;
@@ -45,8 +45,9 @@ All from 2026-10-09 unless dated otherwise.
 - **Corpus XML changes.** Text corrections go through Brihas (VRI). See #452/#453.
 - **Structural markup goes straight to a PR.** [fsnow, 2026-10-19] "We will go straight to PR on
   Tipitaka-xml". The decisions and tools for adding markup are in
-  [markup-conventions.md](markup-conventions.md#adding-markup). The first PR is
-  VipassanaTech/tipitaka-xml#2729 (the four AN ṭīkās and AN9–11 of `s0404a`).
+  [markup-conventions.md](markup-conventions.md#adding-markup). The PRs so far are
+  VipassanaTech/tipitaka-xml#2729 (the four AN ṭīkās and AN9–11 of `s0404a`), #2730 (`<head>` for the
+  two opening sections without one) and #2731 (the Khuddaka Nikāya aṭṭhakathās and the Netti ṭīkās).
 - **Scope of the corpus.** [fsnow, 2026-10-10] "for our purposes here we only care about “deva master”". `deva master/` in `VipassanaTech/tipitaka-xml` is what CST Reader downloads (`Settings.XmlRepositoryPath`) [observed]. The 14 script folders beside it don't matter here.
 - **Other consumers of the markup.** [fsnow, 2026-10-10] "Since the master files have a mix of markup styles, with div, head, trailer, or only p, so I assume that everything they have written handles both cases." This is his assumption about VRI's tipitaka.org code, which Len Aye recently rewrote. It has not been verified.
 
