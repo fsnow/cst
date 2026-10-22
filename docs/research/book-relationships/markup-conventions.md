@@ -156,6 +156,9 @@ the page turn actually is.
 
 This table is the corpus as measured on 2026-10-10. VipassanaTech/tipitaka-xml#2729 marks the four
 book-only files and completes `s0404a`. Once it is merged, those five files move to "marked".
+VipassanaTech/tipitaka-xml#2731 marks 26 unmarked files: the Khuddaka Nikāya aṭṭhakathās, the Netti
+aṭṭhakathā and the two Netti ṭīkās. [STRUCTURAL_MARKUP_INVENTORY.md](../STRUCTURAL_MARKUP_INVENTORY.md)
+is the current count.
 
 [fsnow, 2026-10-12] "s0404a is where I stopped the work I guess and need to pick up there." So `s0404a` (AN9–11) is where the 2007–08 markup work resumes.
 
@@ -244,7 +247,9 @@ is a corpus change: a PR to VipassanaTech/tipitaka-xml (see [Adding markup](#add
 ## Adding markup
 
 The decisions taken when the markup work resumed, in October 2026. The first files done this way are the
-four AN ṭīkās and AN9–11 of `s0404a` (VipassanaTech/tipitaka-xml#2729).
+four AN ṭīkās and AN9–11 of `s0404a` (VipassanaTech/tipitaka-xml#2729). The Khuddaka Nikāya aṭṭhakathās
+and the Netti ṭīkās followed (VipassanaTech/tipitaka-xml#2731); the decisions they added are in
+[Khuddaka Nikāya](#khuddaka-nikāya).
 
 ### Decisions
 
@@ -281,6 +286,46 @@ four AN ṭīkās and AN9–11 of `s0404a` (VipassanaTech/tipitaka-xml#2729).
   - A vagga whose only content is such a note keeps its heading, and the note is its content.
 - **A section with no closing line** ends at its last element and has no trailer.
 
+#### Khuddaka Nikāya
+
+[fsnow, 2026-10-21] "Let's do KN first." These files had no divs at all, so each gets its book div too,
+laid out as in its mūla: the Namo and nikāya lines stay outside it.
+
+- **Ids and types come from the mūla, by printed number.** The commentary names its sections its own way
+  ("२. सिक्खापदवण्णना" for the mūla's "२. दससिक्खापदं"). Sections numbered in neither text are matched by
+  name (`s0516a`, chapters 5 and 6 of the Netti).
+- **Only a closing line that names the section is its trailer.** [fsnow, 2026-10-21] ""A closing line
+  becomes a section's trailer only if it names that section". yes. More specifically a closing line that is
+  the closing of a smaller division that we are not marking up should not be the trailer of the larger
+  division". This holds even when that line is the section's last: `s0501a`'s "कतं निदानसोधनं।", and the
+  Netti's Paṭiniddesavāra, which ends on the closing of its hāra-sampāta. A closing line names its section
+  in any form: "सङ्गहवारस्स अत्थविभावना निट्ठिता।" for "सङ्गहवारअत्थविभावना" (`s0501t`).
+- **A trailer is the last element of its div.** [observed] TEI (P4, which the corpus's `<TEI.2>` is, and
+  P5) puts `<trailer>` in a div's closing matter, after the body, so a `<p>` cannot follow it. Nothing
+  here validates against TEI, so this is a choice, not a constraint. Where the author adds a note after a
+  section's closing (`s0501t`'s "पण्डितेहि पन…" after kn19_4 and kn19_5), the section has no trailer.
+  [fsnow, 2026-10-22] "ok, then no trailer".
+- **A division the mūla does not mark stays unmarked, and so do its title and closing.** The Mahāniddesa's
+  Aṭṭhakavagga (`s0515a`): "१. अट्ठकवग्गो" before chapter 1 and "अट्ठकवग्गवण्णना निट्ठिता।" after chapter
+  16 sit in the book div, between sections.
+- **A part break inside a section stays where it is.** [fsnow, 2026-10-22] "one book div as I did before",
+  for `s0517a`, whose second part begins in the middle of the Mahāvagga. The part's closing line and the
+  next part's front matter (Namo, nikāya, book title, "(दुतियो भागो)") stay `<p>` inside the section, as
+  in `s0201a`.
+- **A file that continues a book without a book heading** has a book div with no `<head>`, opening at its
+  first section. [fsnow, 2026-10-22] "0514 div with no head" (`s0514a1`). Its `ChapterListTypes` leave
+  out `book` (fsnow/cst#1083).
+
+Applied in the diffs fsnow reviewed, not separately decided [suggestion]:
+- **An opening section runs to section 1**, and its trailer is its last line only if that line names it.
+  `s0512a`'s gantha-ārambha closes before its nidānakathā, and `s0519t`'s opening covers both; neither
+  gets a trailer.
+- **A closing colophon split over two lines** (a centre line without a danda, then the line that completes
+  it): the completing line is the trailer, whatever its rend. `s0505a` and `s0501t` have completing lines
+  with `rend="bodytext"`, kept as they are.
+- **Where a section's closing names it differently from its heading**, the closing is set by hand in the
+  script (`own_close`), e.g. `s0503a`'s Soṇavagga, which closes as "महावग्गवण्णना".
+
 ### Tools
 
 `scripts/markup.py` adds divs and changes nothing else. Every result passes a **strip check** before it is
@@ -292,6 +337,9 @@ checks that ids are unique, that `n` equals `id`, and that every id extends its 
   marked one, matching headings by name. It prints a review table: each section's heading and closing
   line, and anything left between sections. It writes only with `--write`. Decisions about notes, and the
   rare closing line that names its section differently, are listed in the script with the quotes above.
+- `scripts/mark_kn.py FILE [--write]` marks up a Khuddaka Nikāya aṭṭhakathā from its mūla, or a ṭīkā from
+  its aṭṭhakathā, matching headings by number. Settings for each of the 26 files are in its `CONFIG`,
+  with the quotes behind them. Same review table and `--write` rule as `mark_an.py`.
 - `scripts/mark_s0401t.py` is the first file's own script.
 - `scripts/outline.py`, `scripts/closings.py` and `scripts/opening_sections.py` are the studies behind the
   decisions.
