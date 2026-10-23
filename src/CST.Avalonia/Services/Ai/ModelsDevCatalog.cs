@@ -164,7 +164,8 @@ namespace CST.Avalonia.Services.Ai
                     // catalogue costs a 304 and no body. Only when there is a readable cache to fall back on.
                     // (#1089)
                     using var request = new HttpRequestMessage(HttpMethod.Get, _source);
-                    var known = ReadCache() is not null ? ReadEtag() : null;
+                    // The ETag first: it is a small file, and without one there is no need to parse 6 MB.
+                    var known = ReadEtag() is { } etagOnDisk && ReadCache() is not null ? etagOnDisk : null;
                     var conditional = known is not null;
                     if (known is not null) request.Headers.IfNoneMatch.Add(known);
 
