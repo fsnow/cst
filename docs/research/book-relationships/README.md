@@ -167,8 +167,8 @@ No conclusion changes. The lower Jātaka and Vinaya figures were mostly endings.
 
 **Abhidhamma** [observed]. Also the paragraph number, but in the Pañcapakaraṇa the locator is **(section, ¶)**.
 - In abh03m the numbers restart for each section, such as each yamaka and each Paṭṭhāna section. The aṭṭhakathā restarts with them: Yamaka 1–99, 1–211, 1–254, 1–19, 1–170 on both sides.
-- No Abhidhamma file has markup, so nothing names the section today.
-- `abh02t` holds two works, the Vibhaṅga mūlaṭīkā and the anuṭīkā. Each runs ¶ 1–1030 against the Vibhaṅga's numbers.
+- The 21 files `abh01`–`abh05` are marked on the tipitaka-xml branch `markup-abhidhamma` (not yet merged upstream), so the section has an id. On that branch, a commentary ¶ resolves to one base ¶ by (section id, ¶) in 96–100% of cases per pair; what is left needs an order rule in code. See [markup-conventions.md](markup-conventions.md#abhidhamma) and `scripts/abh/locate.py`.
+- `abh02t` holds two works, the Vibhaṅga mūlaṭīkā and the anuṭīkā. Each runs ¶ 1–1030 against the Vibhaṅga's numbers. The anuṭīkā comments on the mūlaṭīkā: by (section, ¶) it resolves 226 of 228 against it.
 - Ṭīkā → aṭṭhakathā: abh01t 82%, abh02t 63%, abh03t 73%.
 
 **Khuddaka** [observed]. The aṭṭhakathās correlate through the mūla's numbers, but not always in a single pass.
@@ -285,7 +285,7 @@ No conclusion changes. The lower Jātaka and Vinaya figures were mostly endings.
 - **Aṭṭhakathā → mūla:** every such pair lines up section for section, in order. That covers AN, Khuddakapāṭha, Apadāna, Buddhavaṃsa, Cariyāpiṭaka, Jātaka, Niddesa, Paṭisambhidāmagga, Netti, Dhammasaṅgaṇī and the Pañcapakaraṇa. Matched blocks are 64–97%.
 - **Ṭīkā → aṭṭhakathā:** these line up the same way (AN, Vinaya, Netti, Dhammasaṅgaṇī, the Pañcapakaraṇa ṭīkā and anuṭīkā), at 64–90%.
 - The two pairs flagged out of order (`s0511a`, the Pañcapakaraṇa ṭīkās) are short sections of 2–5 blocks, where one or two hits chose the wrong section. The long sections are all in order.
-- **A commentary can skip a section of its base.** `abh03t` has no section for two of `abh03a`'s Yamaka sections. Counting sections stops pairing them correctly from that point, so the section part of a locator needs the section's identity, from markup or headings, not its ordinal. No Abhidhamma file has markup today.
+- **A commentary can skip a section of its base.** `abh03t` has no section for two of `abh03a`'s Yamaka sections. Counting sections stops pairing them correctly from that point, so the section part of a locator needs the section's identity, from markup or headings, not its ordinal. The `markup-abhidhamma` branch gives the sections ids (see above).
 
 **Coverage** [observed, 2026-10-11].
 - **150 of 217 files** are linked or correlated with another file. 126 are linked in `Books.cs` today, and 24 more are correlated by measurement, the Kaṅkhāvitaraṇī family (`vin04t`, `vin09t`) among them.
