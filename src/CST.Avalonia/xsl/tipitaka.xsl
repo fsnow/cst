@@ -221,10 +221,12 @@ p {
 </xsl:template>
 
 <!-- A hanging number takes the paragraph right after it into one grid row (#575); that paragraph is then
-     skipped where it would otherwise be output. Another hanging number is never taken. A hangnum that holds
-     text and no number (3 in the corpus, in abh06t and e0601n) is a line of verse, not a number: it renders
-     on its own, because a grid column sized to an unwrapped line can push it past the left edge. -->
-<xsl:template match='p[@rend="hangnum"][not(@n) and normalize-space(.)]' priority="2">
+     skipped where it would otherwise be output. Another hanging number is never taken. A hangnum with no
+     number that holds words, with a space between them (3 in the corpus, in abh06t and e0601n), is a line
+     of verse: it renders on its own, because a grid column sized to an unwrapped line can push it past the
+     left edge. A label with no space - "(क)", "क.", "२." (86, in vin11t, e1009n, s0505m and others) - hangs
+     like a number. -->
+<xsl:template match='p[@rend="hangnum"][not(@n) and contains(normalize-space(.), " ")]' priority="2">
 <p class="hangnum"><xsl:apply-templates/></p>
 </xsl:template>
 
@@ -256,7 +258,7 @@ p {
 </div>
 </xsl:template>
 
-<xsl:template match="p[not(@rend='hangnum')][preceding-sibling::*[1][self::p[@rend='hangnum'][@n or not(normalize-space(.))]]]" priority="5"/>
+<xsl:template match="p[not(@rend='hangnum')][preceding-sibling::*[1][self::p[@rend='hangnum'][@n or not(contains(normalize-space(.), ' '))]]]" priority="5"/>
 
 <!-- The paragraph in a hanging-number row: its usual class alone (centre is 'centered'; BookDisplayView's
      page script matches classes exactly), and its own para anchors. -->

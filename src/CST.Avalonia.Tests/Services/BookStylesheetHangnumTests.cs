@@ -31,8 +31,11 @@ public class BookStylesheetHangnumTests
         "<p rend=\"hangnum\"> </p>" +
         "<p rend=\"bodytext\">TITLE-D</p>" +
         // abh06t, e0601n: a hangnum that holds a line of verse and no number.
-        "<p rend=\"hangnum\">VERSE-LINE-E</p>" +
+        "<p rend=\"hangnum\">VERSE LINE E</p>" +
         "<p rend=\"gathalast\">VERSE-F</p>" +
+        // vin11t: a label, not a number, with no @n.
+        "<p rend=\"hangnum\">(LABEL-G)</p>" +
+        "<p rend=\"gatha1\">VERSE-H</p>" +
         "</div></body></text></TEI.2>";
 
     private static string Render()
@@ -55,8 +58,8 @@ public class BookStylesheetHangnumTests
     {
         var html = Render();
 
-        // 1204, 7, 8 and the empty one before the title; not the one that holds a line of verse.
-        Assert.Equal(4, Count(html, "<div class=\"hanggrid\">"));
+        // 1204, 7, 8, the empty one before the title and the label; not the one that holds a line of verse.
+        Assert.Equal(5, Count(html, "<div class=\"hanggrid\">"));
     }
 
     [Fact]
@@ -114,9 +117,21 @@ public class BookStylesheetHangnumTests
     {
         var html = Render();
 
-        Assert.Matches(new Regex("<p class=\"hangnum\">VERSE-LINE-E</p> ?<p class=\"gathalast\">VERSE-F</p>"), html);
-        Assert.DoesNotMatch(new Regex("<div class=\"hanggrid\"> ?<p class=\"hangnum\">VERSE-LINE-E"), html);
+        Assert.Matches(new Regex("<p class=\"hangnum\">VERSE LINE E</p> ?<p class=\"gathalast\">VERSE-F</p>"), html);
+        Assert.DoesNotMatch(new Regex("<div class=\"hanggrid\"> ?<p class=\"hangnum\">VERSE LINE E"), html);
         Assert.Equal(1, Count(html, "VERSE-F"));
+    }
+
+    /// <summary>A label with no number - vin11t's "(क)" - hangs beside its verse like a number. Treating every
+    /// hangnum that holds text as a line of verse put the labels on a line of their own. (#575, found in
+    /// testing)</summary>
+    [Fact]
+    public void A_label_with_no_number_hangs_like_a_number()
+    {
+        var html = Render();
+
+        Assert.Matches(new Regex("<div class=\"hanggrid\"> ?<p class=\"hangnum\">\\(LABEL-G\\)</p> ?<p class=\"gatha1\">VERSE-H</p> ?</div>"), html);
+        Assert.Equal(1, Count(html, "VERSE-H"));
     }
 
     /// <summary>
