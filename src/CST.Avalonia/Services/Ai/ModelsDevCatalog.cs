@@ -164,14 +164,25 @@ namespace CST.Avalonia.Services.Ai
                     // catalogue costs a 304 and no body. Only when there is a readable cache to fall back on.
                     // (#1089)
                     using var request = new HttpRequestMessage(HttpMethod.Get, _source);
-                    if (ReadEtag() is { } known && ReadCache() is not null)
-                        request.Headers.TryAddWithoutValidation("If-None-Match", known);
+                    var known = ReadCache() is not null ? ReadEtag() : null;
+                    var conditional = known is not null;
+                    if (known is not null) request.Headers.IfNoneMatch.Add(known);
 
                     using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
                     if (response.StatusCode == HttpStatusCode.NotModified)
                     {
+                        // A 304 vouches only for the copy we asked about. One that answers an unconditional
+                        // request (a captive portal, a confused proxy) says nothing, so it is a failure like
+                        // any other. (review of #1090)
+                        if (!conditional)
+                            throw new HttpRequestException("304 Not Modified to an unconditional request");
+
                         TouchCache();
-                        _current = LoadWithoutNetwork();
+                        // The copy read from disk at startup is this same file; parse it again only if
+                        // what we hold came from somewhere else.
+                        _current = _current is { Source: CatalogSource.Cache } held
+                            ? held with { Problem = null, FetchedUtc = CacheWrittenUtc() }
+                            : LoadWithoutNetwork();
                         Log.Information("Provider catalogue unchanged (#1089)");
                         return;
                     }
@@ -209,8 +220,10 @@ namespace CST.Avalonia.Services.Ai
                     return;
                 }
 
-                WriteCache(text);
-                WriteEtag(etag);
+                // The ETag names the document on disk, so it is kept only if that document was written. A
+                // swallowed write failure that kept the new ETag beside the old copy would let every later
+                // 304 serve the old copy as current, retry included. (review of #1090)
+                WriteEtag(WriteCache(text) ? etag : null);
                 _current = new CatalogResult(parsed, CatalogSource.Network, DateTimeOffset.UtcNow);
                 Log.Information("Provider catalogue refreshed: {Count} providers (#736)", parsed.Count);
             }
@@ -243,13 +256,14 @@ namespace CST.Avalonia.Services.Ai
         /// <summary>The ETag of the cached copy, kept beside it. (#1089)</summary>
         private string EtagPath => _cachePath + ".etag";
 
-        private string? ReadEtag()
+        /// <summary>Parsed, not passed through: a file that does not hold one entity tag is ignored rather than
+        /// sent as raw header text. (review of #1090)</summary>
+        private EntityTagHeaderValue? ReadEtag()
         {
             try
             {
                 if (!File.Exists(EtagPath)) return null;
-                var etag = File.ReadAllText(EtagPath).Trim();
-                return etag.Length > 0 ? etag : null;
+                return EntityTagHeaderValue.TryParse(File.ReadAllText(EtagPath).Trim(), out var etag) ? etag : null;
             }
             catch { return null; }
         }
@@ -322,7 +336,8 @@ namespace CST.Avalonia.Services.Ai
             }
         }
 
-        private void WriteCache(string text)
+        /// <returns>Whether the document is now on disk.</returns>
+        private bool WriteCache(string text)
         {
             try
             {
@@ -333,11 +348,13 @@ namespace CST.Avalonia.Services.Ai
                 var tmp = _cachePath + ".tmp";
                 File.WriteAllText(tmp, text);
                 File.Move(tmp, _cachePath, overwrite: true);
+                return true;
             }
             catch (Exception ex)
             {
                 // Not fatal: we have the document in memory for this session and will fetch again next time.
                 Log.Warning(ex, "Could not write the provider catalogue cache (#736)");
+                return false;
             }
         }
 
