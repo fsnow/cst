@@ -678,7 +678,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Mula;
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 105;
-			book.ChapterListTypes = "book,chapter";
+			book.ChapterListTypes = "book,kanda,section";
 			bookList.Add(book);
 
 			book = new Book();
@@ -690,6 +690,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 106;
 			book.TikaIndex = 141;
+			book.ChapterListTypes = "book,vibhanga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -701,6 +702,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,matika,naya";
 			bookList.Add(book);
 
 			book = new Book();
@@ -712,6 +714,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,matika,uddesa,niddesa,pannatti";
 			bookList.Add(book);
 
 			book = new Book();
@@ -723,6 +726,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = -1;  // TODO: real ṭīkā linking here is complex (many-to-many); 99999 was a placeholder that left the ṭīkā button enabled-but-dead (HasTika is TikaIndex >= 0). -1 disables it until the linking is revisited in #174. (CORE-2)
+			book.ChapterListTypes = "book,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -734,6 +738,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,yamaka,vara";
 			bookList.Add(book);
 
 			book = new Book();
@@ -745,6 +750,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,yamaka,vara";
 			bookList.Add(book);
 
 			book = new Book();
@@ -756,6 +762,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,yamaka,vara";
 			bookList.Add(book);
 
 			book = new Book();
@@ -767,6 +774,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = -1;  // TODO: real ṭīkā linking here is complex (many-to-many); 99999 was a placeholder that left the ṭīkā button enabled-but-dead (HasTika is TikaIndex >= 0). -1 disables it until the linking is revisited in #174. (CORE-2)
+			book.ChapterListTypes = "book,patthana,tika,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -778,6 +786,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,patthana,tika";
 			bookList.Add(book);
 
 			book = new Book();
@@ -789,6 +798,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,patthana,gocchaka";
 			bookList.Add(book);
 
 			book = new Book();
@@ -800,6 +810,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = -1;  // TODO: real ṭīkā linking here is complex (many-to-many); 99999 was a placeholder that left the ṭīkā button enabled-but-dead (HasTika is TikaIndex >= 0). -1 disables it until the linking is revisited in #174. (CORE-2)
+			book.ChapterListTypes = "book,patthana,gocchaka,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -811,6 +822,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,patthana";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1341,6 +1353,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Atthakatha;
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.MulaIndex = 48;
+			book.ChapterListTypes = "book,intro,kanda,section";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1352,6 +1365,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.MulaIndex = 49;
 			book.TikaIndex = 141;
+			book.ChapterListTypes = "book,vibhanga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1363,6 +1377,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.MulaIndex = 50; // 50 - 60
 			book.TikaIndex = 142;
+			book.ChapterListTypes = "book,intro,matika,naya,niddesa,pannatti,vagga,yamaka,vara,tika,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1742,6 +1757,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Tika;
 			book.Pitaka = Pitaka.Abhidhamma;
 			// unlinked
+			book.ChapterListTypes = "book,intro,kanda,section";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1753,6 +1769,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.MulaIndex = 49;
 			book.AtthakathaIndex = 106;
+			book.ChapterListTypes = "book,vibhanga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1764,6 +1781,7 @@ namespace CST
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.MulaIndex = 50; // 50 - 60
 			book.AtthakathaIndex = 107;
+			book.ChapterListTypes = "book,intro,matika,naya,niddesa,pannatti,vagga,yamaka,vara,tika,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1774,6 +1792,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Tika;
 			book.Pitaka = Pitaka.Abhidhamma;
 			// unlinked
+			book.ChapterListTypes = "book,intro,kanda,section";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1784,6 +1803,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Tika;
 			book.Pitaka = Pitaka.Abhidhamma;
 			// unlinked
+			book.ChapterListTypes = "book,intro,matika,naya,niddesa,pannatti,vagga,yamaka,vara,tika,chapter";
 			bookList.Add(book);
 
 			book = new Book();
