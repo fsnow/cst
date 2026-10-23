@@ -1017,6 +1017,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 22;
+			book.ChapterListTypes = "book,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1028,6 +1029,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 23;
+			book.ChapterListTypes = "book,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1039,6 +1041,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 24;
+			book.ChapterListTypes = "book,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1050,6 +1053,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 25;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1061,6 +1065,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 26;
+			book.ChapterListTypes = "book,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1072,6 +1077,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 27;
+			book.ChapterListTypes = "book,vimana";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1083,6 +1089,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 28;
+			book.ChapterListTypes = "book,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1094,6 +1101,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 29;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1105,6 +1113,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 29;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1116,6 +1125,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 30;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1127,6 +1137,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 31; // 31 + 32
+			book.ChapterListTypes = "book,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1138,6 +1149,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 33;
+			book.ChapterListTypes = "book,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1149,6 +1161,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 34;
+			book.ChapterListTypes = "book,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1160,6 +1173,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 35;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1171,6 +1185,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 35;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1182,6 +1197,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 35;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 
@@ -1194,6 +1210,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 35;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1205,6 +1222,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 36;
+			book.ChapterListTypes = "nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1216,6 +1234,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 36;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1227,6 +1246,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Split;
 			book.MulaIndex = 36;
+			book.ChapterListTypes = "book,nipata";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1238,6 +1258,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 37;
+			book.ChapterListTypes = "book,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1249,6 +1270,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 38;
+			book.ChapterListTypes = "book,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1260,6 +1282,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 39;
+			book.ChapterListTypes = "book,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1271,6 +1294,7 @@ namespace CST
 			book.Pitaka = Pitaka.Sutta;
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 40;
+			book.ChapterListTypes = "book,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1590,6 +1614,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Tika;
 			book.Pitaka = Pitaka.Sutta;
 			// unlinked
+			book.ChapterListTypes = "book,chapter";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1600,6 +1625,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Tika;
 			book.Pitaka = Pitaka.Sutta;
 			// unlinked
+			book.ChapterListTypes = "book,chapter";
 			bookList.Add(book);
 
 			book = new Book();
