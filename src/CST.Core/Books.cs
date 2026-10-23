@@ -979,7 +979,7 @@ namespace CST
 			book.BookType = BookType.Multi;
 			book.MulaIndex = 12; // 12 + 13 + 14
 			book.TikaIndex = 122;
-			book.ChapterListTypes = "book,pannasaka,vagga";
+			book.ChapterListTypes = "book,pannasaka,vagga,peyyala";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1005,7 +1005,7 @@ namespace CST
 			book.BookType = BookType.Multi;
 			book.MulaIndex = 18; // 18 + 19 + 20 + 21
 			book.TikaIndex = 124;
-			book.ChapterListTypes = "book,pannasaka,vagga,peyyala";
+			book.ChapterListTypes = "book,pannasaka,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1538,6 +1538,7 @@ namespace CST
 			book.BookType = BookType.Whole;
 			book.MulaIndex = 11;
 			book.AtthakathaIndex = 72;
+			book.ChapterListTypes = "book,intro,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1550,6 +1551,7 @@ namespace CST
 			book.BookType = BookType.Multi;
 			book.MulaIndex = 12; // 12 + 13 + 14
 			book.AtthakathaIndex = 73;
+			book.ChapterListTypes = "book,pannasaka,vagga,peyyala";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1562,6 +1564,7 @@ namespace CST
 			book.BookType = BookType.Multi;
 			book.MulaIndex = 15; // 15 + 16 + 17
 			book.AtthakathaIndex = 74;
+			book.ChapterListTypes = "book,pannasaka,vagga";
 			bookList.Add(book);
 
 			book = new Book();
@@ -1574,6 +1577,7 @@ namespace CST
 			book.BookType = BookType.Multi;
 			book.MulaIndex = 18; // 18 + 19 + 20 + 21
 			book.AtthakathaIndex = 75;
+			book.ChapterListTypes = "book,pannasaka,vagga";
 			bookList.Add(book);
 
 			// The filenames of this book and the next are out of order, but this is the order
