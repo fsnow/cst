@@ -88,7 +88,17 @@ p {
 
 .bodytext { font-size: 12pt; text-indent: 2em;}
 
-.hangnum { font-size: 12pt; margin-bottom: -14.4pt; text-indent: 2em;}
+.hangnum { font-size: 12pt; text-indent: 2em;}
+
+/* A hanging number and the paragraph it hangs beside, as one grid row (#575). The paragraph starts at 4em, as
+   before. The number sits in the 4em gutter, right-justified in a box at least 2em wide, so a short number
+   starts at 2em as before and a wider one starts further left instead of running into the paragraph. Only a
+   number wider than the whole gutter widens it and moves the paragraph over. Each keeps its own paragraph and
+   class. */
+.hanggrid { display: grid; grid-template-columns: minmax(4em, max-content) 1fr; align-items: baseline; }
+.hanggrid > .hangnum { grid-column: 1; justify-self: end; min-width: 1.7em; padding-right: 0.3em; margin: 0;
+                       text-indent: 0; text-align: left; white-space: nowrap; }
+.hanggrid > p:not(.hangnum) { grid-column: 2; margin-left: 0; text-indent: 0; }
 
 /* Namo tassa, and nitthita -- no unique structural distinction */
 .centered { font-size: 12pt; text-align:center;}
@@ -210,9 +220,54 @@ p {
 </p>
 </xsl:template>
 
+<!-- A hanging number takes the paragraph right after it into one grid row (#575); that paragraph is then
+     skipped where it would otherwise be output. Another hanging number is never taken. A hangnum that holds
+     text and no number (3 in the corpus, in abh06t and e0601n) is a line of verse, not a number: it renders
+     on its own, because a grid column sized to an unwrapped line can push it past the left edge. -->
+<xsl:template match='p[@rend="hangnum"][not(@n) and normalize-space(.)]' priority="2">
+<p class="hangnum"><xsl:apply-templates/></p>
+</xsl:template>
+
 <xsl:template match='p[@rend="hangnum"]'>
+<div class="hanggrid">
 <p class="hangnum">
   <!-- if the n attribute is set, create an HTML anchor for the paragraph in the form para### -->
+  <xsl:if test="@n">
+    <a>
+      <xsl:attribute name="name">
+        <xsl:text>para</xsl:text>
+        <xsl:value-of select="@n"/>
+      </xsl:attribute>
+    </a>
+    <xsl:if test='ancestor::div[@type="book"]/@id'>
+      <a>
+        <xsl:attribute name="name">
+          <xsl:text>para</xsl:text>
+          <xsl:value-of select="@n"/>
+          <xsl:text>_</xsl:text>
+          <xsl:value-of select='ancestor::div[@type="book"]/@id'/>
+        </xsl:attribute>
+      </a>
+    </xsl:if>
+  </xsl:if>
+<xsl:apply-templates/>
+</p>
+<xsl:apply-templates select="following-sibling::*[1][self::p][not(@rend='hangnum')]" mode="hang"/>
+</div>
+</xsl:template>
+
+<xsl:template match="p[not(@rend='hangnum')][preceding-sibling::*[1][self::p[@rend='hangnum'][@n or not(normalize-space(.))]]]" priority="5"/>
+
+<!-- The paragraph in a hanging-number row: its usual class alone (centre is 'centered'; BookDisplayView's
+     page script matches classes exactly), and its own para anchors. -->
+<xsl:template match="p" mode="hang">
+<p>
+  <xsl:attribute name="class">
+    <xsl:choose>
+      <xsl:when test="@rend='centre'">centered</xsl:when>
+      <xsl:otherwise><xsl:value-of select="@rend"/></xsl:otherwise>
+    </xsl:choose>
+  </xsl:attribute>
   <xsl:if test="@n">
     <a>
       <xsl:attribute name="name">
