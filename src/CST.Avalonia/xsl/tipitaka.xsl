@@ -88,7 +88,7 @@ p {
 
 .bodytext { font-size: 12pt; text-indent: 2em;}
 
-.hangnum { font-size: 12pt;}
+.hangnum { font-size: 12pt; text-indent: 2em;}
 
 /* A hanging number and the paragraph it hangs beside, as one grid row (#575). The paragraph starts at 4em, as
    before. The number sits in the 4em gutter, right-justified in a box at least 2em wide, so a short number
@@ -221,7 +221,13 @@ p {
 </xsl:template>
 
 <!-- A hanging number takes the paragraph right after it into one grid row (#575); that paragraph is then
-     skipped where it would otherwise be output. Another hanging number is never taken. -->
+     skipped where it would otherwise be output. Another hanging number is never taken. A hangnum that holds
+     text and no number (3 in the corpus, in abh06t and e0601n) is a line of verse, not a number: it renders
+     on its own, because a grid column sized to an unwrapped line can push it past the left edge. -->
+<xsl:template match='p[@rend="hangnum"][not(@n) and normalize-space(.)]' priority="2">
+<p class="hangnum"><xsl:apply-templates/></p>
+</xsl:template>
+
 <xsl:template match='p[@rend="hangnum"]'>
 <div class="hanggrid">
 <p class="hangnum">
@@ -250,7 +256,7 @@ p {
 </div>
 </xsl:template>
 
-<xsl:template match="p[not(@rend='hangnum')][preceding-sibling::*[1][self::p[@rend='hangnum']]]" priority="5"/>
+<xsl:template match="p[not(@rend='hangnum')][preceding-sibling::*[1][self::p[@rend='hangnum'][@n or not(normalize-space(.))]]]" priority="5"/>
 
 <!-- The paragraph in a hanging-number row: its usual class alone (centre is 'centered'; BookDisplayView's
      page script matches classes exactly), and its own para anchors. -->
