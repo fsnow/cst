@@ -248,8 +248,9 @@ is a corpus change: a PR to VipassanaTech/tipitaka-xml (see [Adding markup](#add
 
 The decisions taken when the markup work resumed, in October 2026. The first files done this way are the
 four AN ṭīkās and AN9–11 of `s0404a` (VipassanaTech/tipitaka-xml#2729). The Khuddaka Nikāya aṭṭhakathās
-and the Netti ṭīkās followed (VipassanaTech/tipitaka-xml#2731); the decisions they added are in
-[Khuddaka Nikāya](#khuddaka-nikāya).
+and the Netti ṭīkās followed (VipassanaTech/tipitaka-xml#2731), then the 21 Abhidhamma files (branch
+`markup-abhidhamma`). The decisions they added are in [Khuddaka Nikāya](#khuddaka-nikāya) and
+[Abhidhamma](#abhidhamma).
 
 ### Decisions
 
@@ -326,6 +327,65 @@ Applied in the diffs fsnow reviewed, not separately decided [suggestion]:
 - **Where a section's closing names it differently from its heading**, the closing is set by hand in the
   script (`own_close`), e.g. `s0503a`'s Soṇavagga, which closes as "महावग्गवण्णना".
 
+#### Abhidhamma
+
+None of the 21 files (`abh01`–`abh05`) had divs. `abh06t`–`abh09t` (the añña texts) are not marked.
+
+- **Ids.** [fsnow, 2026-10-22] "ok, I am think "abh"": `abh1`–`abh7` for the seven books in canonical
+  order. A book split over files repeats its id in each (the Yamaka is `abh6` in `abh03m4`–`m6`). The
+  shared commentaries (`abh03a`, `abh03t`, `abh05t`) hold `abh3`–`abh7` as sibling book divs, as `s0402a`
+  holds `an2`–`an4`; the file's own title and closing lines sit outside them. `abh02t` holds two works:
+  the mūlaṭīkā is `abh2`, the anuṭīkā `abh2a`.
+- **What to mark, and what to list.** [fsnow, 2026-10-22] "One goal of the structural markup is that the
+  chapter list is a reasonable size, somewhere between 5 and 50 items in most cases. Use this as a
+  guideline as you evaluate the Abhidhamma structure for div candidates", and "don't consider that a hard
+  limit". And: "but since we serve another purpose, to have correct behavior in book linking, we may
+  exclude divisions in the chapter list types while still including them in the markup". So the
+  Vibhaṅga's bhājanīyas, the Kathāvatthu's kathās and the Paṭṭhāna's methods are marked but not listed.
+- **Linking.** [fsnow, 2026-10-22] "the linking can have rules in code. It just needs to be unambiguous."
+  The Abhidhamma's paragraph numbers restart per section, so a locator is (section id, ¶). [observed] On
+  the branch, every restart falls right after a div opens except two inside Yamaka vāras (`abh03m5`), and
+  a commentary paragraph resolves to one base paragraph by the rule "the same id, then the base's
+  preceding sibling (a range section), then the parent" in 96–100% of cases per pair
+  (`scripts/abh/locate.py`). What stays ambiguous needs an order rule in code: ¶1 at the start of the
+  Paṭṭhāna's methods 2–4, and ¶79/¶82 in the aṭṭhakathā's "५-२२" range.
+- **Changing ids is allowed where nothing uses them yet.** [fsnow, 2026-10-22] "For Dhammasaṅgaṇī if we
+  need to change the mul div IDs that would be ok too", and "nothing uses those now so there's no harm in
+  changing them". The commentaries comment on the mātikā inside kaṇḍa 1, so the mūla's mātikā is
+  `abh1_1_0`, inside kaṇḍa 1: the kaṇḍa's div opens at the mātikā and its `<head>` comes after it.
+  Nothing in the mātikā is a `<head>`, or the chapter list would label kaṇḍa 1 with it.
+- **A ṭīkā can take the mūla's ids where the aṭṭhakathā covers a range in one section.** The Paṭṭhāna
+  aṭṭhakathā covers tikas 5–22 in one section ("५-२२.", `abh7_1_1_5`); the ṭīkās' sections on tikas 6 and
+  8 are `abh7_1_1_6` and `abh7_1_1_8`, whose paragraph numbers are the mūla's. [fsnow, 2026-10-22] "yes".
+- **Opening sections are all type `intro`** [fsnow, 2026-10-22, picked "One type: intro"], and every
+  aṭṭhakathā opening without a heading gets a `<head>`-less `_0` [picked "Head-less _0 for all five"], so
+  the ṭīkās' `_0` has a counterpart. In `abh03a`, `abh5_0` opens at the gāthās; its head "निदानकथा" comes
+  later.
+- **A container with no heading gets a type that is not listed**, or `ChapterListsService` labels it with
+  the first heading inside it: the Dhātukathā mūla's `niddesa` (`abh3_2`), the Dhammasaṅgaṇī commentaries'
+  `matika` (`abh1_1_0`), the Paṭṭhāna's `paccaya` container (`abh7_1_1_0`) [picked "Rename it 'paccaya'"]
+  and `method` divs. `patthana` is left out of the shared files' lists [picked "Don't list patthana in
+  abh03a", and "Yes, leave it out" for the ṭīkās]. The Kathāvatthu mūla's vagga 1 has no heading and is
+  listed as "१. पुग्गलकथा", which was accepted ("I accept your Kathāvatthu suggestions").
+
+Per book, the choices he accepted ([fsnow] "I accept your suggestions" for the Vibhaṅga, "I accept your
+Kathāvatthu suggestions", and the options he picked in an interview, 2026-10-22):
+
+| Book | Levels (type) | Listed | Notes |
+|---|---|---|---|
+| Dhammasaṅgaṇī `abh1` | kaṇḍa (`kanda`); sections within (`section`) | both | "अब्याकतपदं" is matched to section 7 |
+| Vibhaṅga `abh2` | vibhaṅga; bhājanīya / niddesa / vāra | vibhaṅga | vibhaṅga 16 has no second level; 17's mātikā is `abh2_17_0` |
+| Dhātukathā `abh3` | `matika`, `niddesa` (no head in the mūla), `naya` | matika, naya | a naya's chapter line is its head |
+| Puggalapaññatti `abh4` | `matika` (`uddesa` groups), `niddesa` (`pannatti` groups) | all | head-less `abh4_2_8` for ¶207 |
+| Kathāvatthu `abh5` | `vagga`, `katha` | vagga | running vagga titles and uddānas sit between divs; paṇṇāsakas unmarked |
+| Yamaka `abh6` | `yamaka`, `vara` | both | the Namo before each yamaka sits between them |
+| Paṭṭhāna `abh7` | `method`, `patthana`, tika / gocchaka / group, `paccaya` intro | patthana (mūla only), tika, gocchaka, chapter | section ids repeat across files; Piṭṭhiduka head-less |
+
+A review pass (Opus 5.5, read-only, against the decisions above) found six boundary defects: commentary
+sections headed by a rend the builder did not search, and one trailer naming the next section. Fixed in
+the branch's second commit. The lesson [suggestion]: match a commentary's headings by text in every rend,
+and check every commentary paragraph against the base section with the same id.
+
 ### Tools
 
 `scripts/markup.py` adds divs and changes nothing else. Every result passes a **strip check** before it is
@@ -340,6 +400,11 @@ checks that ids are unique, that `n` equals `id`, and that every id extends its 
 - `scripts/mark_kn.py FILE [--write]` marks up a Khuddaka Nikāya aṭṭhakathā from its mūla, or a ṭīkā from
   its aṭṭhakathā, matching headings by number. Settings for each of the 26 files are in its `CONFIG`,
   with the quotes behind them. Same review table and `--write` rule as `mark_an.py`.
+- `scripts/abh/` holds the Abhidhamma builders, one folder per book (`abh1/mark_abh1.py`,
+  `abh2/mark_abh2.py`, `abh3-4/`, `abh5/`, `abh6/`, `abh7/`). Each reads every file through `strip()`, so
+  it reproduces the marked files from main's text. The shared commentaries are written once, by
+  `merge_shared.py`, from every book's `parts()`. `locate.py` measures the linking above; `clt.py` checks
+  each file's chapter list (no borrowed labels, no repeats under one parent).
 - `scripts/mark_s0401t.py` is the first file's own script.
 - `scripts/outline.py`, `scripts/closings.py` and `scripts/opening_sections.py` are the studies behind the
   decisions.
@@ -363,7 +428,7 @@ VS Code's diff view reads the UTF-16 files directly.
 
 | Consumer | Uses |
 |---|---|
-| `ChapterListsService` | One chapter-list entry per div whose `type` is in `ChapterListTypes`. Heading text comes from its `.//head`, and the indent from the id's underscore count. A div with no `<head>` is skipped. |
+| `ChapterListsService` | One chapter-list entry per div whose `type` is in `ChapterListTypes`. Heading text comes from its `.//head`, and the indent from the id's underscore count. `.//head` searches the whole div: a listed div with no `<head>` of its own is labelled with the first heading inside it, and is skipped only if it contains none. |
 | `tipitaka.xsl` | `<a name="{id}">` for each div. Every numbered paragraph also gets `para{n}_{bookId}` from its enclosing `type="book"` div, which keeps anchors unique when numbers restart per book. |
 | `BookDisplayView` (#542) | Div starts are section starts, so the status bar shows a section heading's own page. |
 | `BookMarkers` / `TeiPassageReader` / `PassageTool` | The innermost div bounds AI passage context. A file without markup is one section. |
