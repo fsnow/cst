@@ -302,4 +302,183 @@ public class ModelsDevCatalogTests : IDisposable
     {
         Assert.Null(ModelsDevCatalog.Parse("<!doctype html>"));
     }
+
+    // ---- a cheaper refresh (#1089) -------------------------------------------------------------------
+
+    /// <summary>Records each request and answers with whatever the test gives it.</summary>
+    private sealed class Recorder : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _reply;
+        public List<HttpRequestMessage> Requests { get; } = new();
+        public Recorder(Func<HttpRequestMessage, HttpResponseMessage> reply) => _reply = reply;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        { Requests.Add(r); return Task.FromResult(_reply(r)); }
+    }
+
+    private static HttpResponseMessage OkWithEtag(string body, string etag)
+    {
+        var response = Ok(body);
+        response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue(etag);
+        return response;
+    }
+
+    private static string? IfNoneMatch(HttpRequestMessage r) =>
+        r.Headers.TryGetValues("If-None-Match", out var v) ? v.Single() : null;
+
+    /// <summary>
+    /// The catalogue is 5.9 MB as JSON and 420 KB gzipped, and a plain HttpClient asks for no compression.
+    /// On café WiFi the uncompressed download overran the 30 s timeout. (#1089)
+    /// </summary>
+    [Fact]
+    public void The_default_client_asks_for_compression()
+    {
+        Assert.Equal(DecompressionMethods.All, ModelsDevCatalog.CreateHandler().AutomaticDecompression);
+    }
+
+    [Fact]
+    public async Task A_fetched_copy_keeps_its_etag_and_the_next_refresh_sends_it()
+    {
+        var recorder = new Recorder(_ => OkWithEtag(ManyProviders(), "\"v1\""));
+        var catalog = Make(new HttpClient(recorder));
+
+        await catalog.RefreshAsync(force: true);
+        await catalog.RefreshAsync(force: true);
+
+        Assert.Null(IfNoneMatch(recorder.Requests[0]));
+        Assert.Equal("\"v1\"", IfNoneMatch(recorder.Requests[1]));
+    }
+
+    /// <summary>An unchanged catalogue costs a 304: the cache is kept, served, and counted fresh again.</summary>
+    [Fact]
+    public async Task Not_modified_keeps_the_cache_and_restarts_its_freshness()
+    {
+        File.WriteAllText(CachePath, ManyProviders());
+        File.WriteAllText(CachePath + ".etag", "\"v1\"");
+        File.SetLastWriteTimeUtc(CachePath, DateTime.UtcNow.AddDays(-2));
+        var recorder = new Recorder(r => IfNoneMatch(r) == "\"v1\""
+            ? new HttpResponseMessage(HttpStatusCode.NotModified)
+            : Ok(ManyProviders(61)));
+        var catalog = Make(new HttpClient(recorder));
+
+        await catalog.RefreshAsync();
+        var result = await catalog.GetAsync();
+
+        Assert.Equal("\"v1\"", IfNoneMatch(recorder.Requests.Single()));
+        Assert.Equal(CatalogSource.Cache, result.Source);
+        Assert.Null(result.Problem);
+        Assert.True(DateTime.UtcNow - File.GetLastWriteTimeUtc(CachePath) < TimeSpan.FromMinutes(1));
+    }
+
+    /// <summary>A 304 vouches for the copy it was issued for. With no readable cache there is nothing for it
+    /// to vouch for, so the request must not be conditional.</summary>
+    [Fact]
+    public async Task With_no_cache_the_request_is_not_conditional()
+    {
+        File.WriteAllText(CachePath + ".etag", "\"v1\"");
+        var recorder = new Recorder(_ => Ok(ManyProviders()));
+
+        await Make(new HttpClient(recorder)).RefreshAsync(force: true);
+
+        Assert.Null(IfNoneMatch(recorder.Requests.Single()));
+    }
+
+    /// <summary>A copy that arrives without an ETag must not inherit the old one.</summary>
+    [Fact]
+    public async Task A_copy_without_an_etag_forgets_the_old_one()
+    {
+        File.WriteAllText(CachePath, ManyProviders());
+        File.WriteAllText(CachePath + ".etag", "\"old\"");
+
+        await Make(new HttpClient(new Recorder(_ => Ok(ManyProviders(61))))).RefreshAsync(force: true);
+
+        Assert.False(File.Exists(CachePath + ".etag"));
+    }
+
+    /// <summary>
+    /// The ETag names the document on disk. When the cache write failed but the new ETag was kept, every
+    /// later 304 served the old copy as current, and retry could not escape it. (review of #1090)
+    /// </summary>
+    [Fact]
+    public async Task A_failed_cache_write_keeps_no_etag()
+    {
+        File.WriteAllText(CachePath, ManyProviders());
+        File.WriteAllText(CachePath + ".etag", "\"v1\"");
+        Directory.CreateDirectory(CachePath + ".tmp");   // the temp file cannot be written
+
+        await Make(new HttpClient(new Recorder(_ => OkWithEtag(ManyProviders(61), "\"v2\"")))).RefreshAsync(force: true);
+
+        Assert.False(File.Exists(CachePath + ".etag"));
+    }
+
+    /// <summary>A 304 vouches only for the copy it was asked about. One that answers an unconditional request
+    /// is a failure, and must not make an unchecked cache count as fresh. (review of #1090)</summary>
+    [Fact]
+    public async Task A_304_to_an_unconditional_request_is_a_failure()
+    {
+        File.WriteAllText(CachePath, ManyProviders());     // no ETag file: the request is unconditional
+        var stale = DateTime.UtcNow.AddDays(-30);
+        File.SetLastWriteTimeUtc(CachePath, stale);
+        var catalog = Make(new HttpClient(new Recorder(_ => new HttpResponseMessage(HttpStatusCode.NotModified))));
+
+        await catalog.RefreshAsync();
+        var result = await catalog.GetAsync();
+
+        Assert.NotNull(result.Problem);
+        Assert.Equal(stale, File.GetLastWriteTimeUtc(CachePath), TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>The file is parsed as one entity tag, not passed through: anything else is ignored rather
+    /// than sent as raw header text. (review of #1090)</summary>
+    [Fact]
+    public async Task An_etag_file_that_is_not_an_etag_is_not_sent()
+    {
+        File.WriteAllText(CachePath, ManyProviders());
+        File.WriteAllText(CachePath + ".etag", "\"a\"\r\nX-Injected: 1");
+        var recorder = new Recorder(_ => Ok(ManyProviders()));
+
+        await Make(new HttpClient(recorder)).RefreshAsync(force: true);
+
+        Assert.Null(IfNoneMatch(recorder.Requests.Single()));
+        Assert.False(recorder.Requests.Single().Headers.Contains("X-Injected"));
+    }
+
+    /// <summary>
+    /// The client the app actually builds asks for compression and reads a gzipped reply. Testing the handler
+    /// factory alone would pass if the constructor stopped using it. (review of #1090)
+    /// </summary>
+    [Fact]
+    public async Task The_default_client_fetches_compressed()
+    {
+        var body = System.Text.Encoding.UTF8.GetBytes(ManyProviders());
+        using var gz = new MemoryStream();
+        using (var z = new System.IO.Compression.GZipStream(gz, System.IO.Compression.CompressionLevel.Fastest, true))
+            z.Write(body);
+        var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        string? acceptEncoding = null;
+        var server = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            var reader = new StreamReader(stream);
+            string? line;
+            while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+                if (line.StartsWith("Accept-Encoding:", StringComparison.OrdinalIgnoreCase))
+                    acceptEncoding = line.Substring("Accept-Encoding:".Length).Trim();
+            var head = System.Text.Encoding.ASCII.GetBytes(
+                $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Encoding: gzip\r\n" +
+                $"Content-Length: {gz.Length}\r\nConnection: close\r\n\r\n");
+            await stream.WriteAsync(head);
+            await stream.WriteAsync(gz.ToArray());
+        });
+
+        var catalog = new ModelsDevCatalog(cachePath: CachePath, source: $"http://127.0.0.1:{port}/api.json", minimumProviders: 1);
+        await catalog.RefreshAsync(force: true);
+        await server;
+        listener.Stop();
+
+        Assert.Contains("gzip", acceptEncoding ?? "");
+        Assert.Equal(CatalogSource.Network, (await catalog.GetAsync()).Source);
+    }
 }

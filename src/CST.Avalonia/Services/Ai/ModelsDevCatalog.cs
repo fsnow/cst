@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -118,13 +120,18 @@ namespace CST.Avalonia.Services.Ai
         public ModelsDevCatalog(HttpClient? http = null, string? cachePath = null, string? source = null,
                                 int minimumProviders = MinimumPlausibleProviders)
         {
-            _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            // Compressed: the document is 5.9 MB as JSON and 420 KB gzipped, and a plain HttpClient asks for
+            // no compression. On café WiFi the uncompressed download overran the 30 s timeout. (#1089)
+            _http = http ?? new HttpClient(CreateHandler()) { Timeout = TimeSpan.FromSeconds(30) };
             _cachePath = cachePath ?? Path.Combine(AppConstants.DataDirectory, "models-dev.json");
             _source = source ?? DefaultSource;
             _minimumProviders = minimumProviders;
         }
 
         private readonly int _minimumProviders;
+
+        internal static SocketsHttpHandler CreateHandler() =>
+            new() { AutomaticDecompression = DecompressionMethods.All };
 
         public async Task<CatalogResult> GetAsync(CancellationToken ct = default)
         {
@@ -150,9 +157,39 @@ namespace CST.Avalonia.Services.Ai
                 if (!force && IsCacheFresh()) return;   // re-check under the gate
 
                 string text;
+                string? etag;
                 try
                 {
-                    text = await _http.GetStringAsync(_source, ct).ConfigureAwait(false);
+                    // Conditional: models.dev sends an ETag (max-age=0, must-revalidate), so an unchanged
+                    // catalogue costs a 304 and no body. Only when there is a readable cache to fall back on.
+                    // (#1089)
+                    using var request = new HttpRequestMessage(HttpMethod.Get, _source);
+                    // The ETag first: it is a small file, and without one there is no need to parse 6 MB.
+                    var known = ReadEtag() is { } etagOnDisk && ReadCache() is not null ? etagOnDisk : null;
+                    var conditional = known is not null;
+                    if (known is not null) request.Headers.IfNoneMatch.Add(known);
+
+                    using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+                    if (response.StatusCode == HttpStatusCode.NotModified)
+                    {
+                        // A 304 vouches only for the copy we asked about. One that answers an unconditional
+                        // request (a captive portal, a confused proxy) says nothing, so it is a failure like
+                        // any other. (review of #1090)
+                        if (!conditional)
+                            throw new HttpRequestException("304 Not Modified to an unconditional request");
+
+                        TouchCache();
+                        // The copy read from disk at startup is this same file; parse it again only if
+                        // what we hold came from somewhere else.
+                        _current = _current is { Source: CatalogSource.Cache } held
+                            ? held with { Problem = null, FetchedUtc = CacheWrittenUtc() }
+                            : LoadWithoutNetwork();
+                        Log.Information("Provider catalogue unchanged (#1089)");
+                        return;
+                    }
+                    response.EnsureSuccessStatusCode();
+                    text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    etag = response.Headers.ETag?.ToString();
                 }
                 // Filtering on the token, not the exception type: HttpClient.Timeout surfaces as
                 // TaskCanceledException, so `is not OperationCanceledException` would let a hung models.dev
@@ -184,7 +221,10 @@ namespace CST.Avalonia.Services.Ai
                     return;
                 }
 
-                WriteCache(text);
+                // The ETag names the document on disk, so it is kept only if that document was written. A
+                // swallowed write failure that kept the new ETag beside the old copy would let every later
+                // 304 serve the old copy as current, retry included. (review of #1090)
+                WriteEtag(WriteCache(text) ? etag : null);
                 _current = new CatalogResult(parsed, CatalogSource.Network, DateTimeOffset.UtcNow);
                 Log.Information("Provider catalogue refreshed: {Count} providers (#736)", parsed.Count);
             }
@@ -213,6 +253,40 @@ namespace CST.Avalonia.Services.Ai
 
         private DateTimeOffset? CacheWrittenUtc() =>
             File.Exists(_cachePath) ? File.GetLastWriteTimeUtc(_cachePath) : null;
+
+        /// <summary>The ETag of the cached copy, kept beside it. (#1089)</summary>
+        private string EtagPath => _cachePath + ".etag";
+
+        /// <summary>Parsed, not passed through: a file that does not hold one entity tag is ignored rather than
+        /// sent as raw header text. (review of #1090)</summary>
+        private EntityTagHeaderValue? ReadEtag()
+        {
+            try
+            {
+                if (!File.Exists(EtagPath)) return null;
+                return EntityTagHeaderValue.TryParse(File.ReadAllText(EtagPath).Trim(), out var etag) ? etag : null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>A copy without an ETag forgets any old one, so a later 304 can never vouch for a document
+        /// it was not issued for.</summary>
+        private void WriteEtag(string? etag)
+        {
+            try
+            {
+                if (etag is null) File.Delete(EtagPath);
+                else File.WriteAllText(EtagPath, etag);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Could not write the provider catalogue ETag (#1089)"); }
+        }
+
+        /// <summary>A 304 confirms the cached copy is current: restart its freshness window.</summary>
+        private void TouchCache()
+        {
+            try { File.SetLastWriteTimeUtc(_cachePath, DateTime.UtcNow); }
+            catch (Exception ex) { Log.Warning(ex, "Could not mark the provider catalogue cache fresh (#1089)"); }
+        }
 
         private IReadOnlyDictionary<string, CatalogProvider>? ReadCache()
         {
@@ -263,7 +337,8 @@ namespace CST.Avalonia.Services.Ai
             }
         }
 
-        private void WriteCache(string text)
+        /// <returns>Whether the document is now on disk.</returns>
+        private bool WriteCache(string text)
         {
             try
             {
@@ -274,11 +349,13 @@ namespace CST.Avalonia.Services.Ai
                 var tmp = _cachePath + ".tmp";
                 File.WriteAllText(tmp, text);
                 File.Move(tmp, _cachePath, overwrite: true);
+                return true;
             }
             catch (Exception ex)
             {
                 // Not fatal: we have the document in memory for this session and will fetch again next time.
                 Log.Warning(ex, "Could not write the provider catalogue cache (#736)");
+                return false;
             }
         }
 
