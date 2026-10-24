@@ -1,13 +1,15 @@
 # #827 — Reading the assistant's selection without the 4096-character title cap
 
-**Status:** plan, for adversarial review before any code. Branch `plan-827-selection-bridge`.
-**Issue:** #827 (bug, Beta 9). Related: #829 (the mitigation that shipped in Beta 6), #833 (translating a
-whole sutta — needs this, but is not delivered by it), #672 (context budget).
+**Status:** plan, revised after two adversarial plan reviews and the maintainer's decisions (2026-10-24). A
+probe runs before the feature is written (§7). Branch `plan-827-selection-bridge`.
+**Issue:** #827 (bug, Beta 9). Related: #829 (the Beta 6 mitigation), #833 (translating a whole sutta —
+needs this, is not delivered by it), #672 (context budget).
 
-Provenance, per CLAUDE.md. **[fsnow]** marks the maintainer's own words. The comments on #827 and the body of
-#833 were written by an agent on the maintainer's account; where they report a maintainer correction they
-paraphrase it, so they are cited here as the issue's record, not as his words. **[observed]** is a fact from
-code or a measurement, with its source. **[suggestion]** is this plan's reasoning.
+Provenance, per CLAUDE.md. **[fsnow]** marks the maintainer's own words or the option label he picked.
+The comments on #827 and the body of #833 were written by an agent on his account; where they report a
+maintainer correction they paraphrase it, so they are cited as the issue's record, not as his words.
+**[observed]** is a fact from code or a measurement, with its source. **[suggestion]** is reasoning — this
+plan's or a reviewer's.
 
 [fsnow, 2026-10-24] "In the meantime I would like to implement 827. I will defer to you on the way to organize
 this task, but we will want plenty of adversarial review, maybe even in the planning stage."
@@ -16,177 +18,173 @@ this task, but we will want plenty of adversarial review, maybe even in the plan
 
 ## 1. Problem
 
-[observed, #827 and #829] The assistant reads the reader's selection by running a script in the book's
-WebView that writes `CST_AI_SEL:…` into `document.title`; `BookDisplayView.OnTitleChanged` parses it.
-Chromium caps `document.title` at 4096 characters. After #829 (routing before payload, base64, a declared
-`LEN=` so truncation is detected) the ceiling is about **1,100 characters in a non-Latin script and about
-2,900 in Latin**. A longer selection is refused and the turn falls back, with a notice, to the surrounding
-passage (`PromptBuilder` — "Your selection could not be read, so the answer covers the whole passage.").
+[observed, #827, #829] The assistant reads the reader's selection by running a script in the book's WebView
+that writes `CST_AI_SEL:…` into `document.title`; `BookDisplayView.OnTitleChanged` parses it. Chromium caps
+`document.title` at 4096 characters. After #829 the ceiling is about **1,100 characters in a non-Latin script
+and about 2,900 in Latin**. A longer selection is refused and the turn answers over the surrounding passage,
+with the notice "Your selection could not be read, so the answer covers the whole passage." (`PromptBuilder`).
 
-The issue's record (its own comments) settled the scope:
-- Only `CST_AI_SEL` carries payload that is unbounded in practice. `CST_LOOKUP_SEL` (Cmd+D, Cmd+Shift+F)
-  is a word-or-phrase gesture (measured maximum 791 characters over 44 samples) and stays on the title
-  channel. `CST_STATUS_UPDATE` and the other ~15 control messages are bounded (≤ 223 characters) and stay.
-- The ceiling binds in Latin too: a sutta is 8–50× the Latin ceiling (#833).
+Scope, from the issue's record: only `CST_AI_SEL` carries payload that is unbounded in practice.
+`CST_LOOKUP_SEL` (Cmd+D, Cmd+Shift+F) is a word-or-phrase gesture (measured maximum 791 characters over 44
+samples) and stays on the title channel; the status and control messages are bounded (≤ 223 characters) and
+stay. The ceiling binds in Latin too: a sutta is 8–50× the Latin ceiling (#833).
 
-**Goal.** `GetWebViewSelectionWithParagraphAsync` returns selections of any realistic size (a whole sutta is
-up to ~130,000 characters, #833) with the same paragraph resolution as today, and falls back to the current
-title path automatically if the new path is unavailable, so the worst case is today's behaviour.
+**Goal.** `GetWebViewSelectionWithParagraphAsync` reads selections of any realistic size (a whole sutta is up
+to ~130,000 characters, #833), with the same paragraph resolution as today.
 
-**Non-goals.** Not the lookup path, not the status channel, not #833's chunked translation, not the
-context budget (#672). The selection arriving whole does not mean it fits the model; that is downstream.
+**Non-goals.** The lookup path, the status channel, #833's chunked translation, the context budget (#672).
 
 ## 2. The current path, end to end [observed]
 
 | Step | Where |
 |---|---|
-| Caller | `ReaderState.ReadSelectionAsync` (`Services/Ai/ReaderState.cs`, ~322) — the only caller. Runs on the UI thread via `Dispatcher.UIThread.InvokeAsync`. Used by the assistant turn and, through `ReaderState`, by `LocalApiServer` (agents). |
-| Request | `BookDisplayView.GetWebViewSelectionWithParagraphAsync` (~284): returns `(null, null)` if `_webView == null || !_isBrowserInitialized`; else stores a fresh `TaskCompletionSource` in the single field `_aiSelectionTcs`, runs the script with `_webView.ExecuteScript`, and awaits it against `AiSelectionTimeout` = 700 ms. |
-| Script | Reads `window.getSelection()`; resolves PARA from the selection's start node by **document order** against `a[name^=para]` anchors (strips the `_bookcode` suffix and a `-range`); base64-encodes UTF-8 text; writes `CST_AI_SEL:|TAB:<tabId>|SEQ:<n>|PARA=…|LEN=…|B64:…`. |
-| Response | `OnTitleChanged` (~2781): checks `TAB` equals `_tabId`, parses PARA and LEN, refuses a payload whose length differs from LEN (logged warning), decodes, `TrySetResult((sel, para))`. |
-| Result | `ReadSelectionAsync`: `null` text means unavailable (→ `SelectionUnavailable`, the notice above); `""` means nothing selected; otherwise `SelectionPipeline.Normalize(raw, script)`. |
+| Caller | `ReaderState.ReadSelectionAsync` — the only caller, on the UI thread via `Dispatcher.UIThread.InvokeAsync`. Reached from `ReaderState.GetCurrentAsync` (assistant turns, and `LocalApiServer` for agents). |
+| Request | `BookDisplayView.GetWebViewSelectionWithParagraphAsync`: `(null, null)` if `_webView == null || !_isBrowserInitialized`; else a fresh TCS in the single field `_aiSelectionTcs`, `ExecuteScript`, and a wait of `AiSelectionTimeout` = 700 ms. |
+| Script | `window.getSelection()`; PARA from the selection's start node by **document order** against `a[name^=para]` (strips `_bookcode` and a `-range`); base64 UTF-8; writes `CST_AI_SEL:|TAB:…|SEQ:…|PARA=…|LEN=…|B64:…`. |
+| Response | `OnTitleChanged`: TAB must equal `_tabId`; a payload shorter than LEN is refused and logged; decode; `TrySetResult`. |
+| Result | `ReadSelectionAsync`: `null` = unavailable (→ the notice), `""` = nothing selected, otherwise `SelectionPipeline.Normalize(raw, script)`. |
+| Downstream | `AiContextBundler.BuildSelection` passes the normalized selection **whole** into `{{selection}}`; `TeiPassageReader` locates it with `selectionCap = MaxSelectionChars` (20,000) and reports `SelectionTruncated`, which drives the "was cut to fit" notice. |
 
-Two properties the replacement must keep: **null vs empty** (could-not-read vs nothing-selected, #581), and
-**the paragraph from the selection's own position**, not the reading position (#649).
+Contracts to keep: **null vs empty** (#581); **the paragraph from the selection's own position** (#649).
 
 ## 3. Mechanisms considered
 
-Both candidate mechanisms carry data in a CEF process message, not in the title, so neither has the 4096 cap
-or the encoding multiplier. [observed: CefGlue `Messages.JsEvaluationResult` / `NativeObjectCallRequest`;
-Chromium's IPC message limit is far above any selection — inferred, not measured.]
+### A. `WebView.EvaluateScript<T>` — request/response from .NET — **chosen**
 
-### A. `WebView.EvaluateScript<T>` — request/response from .NET **[suggestion: preferred, subject to the probe in §6]**
-
-[observed, decompiled WebViewControl.Avalonia 3.120.9 and CefGlue.Common.ARM64 120.6099.207 — the versions
+[observed, decompiled WebViewControl.Avalonia 3.120.9 and CefGlue.Common.ARM64 120.6099.207, the versions
 `project.assets.json` resolves]
-- `EvaluateScript<T>(script, frameName, timeout)` returns `Task<T>`. It queues the script on the frame's
-  `JavascriptExecutor` (the same queue `ExecuteScript` uses), which evaluates it in the renderer and
-  completes the task with the result.
-- CefGlue wraps the script as a **function body**: `cefglue.evaluateScript(function() { <script> })`
-  (`JavascriptHelper.WrapScriptForEvaluation`). **A script must `return` its value.**
-- If the executor is disposed or its flush is cancelled (view disposed), the task completes with
-  `default(T)` rather than throwing (`JavascriptExecutor.EvaluateScript`: `QueueScript` returns null, or
-  `FlushTaskCancellationToken` is cancelled). With a `timeout`, a context that never initialises throws
-  `JavascriptException("Timeout")`.
+- `EvaluateScript<T>(script, frameName, timeout)` returns `Task<T>`. The script is queued on the frame's
+  `JavascriptExecutor` — **the same per-frame queue `ExecuteScript` uses, drained by one flush thread** — and
+  evaluated in the renderer; the result returns in a CEF process message (no title, no 4096 cap, no encoding
+  multiplier).
+- CefGlue evaluates the script as a **function body**: `cefglue.evaluateScript(function() { <script> })`
+  (`JavascriptHelper.WrapScriptForEvaluation`). **The script must `return` its value**; a script without a
+  top-level `return` yields `undefined`, which arrives as null.
+- **`timeout` does not bound the caller's wait.** In `JavascriptExecutor.EvaluateScript` it is used two ways:
+  the outer `Task.WhenAny` throws `JavascriptException("Timeout")` only while `IsFlushTaskInitializing`;
+  otherwise the method goes on awaiting `evaluationTask`, whose inner CefGlue timer starts only when the flush
+  thread dequeues the script. So a call queued behind slow scripts can wait indefinitely. (The 60 s
+  `DefaultTimeout` applies to `BulkExecuteScripts`, the fire-and-forget path — not to evaluation.)
+- If the executor is disposed or its flush cancelled, the task completes with `default(T)` instead of
+  throwing; if the executor was disposed **before** the script was flushed, `QueueScript` returns null and
+  the task completes with `default(T)` at once.
+- Renderer side: if the frame's V8 context cannot be entered (`EnterOrFail`), the evaluation produces **no
+  reply**, so the caller's task depends on its own bound.
 
-**Why the codebase believes "EvaluateScript returns null in this build".** [observed] The belief dates from
-#25 (commit `3ce8e63`): the first version of `GetWebViewSelectionAsync` used `EvaluateScript`, its comment then
-records "EvaluateScript returns null in this CEF binding", and the code switched to the title channel. The
-cause was never recorded. [inferred, high confidence] The wrapper above explains it: a script written as an
-IIFE expression without `return` (the shape in `docs/research/RENDERING_REQUIREMENTS.md`) evaluates to
-`undefined` and comes back null. This is a hypothesis to prove in the probe, not a fact.
+**History, corrected.** The codebase's belief that "EvaluateScript returns null in this build" appears in
+`3ce8e63` (#25), but git shows no version of `GetWebViewSelectionAsync` that called `EvaluateScript` — that
+commit already used the title channel. [inferred] The belief most likely came from
+`docs/research/RENDERING_REQUIREMENTS.md:488`, which names CefSharp's `EvaluateScriptAsync` with an IIFE
+expression and no `return`. Under CefGlue that shape returns null for the reason above. [observed] The
+wrapping is confirmed from code; the probe confirms it in the running app.
 
-Why prefer it:
-- **No lifecycle.** Nothing is registered, so nothing must be re-registered after float/move/recycle, and
-  nothing outlives the browser. The request goes to *this view's* browser and the answer comes back on *this
-  call's* task — **tab routing is by construction**; there is no shared channel to filter.
-- **No single-slot TCS, no SEQ, no timeout guess for a shared channel.** Each call has its own task.
-- It removes code (the CST_AI_SEL parse in `OnTitleChanged`) rather than adding a second inbound channel.
+Why A:
+- **No lifecycle.** Nothing to register, re-register after the float/move funnel, or outlive the browser.
+- **Routing by construction.** The request goes to this view's browser; the answer completes this call's
+  task. No shared channel to filter, no single-slot TCS, no `SEQ`.
+- It removes code (the CST_AI_SEL machinery) rather than adding a second inbound channel.
 
-Risks:
-- It shares the executor queue with every `ExecuteScript` (status-tick scripts, scroll restoration). A long
-  queue delays the answer; the wait needs an honest timeout (the library default is 60 s).
-- `T` mapping: the renderer returns the value as JSON and the browser side deserialises into `T`
-  [inferred from `ResultAsJson`/`GetResult<T>`; the exact rules for a string vs an object need the probe].
-  Returning `JSON.stringify({ text, para })` and deserialising ourselves avoids depending on them.
+### B. `WebView.RegisterJavascriptObject` — rejected
 
-### B. `WebView.RegisterJavascriptObject` — a JS→.NET bridge (the issue's proposal)
+[observed] Registration may precede the browser and survives navigation (objects are rebound in every new
+main-frame context); JS gets a Promise; arguments and results travel as JSON. The bound method runs on CEF's
+browser-process UI thread — the Avalonia UI thread on macOS (`MultiThreadedMessageLoop = false`, external
+pump), **another thread on Windows/Linux** (`MultiThreadedMessageLoop = true`).
 
-[observed, same decompilation]
-- `RegisterJavascriptObject(name, obj, interceptCall = null)` → CefGlue `NativeObjectRegistry.Register`. Can
-  be called **before the browser exists**: the registration is stored and sent to the renderer when the
-  browser is set (`SetBrowser`). Returns false if the name is already registered on this WebView.
-- In the renderer, registered objects are **re-created in every new main-frame V8 context**
-  (`JavascriptToNativeDispatcherRenderSide.HandleContextCreated`), so a registration survives navigation
-  (`LoadUrl` of a book, reload on script change) within one browser.
-- JS sees `window.<name>.<method>(…)` returning a **Promise**; arguments travel as JSON, the result returns as
-  JSON. A method returning a `Task` is rejected ("Unexpected Task type result") unless an async interceptor
-  is used.
-- **Threading.** The .NET method runs on CEF's browser-process UI thread. macOS: `MultiThreadedMessageLoop =
-  false` with an external pump, so that is the Avalonia UI thread. Windows/Linux: `MultiThreadedMessageLoop
-  = true`, so it is **not** the Avalonia UI thread [observed `CefRuntimeLoader`; the thread the handler runs
-  on is inferred from CEF's model].
-- **Disposal.** `WebView.Dispose` counts in-flight bound calls; if any are pending it defers the actual
-  dispose to `Task.Run` until they finish (`InnerDispose`), i.e. **off the UI thread** — in the subsystem where
-  a mistake costs a SIGSEGV. After `isDisposing`, new calls return null immediately.
-- Each `BookDisplayView` has its own WebView and so its own registry, which routes to the right view; a
-  per-request id would still be needed to drop late answers.
+Rejected because: [suggestion, reviewer B] on Windows/Linux a bound call in flight at `WebView.Dispose` makes
+the library defer the dispose to `Task.Run` (`InnerDispose`, `JavascriptPendingCalls`) — **off the UI thread,
+racing `SplitToWindow`'s dispose-and-recreate**, the subsystem where a mistake costs a SIGSEGV. A never puts a
+call in that state. B also needs a register-per-instance lifecycle and still pairs a JS push with a pending
+.NET request — the pairing that made the title path fragile.
 
-Why not preferred: it adds a second inbound channel with a lifecycle (register per WebView instance, survive
-the dispose+recreate funnel, never let a call be in flight at dispose), it needs cross-thread marshalling on
-Windows, and it is JS-initiated, so the .NET side still has to pair a push with a pending request — the very
-pairing that made the title path fragile. It is the right tool for JS that calls .NET unprompted; the
-selection is a question .NET asks.
+### C. Rejected without a probe
 
-### C. Rejected
+Chunking over the title channel (writes coalesce and identical writes fire no event — CODE_REVIEW_2026-07-01
+BOOK-4); the clipboard (overwrites the reader's clipboard, no paragraph); a custom CEF process message (needs a
+renderer handler; CefGlue's renderer process is prebuilt).
 
-- **Chunking over the title channel.** [observed, CODE_REVIEW_2026-07-01 BOOK-4] `OnTitleChanged` reads the
-  latest `Title`, so rapid writes coalesce and identical writes fire no event. Chunking needs an ack per chunk
-  over a channel shared with 3,600 status messages a session — more of the mechanism that is the problem.
-- **Clipboard** (`EditCommands.Copy`, which Cmd+C already uses natively). Overwrites the reader's clipboard,
-  gives no paragraph, and reading the clipboard back is its own async path.
-- **A custom CEF process message.** Needs a renderer-side handler; CefGlue's renderer process is prebuilt
-  (`Xilium.CefGlue.BrowserProcess`), and A/B are the supported surface over exactly this mechanism.
+## 4. Decisions [fsnow, 2026-10-24]
 
-## 4. Design (mechanism A)
+1. **No title fallback for the assistant.** [fsnow, picked "Remove it (Recommended)"] The assistant reads the
+   selection by `EvaluateScript` only. On failure it reports "couldn't read" with a logged cause, and the
+   answer covers the passage as today. The title path stays for Cmd+D and Cmd+Shift+F
+   (`GetWebViewSelectionAsync`), unchanged. Once the probe confirms `EvaluateScript`, the CST_AI_SEL machinery
+   goes: `_aiSelectionTcs`, its `OnTitleChanged` branch, `AiSelectionTimeout`.
+2. **Over-cap selections.** [fsnow, picked "Cut to 20,000, notice true (Recommended)"] `{{selection}}` is cut
+   at the same `TeiPassageReader.MaxSelectionChars` (20,000), so the bundler's notice and the reader's "cut to
+   fit" note are both true. [observed] Today `BuildSelection` passes the selection whole while the passage
+   reader caps at 20,000 — a 130,000-character selection would reach the prompt uncut.
+3. **Probe machines.** [fsnow, picked "Kestrel and Merlin (Recommended)"] macOS arm64 and Windows.
 
-[suggestion] In `BookDisplayView`:
+## 5. Design
 
-1. `GetWebViewSelectionWithParagraphAsync` keeps its signature and contract (null = could not read, "" =
-   nothing selected, paragraph from the selection's position).
-2. It first tries **`EvaluateScript<string>`** with the same selection and document-order PARA logic as
-   today, ending in `return JSON.stringify({ t: text, p: para });` — no base64, no title.
-3. The task is awaited with a timeout (to be set from the probe's measurements; the issue's 700 ms was
-   chosen for a shared title channel). On success it parses the JSON and returns `(text, para)`.
-4. **Fallback:** if the call throws, times out, or returns null/unparseable, it logs which, and runs today's
-   title path unchanged. The worst case is today's behaviour.
-5. Guards before calling: `_webView != null`, `_isBrowserInitialized`, not shut down. A call that loses its
-   browser mid-flight completes with `default(T)` (library) and falls back.
-6. Logging: one Information line per read, naming the path that answered, length, paragraph and elapsed ms;
-   a Warning for each fallback with its cause.
+`GetWebViewSelectionWithParagraphAsync` keeps its signature and contract.
 
-If the probe shows A unusable, the same section is rewritten for B with: register in `TryCreateWebView`
-(once per WebView instance; the funnel builds a new View with a new WebView), a bound method that does
-nothing but complete a per-request `TaskCompletionSource` (thread-safe, no Avalonia access, returns at once,
-so no bound call is ever in flight at dispose), and a request id checked on arrival.
+1. **The script** is a named constant, `AiSelectionScript`: today's selection and document-order PARA logic,
+   ending in a top-level `return JSON.stringify({ t: text, p: para });`. No base64, no title.
+2. **The bound.** One value, `AiSelectionEvalTimeout` (set from the probe's measurements), is passed **both**
+   as `EvaluateScript`'s `timeout` (so the library frees the flush thread) **and** as our own
+   `Task.WhenAny(call, Task.Delay(bound))`. **Invariant: never call `EvaluateScript` without a timeout.** An
+   abandoned call is observed (a continuation logs its eventual outcome and swallows its exception) so it
+   cannot surface as an unobserved task exception.
+3. **Staleness.** Before calling, capture the WebView instance, `_isShutDown`, and a **load generation** that is
+   incremented when `LoadHtmlContent` **starts** (the existing `_navGeneration` increments only on
+   `Navigated`, too late to catch a read that crosses a reload, re-script or tab rebind). After the await,
+   if any changed, return null — never `""` — and log the cause.
+4. **Parse** in a pure function: JSON → `(text, para)`; empty selection → `""`; missing or non-numeric para →
+   null paragraph; malformed or null → read failure.
+5. **Threading.** No `ConfigureAwait(false)` in `GetWebViewSelectionWithParagraphAsync` — it reads UI-thread
+   state after the await. Every `TaskCompletionSource` in the path uses `RunContinuationsAsynchronously`.
+6. **Logging.** Every null names its cause — `disposed`, `navigated`, `shutdown`, `timeout`, `script-null`,
+   `parse`, `exception` — with elapsed ms and the load generation before and after. A successful read logs
+   length, paragraph and elapsed ms at Information.
+7. **Cancellation.** Pass `GetCurrentAsync`'s `ct` through to `ReadSelectionAsync` (`ReaderState.cs` ~180).
+8. **Cap** (decision 2): cut `{{selection}}` to `TeiPassageReader.MaxSelectionChars` in the bundler, where the
+   notice is written, so the two always agree.
 
-## 5. Concurrency and threading
+**Test seam.** The transport sits behind a delegate, e.g. `Func<string script, TimeSpan timeout,
+Task<string?>>`, defaulting to `_webView.EvaluateScript<string>`. The decision logic is then testable without
+CEF.
 
-- [observed] `ReadSelectionAsync` runs on the UI thread and is the only caller. Overlapping reads (two
-  assistant turns, or an agent request during a turn) are possible in principle.
-- A: each call owns its task, so overlapping reads cannot clobber each other — unlike `_aiSelectionTcs`,
-  which is a single slot.
-- The title fallback keeps today's single-slot behaviour; it is only reached when A fails.
-- Cmd+D's `_lookupSelectionTcs` is untouched.
+## 6. Risks [observed unless marked]
 
-## 6. Probe before implementation [suggestion]
+- The renderer's `EnterOrFail` path and the disposed-before-flush executor path both leave the caller
+  dependent on its own bound — covered by §5.2.
+- `EvaluateScript`'s result mapping into `T` (JSON vs raw string) is not verified — returning a JSON string
+  and parsing it ourselves avoids most of it; the probe checks the rest.
+- Queue latency is **not** a distinguishing risk: the title path's `ExecuteScript` sits in the same per-frame
+  queue. [suggestion, reviewer A]
+- [inferred] Chromium's IPC message limit is far above any selection; the probe measures 150,000 characters.
+- Nothing here can be tested headlessly against CEF; the project has no CEF harness (#829 records the gap).
 
-The plan stands on an inference about why `EvaluateScript` "returned null". Before writing the feature:
+## 7. Probe (before the feature)
 
-1. A temporary, logged probe in `BookDisplayView`: `EvaluateScript<string>` returning a known string, then a
-   20,000-character and a 150,000-character string, and a selection in Myanmar; record value, length and
-   elapsed time, and what happens with no `return`.
-2. Run on macOS (arm64), and on Windows, where CEF's message loop is multi-threaded.
-3. Exercise a float and a re-dock with a read in flight.
+A diagnostic, env-var-gated duplicate read (`CST_PROBE_827=1`, optional `CST_PROBE_827_BUSY_MS`): each
+assistant selection read also runs the planned `EvaluateScript` read after the existing title read and logs
+both. Steps are given separately for Kestrel (macOS) and Merlin (Windows). It is removed when the feature
+lands.
 
-This needs the running app, so it is a short manual run for the maintainer, or a session he has approved
-for GUI work. Nothing here can be measured headlessly: the project has no CEF test harness (#829 records the
-same gap).
+## 8. Tests
 
-## 7. Tests
+- **Unit, against a fake transport:** never completes (→ timeout null), returns null (→ script-null), throws
+  `JavascriptException("Timeout")`, throws something else, returns late after the bound, returns across a
+  load-generation bump (→ navigated null, never `""`), returns `{"t":"","p":""}` (→ `""`), returns
+  well-formed text and paragraph.
+- **The script constant has a top-level `return`.**
+- **Headless, through `AiContextBundler` → `PromptBuilder`,** with 25,000- and 130,000-character
+  selections: `{{selection}}` is cut to 20,000 and the "cut to fit" notice is present; and
+  `TeiPassageReader.LocateSelection`'s cost with a 130,000-character needle (measure; fix if pathological).
+- **Manual test list** for the maintainer: a paragraph and a whole sutta in Latin, Devanāgarī and Myanmar;
+  nothing selected; float or re-dock during a read; two books in two windows; Cmd+D and Cmd+Shift+F still
+  work; the browser-not-ready notice; and an agent-path read (`LocalApiServer`) with a large selection.
 
-- **Unit (no CEF):** extract the response parsing into a pure function (JSON → `(text, para)`, including
-  empty selection, missing paragraph, malformed JSON → null) and the "which path, and why" decision, and test
-  those. The PARA logic stays in JS, as today.
-- **Manual test list** for the maintainer: a one-paragraph and a whole-sutta selection in Latin, Devanāgarī
-  and Myanmar; nothing selected; selection then float the book and ask; two books in two windows, select in
-  one, ask in the other; Cmd+D and Cmd+Shift+F still work; the assistant's notice appears if the browser is
-  not ready.
+Noted, out of scope: `/ai/context-preview` passes `reader.Paragraph` rather than `SelectionParagraph`
+(`LocalApiServer.cs` ~739).
 
-## 8. Open questions for the maintainer
+## 9. Doc and comment sweep (when the feature lands)
 
-1. Is a probe in the running app acceptable before implementation (§6), and on which machines?
-2. Should a successful read via the new path make the title fallback a logged anomaly (Warning) or routine
-   (Information)?
-3. #833's whole-sutta translation will hit the context budget next. Should this change also log the
-   selection's size against the budget, so the next limit is visible when it is reached?
+`BookDisplayView.axaml.cs` ~395–400, ~409, ~4114 (the print path's "EvaluateScript returns null" claim);
+`ReaderState.cs` ~173, ~308–318; the `AiContextBundler.BuildSelection` comment; `AI_SURFACE_B.md` ~157 and
+~571; `CODE_REVIEW_2026-08_FINDINGS.md` R8-1; `RENDERING_REQUIREMENTS.md:488`.
+
+**Release note:** retire #827's Known Issues entry and write the resolution note.
