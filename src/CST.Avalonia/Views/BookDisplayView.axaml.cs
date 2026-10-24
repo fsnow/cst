@@ -283,6 +283,15 @@ public partial class BookDisplayView : UserControl
     /// </returns>
     public async Task<(string? Text, int? Paragraph)> GetWebViewSelectionWithParagraphAsync()
     {
+        var answer = await GetWebViewSelectionViaTitleAsync();
+        // #827 probe: off unless CST_PROBE_827=1. Reads the selection a second time the planned way and logs
+        // both; the title read's answer is what the caller gets either way. Remove with the probe.
+        if (Probe827.Enabled) await Probe827ReadAsync(answer);
+        return answer;
+    }
+
+    private async Task<(string? Text, int? Paragraph)> GetWebViewSelectionViaTitleAsync()
+    {
         // EVERY WAY THIS CAN FAIL NOW SAYS WHICH ONE IT WAS. Two of the three returned a bare null, so a
         // reader who was told "the page was not ready, or the request timed out" could not learn which, and
         // neither could anyone reading the log: the sentence names two causes because nothing distinguished
@@ -393,6 +402,124 @@ public partial class BookDisplayView : UserControl
     /// updates and the dictionary lookup, so the wait is not really "how long does the script take".</para>
     /// </summary>
     private static readonly TimeSpan AiSelectionTimeout = TimeSpan.FromMilliseconds(700);
+
+    // ---- #827 probe: diagnostic only, removed when the feature lands -------------------------------------
+
+    /// <summary>Environment switches for the #827 probe. Read once; unset means the probe never runs.</summary>
+    private static class Probe827
+    {
+        public static readonly bool Enabled = Environment.GetEnvironmentVariable("CST_PROBE_827") == "1";
+        public static readonly int BusyMs =
+            int.TryParse(Environment.GetEnvironmentVariable("CST_PROBE_827_BUSY_MS"), out var ms) && ms > 0 ? ms : 0;
+        public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+    }
+
+    /// <summary>
+    /// The planned read (#827, docs/features/in-progress/827-selection-native-bridge.md): the same selection
+    /// and document-order paragraph logic as the title script, returned by EvaluateScript instead of written
+    /// to document.title. CefGlue evaluates a script as a function body, so it must end in a top-level return.
+    /// </summary>
+    private const string Probe827Script = @"
+        var sel = window.getSelection ? window.getSelection() : null;
+        var text = sel ? sel.toString() : '';
+        var para = '';
+        if (sel && sel.rangeCount > 0 && text.length > 0) {
+            var startNode = sel.getRangeAt(0).startContainer;
+            var anchors = document.querySelectorAll('a[name]');
+            var best = null;
+            for (var i = 0; i < anchors.length; i++) {
+                var a = anchors[i];
+                if (!a.name || a.name.indexOf('para') !== 0) continue;
+                var rel = a.compareDocumentPosition(startNode);
+                if (rel === 0 || (rel & Node.DOCUMENT_POSITION_FOLLOWING)) best = a;
+                else break;
+            }
+            if (!best && anchors.length > 0) {
+                for (var j = 0; j < anchors.length; j++) {
+                    if (anchors[j].name && anchors[j].name.indexOf('para') === 0) { best = anchors[j]; break; }
+                }
+            }
+            var name = best ? (best.name || '') : '';
+            if (name.indexOf('para') === 0) {
+                var t = name.substring(4);
+                var underscore = t.indexOf('_');
+                if (underscore !== -1) t = t.substring(0, underscore);
+                var dash = t.indexOf('-');
+                if (dash !== -1) t = t.substring(0, dash);
+                para = t;
+            }
+        }
+        return JSON.stringify({ t: text, p: para });";
+
+    private async Task Probe827ReadAsync((string? Text, int? Paragraph) titleAnswer)
+    {
+        var webView = _webView;
+        var script = _viewModel?.BookScript.ToString() ?? "?";
+        string outcome;
+        string? evalText = null;
+        int? evalPara = null;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            if (webView == null || !_isBrowserInitialized || _isShutDown)
+            {
+                outcome = "not-ready";
+            }
+            else
+            {
+                var js = (Probe827.BusyMs > 0
+                             ? "var __e = Date.now() + " + Probe827.BusyMs + "; while (Date.now() < __e) {}\n"
+                             : "")
+                         + Probe827Script;
+                // The library's timeout does not bound the wait on its own (its timer starts when the script
+                // is dequeued), so the same value bounds our own wait as well.
+                var call = webView.EvaluateScript<string>(js, null, Probe827.Timeout);
+                var done = await Task.WhenAny(call, Task.Delay(Probe827.Timeout));
+                if (done != call)
+                {
+                    outcome = "timeout";
+                    _ = call.ContinueWith(t => _logger.Information(
+                        "PROBE-827 abandoned eval finished later: status {Status}, error {Error}",
+                        t.Status, t.Exception?.GetBaseException().Message), TaskScheduler.Default);
+                }
+                else if (!ReferenceEquals(webView, _webView) || _isShutDown)
+                {
+                    outcome = "browser-changed";
+                }
+                else
+                {
+                    var raw = await call;
+                    if (raw == null)
+                    {
+                        outcome = "script-null";
+                    }
+                    else
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(raw);
+                        evalText = doc.RootElement.GetProperty("t").GetString();
+                        var p = doc.RootElement.GetProperty("p").GetString();
+                        evalPara = int.TryParse(p, out var n) ? n : null;
+                        outcome = "ok";
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            outcome = "exception: " + ex.GetType().Name + ": " + ex.Message;
+        }
+        watch.Stop();
+
+        _logger.Information(
+            "PROBE-827 script {Script} busy {BusyMs}ms | title: {TitleLen} char(s), para {TitlePara} | eval: "
+            + "{Outcome}, {EvalLen} char(s), para {EvalPara}, {Elapsed}ms | text equal {Equal}, para equal {ParaEqual}, tab={Tab}",
+            script, Probe827.BusyMs,
+            titleAnswer.Text?.Length.ToString() ?? "null", titleAnswer.Paragraph?.ToString() ?? "(none)",
+            outcome, evalText?.Length.ToString() ?? "null", evalPara?.ToString() ?? "(none)", watch.ElapsedMilliseconds,
+            titleAnswer.Text != null && evalText != null ? (titleAnswer.Text == evalText).ToString() : "n/a",
+            titleAnswer.Text != null && evalText != null ? (titleAnswer.Paragraph == evalPara).ToString() : "n/a",
+            _tabId);
+    }
 
     /// <summary>
     /// Returns the text the user has selected inside the book WebView (or null/empty if none). Used by
