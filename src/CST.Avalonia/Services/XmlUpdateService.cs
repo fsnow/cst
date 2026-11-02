@@ -316,15 +316,6 @@ namespace CST.Avalonia.Services
         ///
         /// <para>[fsnow, 2026-11-02] "as long as "Enable automatic updates" is checked, any deviation from upstream
         /// should be detected and repaired." So every run hashes the books on disk rather than trusting the record
-        /// of what it last downloaded. A local edit, a truncated or damaged file, or a missing one is replaced by
-        /// upstream's copy, whether or not upstream has changed that book. Keeping local edits is what turning
-        /// automatic updates off is for (see <see cref="CheckForUpdatesAsync"/>).</para>
-        /// </summary>
-        /// <summary>
-        /// Brings the local books into line with upstream. (#1093)
-        ///
-        /// <para>[fsnow, 2026-11-02] "as long as "Enable automatic updates" is checked, any deviation from upstream
-        /// should be detected and repaired." So every run hashes the books on disk rather than trusting the record
         /// of what it last downloaded. A local edit, a truncated, damaged or unreadable file, or a missing one is
         /// replaced by upstream's copy, whether or not upstream has changed that book. Keeping local edits is what
         /// turning automatic updates off is for (see <see cref="CheckForUpdatesAsync"/>).</para>
@@ -549,10 +540,11 @@ namespace CST.Avalonia.Services
         /// recorded under another hash, or not at all, gets upstream's hash and a null timestamp. Whether a book
         /// is re-indexed is decided by its file's modification time, not here.</para>
         ///
-        /// <para>A book that is not in the repository is kept as it is, and its entry is carried through - with
-        /// its local hash as the recorded copy, if it had none - so it is not reported as a deviation at every
-        /// start. Without this, saving the plan dropped its entry, the indexer re-added it with no hash, and the
-        /// tree was fetched and the book re-indexed on every launch. (#1093)</para>
+        /// <para>A book that is not in the repository is kept as it is, with its local hash as the recorded copy,
+        /// so it is not reported as a deviation at every start: there is no upstream copy to repair it from.
+        /// Without this, saving the plan dropped its entry, the indexer re-added it with no hash, and the tree
+        /// was fetched and the book re-indexed on every launch; and an edited one recorded under its last
+        /// upstream hash counted as differing forever. (#1093)</para>
         /// </summary>
         internal static SyncPlan PlanSync(IEnumerable<string> bookFiles, IReadOnlyDictionary<string, LocalBook> local,
             IReadOnlyDictionary<string, FileCommitInfo>? tracked, IReadOnlyDictionary<string, string> repoShas)
@@ -570,10 +562,12 @@ namespace CST.Avalonia.Services
                 if (!repoShas.TryGetValue(name, out var repoSha))
                 {
                     notInRepository.Add(name);
-                    if (info != null && !string.IsNullOrEmpty(info.CommitHash))
+                    if (book.Sha != null)
+                        tracking[name] = info != null && info.CommitHash == book.Sha
+                            ? info
+                            : new FileCommitInfo { LastIndexedTimestamp = info?.LastIndexedTimestamp, CommitHash = book.Sha };
+                    else if (info != null)
                         tracking[name] = info;
-                    else if (book.Sha != null)
-                        tracking[name] = new FileCommitInfo { LastIndexedTimestamp = info?.LastIndexedTimestamp, CommitHash = book.Sha };
                     continue;
                 }
 

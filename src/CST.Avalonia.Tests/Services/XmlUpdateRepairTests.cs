@@ -159,6 +159,21 @@ public class XmlUpdateRepairTests : IDisposable
         Assert.Equal(0, Check(Edited, plan.Tracking["b.xml"]).Count);
     }
 
+    /// <summary>A book upstream no longer has, recorded under its last upstream copy and then edited, has nothing
+    /// to be repaired from. Recording it as it is stops it counting as a difference, and costing a tree fetch,
+    /// at every start; its index timestamp is kept. (re-review of badb757)</summary>
+    [Fact]
+    public void An_edited_book_upstream_no_longer_has_stops_being_a_deviation()
+    {
+        var indexed = DateTime.UtcNow;
+
+        var plan = Plan(local: Edited, tracked: Tracked(Old, indexed), repo: null);
+
+        Assert.Equal(Edited, plan.Tracking["b.xml"].CommitHash);
+        Assert.Equal(indexed, plan.Tracking["b.xml"].LastIndexedTimestamp);
+        Assert.Equal(0, Check(Edited, plan.Tracking["b.xml"]).Count);
+    }
+
     /// <summary>What the no-download path saves: every book's entry, so nothing is dropped.</summary>
     [Fact]
     public void The_saved_tracking_set_covers_every_book_that_is_not_downloaded()
