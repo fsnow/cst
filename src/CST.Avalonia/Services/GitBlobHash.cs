@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -21,6 +22,24 @@ public static class GitBlobHash
         sha1.TransformBlock(header, 0, header.Length, null, 0);
         sha1.TransformFinalBlock(content, 0, content.Length);
         return Convert.ToHexString(sha1.Hash!).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// The Git blob id of the file at <paramref name="path"/>, streamed rather than read whole: the startup check
+    /// hashes every book, about 220 MB, and reading each into one array churns the large object heap. Same id as
+    /// <see cref="Compute"/> on the file's bytes. (#1093)
+    /// </summary>
+    public static string ComputeFile(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                                          bufferSize: 1 << 16, FileOptions.SequentialScan);
+        using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        sha1.AppendData(Encoding.ASCII.GetBytes($"blob {stream.Length}\0"));
+        var buffer = new byte[1 << 16];
+        int read;
+        while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            sha1.AppendData(buffer, 0, read);
+        return Convert.ToHexString(sha1.GetHashAndReset()).ToLowerInvariant();
     }
 
     /// <summary>

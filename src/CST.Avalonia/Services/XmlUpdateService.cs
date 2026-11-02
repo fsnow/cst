@@ -320,24 +320,30 @@ namespace CST.Avalonia.Services
         /// upstream's copy, whether or not upstream has changed that book. Keeping local edits is what turning
         /// automatic updates off is for (see <see cref="CheckForUpdatesAsync"/>).</para>
         /// </summary>
+        /// <summary>
+        /// Brings the local books into line with upstream. (#1093)
+        ///
+        /// <para>[fsnow, 2026-11-02] "as long as "Enable automatic updates" is checked, any deviation from upstream
+        /// should be detected and repaired." So every run hashes the books on disk rather than trusting the record
+        /// of what it last downloaded. A local edit, a truncated, damaged or unreadable file, or a missing one is
+        /// replaced by upstream's copy, whether or not upstream has changed that book. Keeping local edits is what
+        /// turning automatic updates off is for (see <see cref="CheckForUpdatesAsync"/>).</para>
+        /// </summary>
         private async Task CheckGitHubForUpdatesAsync()
         {
-            var xmlDir = _settingsService.Settings.XmlBooksDirectory;
-
-            // STEP 0: the books on disk against the copies last downloaded. No network needed, so it is reported
-            // even offline. Hashing all 217 books takes about a third of a second.
-            var bookFiles = Books.Inst.Select(b => b.FileName).ToList();
-            var localShas = ComputeLocalShas(xmlDir, bookFiles);
-            var fileDatesData = await _xmlFileDatesService.GetFileDatesDataAsync();
-            var deviations = FindLocalDeviations(bookFiles, localShas, fileDatesData?.Files);
-            if (deviations.Count > 0)
-            {
-                _logger.LogInformation("Local check: {Count} book(s) differ from the copies last downloaded: {Files}",
-                    deviations.Count, Summarize(deviations));
-            }
-
+            LocalCheck? check = null;
             try
             {
+                var xmlDir = _settingsService.Settings.XmlBooksDirectory;
+
+                // STEP 0: the books on disk against the copies last downloaded. No network needed, so it is
+                // reported even offline. Streaming all 217 books takes well under a second.
+                var bookFiles = Books.Inst.Select(b => b.FileName).ToList();
+                var local = ReadLocalBooks(xmlDir, bookFiles);
+                var fileDatesData = await _xmlFileDatesService.GetFileDatesDataAsync();
+                check = CheckLocalBooks(bookFiles, local, fileDatesData?.Files);
+                LogLocalCheck(check);
+
                 var settings = _settingsService.Settings.XmlUpdateSettings;
                 var owner = settings.XmlRepositoryOwner;
                 var repo = settings.XmlRepositoryName;
@@ -356,7 +362,7 @@ namespace CST.Avalonia.Services
                 if (completedTask == timeoutTask)
                 {
                     _logger.LogWarning("GitHub API call timed out after 15 seconds");
-                    WarnUnrepaired(deviations);
+                    WarnUnrepaired(check, "upstream could not be reached");
                     UpdateStatusChanged?.Invoke("Network request timed out - skipping updates");
                     return;
                 }
@@ -365,8 +371,7 @@ namespace CST.Avalonia.Services
                 var commitSha = branchInfo.Commit.Sha;
                 _logger.LogInformation("Latest commit SHA: {CommitSha}", commitSha.Substring(0, 7));
 
-                // Nothing to do only when upstream has not moved AND every book on disk is the copy we recorded.
-                if (fileDatesData?.LastKnownRepositoryCommitHash == commitSha && deviations.Count == 0)
+                if (CanSkip(fileDatesData?.LastKnownRepositoryCommitHash, commitSha, check))
                 {
                     _logger.LogInformation("Already up to date with commit {Hash}", commitSha.Substring(0, 7));
                     UpdateStatusChanged?.Invoke("XML data is up to date");
@@ -383,7 +388,7 @@ namespace CST.Avalonia.Services
                 if (treeCompletedTask == treeTimeoutTask)
                 {
                     _logger.LogWarning("GitHub tree API call timed out after 30 seconds");
-                    WarnUnrepaired(deviations);
+                    WarnUnrepaired(check, "upstream could not be reached");
                     UpdateStatusChanged?.Invoke("Network request timed out - skipping updates");
                     return;
                 }
@@ -402,109 +407,179 @@ namespace CST.Avalonia.Services
 
                 var repoFilesByName = targetFiles.ToDictionary(f => Path.GetFileName(f.Path), f => f);
 
-                var missingFromRepo = bookFiles.Where(f => !repoFilesByName.ContainsKey(f)).ToList();
-                foreach (var name in missingFromRepo.Take(5)) // Only log first 5 to avoid spam
-                    _logger.LogWarning("Book file {FileName} not found in repository", name);
-
                 // STEP 3: the books on disk against the tree. Every run compares the actual files.
-                var plan = PlanSync(bookFiles, localShas, fileDatesData?.Files,
+                var plan = PlanSync(bookFiles, local, fileDatesData?.Files,
                     repoFilesByName.ToDictionary(kv => kv.Key, kv => kv.Value.Sha));
+
+                if (plan.NotInRepository.Count > 0)
+                    _logger.LogWarning("{Count} book(s) are not in the repository; their local copies are kept as they are: {Files}",
+                        plan.NotInRepository.Count, Summarize(plan.NotInRepository));
 
                 if (plan.ToDownload.Count == 0)
                 {
                     _logger.LogInformation("No files need updating");
                     UpdateStatusChanged?.Invoke("No files need updating");
                     // Saves the new repository commit, and a rebuilt tracking entry for any book that lacked one.
-                    await _xmlFileDatesService.SaveFileDatesDataAsync(plan.UpToDate, commitSha);
+                    await _xmlFileDatesService.SaveFileDatesDataAsync(plan.Tracking, commitSha);
                     return;
                 }
 
                 _logger.LogInformation(
                     "Files needing update: {UpdateCount}/{TotalBooks}, of which {RepairCount} repair(s) of local copies upstream has not changed: {RepairFiles}",
                     plan.ToDownload.Count, bookFiles.Count, plan.Repairs.Count, Summarize(plan.Repairs));
-                _logger.LogInformation("Files already up-to-date: {UpToDateCount}/{TotalBooks}", plan.UpToDate.Count, bookFiles.Count);
+                _logger.LogInformation("Files already up-to-date: {UpToDateCount}/{TotalBooks}", plan.Tracking.Count, bookFiles.Count);
 
                 // STEP 4: Download updated files via direct HTTPS (no API calls)
                 var filesToUpdate = plan.ToDownload.Select(f => repoFilesByName[f]).ToList();
-                await DownloadUpdatedFilesDirectAsync(filesToUpdate, plan.UpToDate, commitSha, owner, repo, branch);
+                await DownloadUpdatedFilesDirectAsync(filesToUpdate, plan.Tracking, commitSha, owner, repo, branch);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking GitHub for updates");
-                WarnUnrepaired(deviations);
+                if (check != null) WarnUnrepaired(check, $"the update failed ({ex.Message})");
                 UpdateStatusChanged?.Invoke($"Error checking for updates: {ex.Message}");
             }
         }
 
-        private void WarnUnrepaired(List<string> deviations)
+        private void LogLocalCheck(LocalCheck check)
         {
-            if (deviations.Count > 0)
-                _logger.LogWarning(
-                    "{Count} book(s) differ from upstream and were not repaired now; they will be at the next start with a connection: {Files}",
-                    deviations.Count, Summarize(deviations));
+            if (check.Differ.Count > 0)
+                _logger.LogInformation("Local check: {Count} book(s) differ from the copies last downloaded: {Files}",
+                    check.Differ.Count, Summarize(check.Differ));
+            if (check.Missing.Count > 0)
+                _logger.LogInformation("Local check: {Count} book(s) are missing: {Files}",
+                    check.Missing.Count, Summarize(check.Missing));
+            if (check.Unreadable.Count > 0)
+                _logger.LogWarning("Local check: {Count} book(s) could not be read: {Files}",
+                    check.Unreadable.Count, Summarize(check.Unreadable));
+            if (check.Unrecorded.Count > 0)
+                _logger.LogInformation("Local check: {Count} book(s) have no record of the copy downloaded, so they will be verified against upstream: {Files}",
+                    check.Unrecorded.Count, Summarize(check.Unrecorded));
+        }
+
+        /// <summary>Says which books were left as they are, and why - without calling an unverified book
+        /// "different", or blaming the connection for a failure that was not one.</summary>
+        private void WarnUnrepaired(LocalCheck check, string reason)
+        {
+            var known = check.Differ.Concat(check.Missing).Concat(check.Unreadable).ToList();
+            if (known.Count > 0)
+                _logger.LogWarning("{Count} book(s) differ from the copies last downloaded and were not repaired, because {Reason}: {Files}",
+                    known.Count, reason, Summarize(known));
+            if (check.Unrecorded.Count > 0)
+                _logger.LogWarning("{Count} book(s) with no record of the copy downloaded were not verified, because {Reason}",
+                    check.Unrecorded.Count, reason);
         }
 
         private static string Summarize(IReadOnlyCollection<string> names, int max = 10) =>
             names.Count <= max ? string.Join(", ", names) : string.Join(", ", names.Take(max)) + $" and {names.Count - max} more";
 
-        /// <summary>The Git blob SHA of each book on disk; null for a book with no local file. (#1093)</summary>
-        internal static Dictionary<string, string?> ComputeLocalShas(string xmlDir, IEnumerable<string> bookFiles)
+        /// <summary>A book on disk: its Git blob SHA, or none because the file is missing or could not be read.</summary>
+        internal sealed record LocalBook(string? Sha, bool Unreadable = false)
         {
-            var shas = new Dictionary<string, string?>();
+            public bool Missing => Sha == null && !Unreadable;
+        }
+
+        /// <summary>
+        /// Every book's Git blob SHA. A file that cannot be read (no permission, or another process holding it
+        /// exclusively) is reported as unreadable rather than failing the whole check: one bad book must not stop
+        /// every other book being updated. (#1093)
+        /// </summary>
+        internal static Dictionary<string, LocalBook> ReadLocalBooks(string xmlDir, IEnumerable<string> bookFiles)
+        {
+            var books = new Dictionary<string, LocalBook>();
             foreach (var name in bookFiles)
             {
                 var path = Path.Combine(xmlDir, name);
-                shas[name] = File.Exists(path) ? GitBlobHash.Compute(File.ReadAllBytes(path)) : null;
+                try
+                {
+                    books[name] = new LocalBook(File.Exists(path) ? GitBlobHash.ComputeFile(path) : null);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    books[name] = new LocalBook(null, Unreadable: true);
+                }
             }
-            return shas;
+            return books;
+        }
+
+        internal sealed record LocalCheck(List<string> Differ, List<string> Missing, List<string> Unreadable,
+            List<string> Unrecorded)
+        {
+            public int Count => Differ.Count + Missing.Count + Unreadable.Count + Unrecorded.Count;
         }
 
         /// <summary>
-        /// Books whose file on disk is not the copy last downloaded: edited, damaged, missing, or never recorded.
-        /// (#1093)
+        /// Books whose file on disk is not the copy last downloaded: edited or damaged, missing, unreadable, or
+        /// never recorded. Needs no network. (#1093)
         /// </summary>
-        internal static List<string> FindLocalDeviations(IEnumerable<string> bookFiles,
-            IReadOnlyDictionary<string, string?> localShas, IReadOnlyDictionary<string, FileCommitInfo>? tracked)
+        internal static LocalCheck CheckLocalBooks(IEnumerable<string> bookFiles,
+            IReadOnlyDictionary<string, LocalBook> local, IReadOnlyDictionary<string, FileCommitInfo>? tracked)
         {
-            var deviations = new List<string>();
+            var check = new LocalCheck(new(), new(), new(), new());
             foreach (var name in bookFiles)
             {
-                localShas.TryGetValue(name, out var local);
+                var book = local.TryGetValue(name, out var b) ? b : new LocalBook(null);
                 FileCommitInfo? info = null;
                 tracked?.TryGetValue(name, out info);
-                if (local == null || string.IsNullOrEmpty(info?.CommitHash) || local != info.CommitHash)
-                    deviations.Add(name);
+                if (book.Unreadable) check.Unreadable.Add(name);
+                else if (book.Missing) check.Missing.Add(name);
+                else if (string.IsNullOrEmpty(info?.CommitHash)) check.Unrecorded.Add(name);
+                else if (book.Sha != info.CommitHash) check.Differ.Add(name);
             }
-            return deviations;
+            return check;
         }
 
-        internal sealed record SyncPlan(List<string> ToDownload, List<string> Repairs,
-            Dictionary<string, FileCommitInfo> UpToDate);
+        /// <summary>
+        /// The update can stop early only when upstream has not moved AND every book on disk is the copy last
+        /// downloaded. An unchanged commit alone is not enough: that rule is what let a local edit survive. (#1093)
+        /// </summary>
+        internal static bool CanSkip(string? storedCommit, string remoteCommit, LocalCheck check) =>
+            storedCommit == remoteCommit && check.Count == 0;
+
+        /// <param name="Tracking">The tracking entries to save, for every book except those downloaded now.</param>
+        internal sealed record SyncPlan(List<string> ToDownload, List<string> Repairs, List<string> NotInRepository,
+            Dictionary<string, FileCommitInfo> Tracking);
 
         /// <summary>
         /// Which books to download: every book whose file on disk is not upstream's, whatever the tracking data
-        /// says. A download is a <i>repair</i> when upstream's copy is the one we recorded: upstream has not changed
-        /// the book, the local file has. A book that matches keeps its tracking entry, so the indexer does not
-        /// re-index it; one that matches but was recorded under another hash, or not at all, gets upstream's hash
-        /// and a null index timestamp, leaving the indexer to decide. Books not in the repository are left out.
-        /// (#1093)
+        /// says. A download is a <i>repair</i> when upstream's copy is the one we recorded: upstream has not
+        /// changed the book, the local file has.
+        ///
+        /// <para>A book that matches keeps its tracking entry, timestamp included; one that matches but was
+        /// recorded under another hash, or not at all, gets upstream's hash and a null timestamp. Whether a book
+        /// is re-indexed is decided by its file's modification time, not here.</para>
+        ///
+        /// <para>A book that is not in the repository is kept as it is, and its entry is carried through - with
+        /// its local hash as the recorded copy, if it had none - so it is not reported as a deviation at every
+        /// start. Without this, saving the plan dropped its entry, the indexer re-added it with no hash, and the
+        /// tree was fetched and the book re-indexed on every launch. (#1093)</para>
         /// </summary>
-        internal static SyncPlan PlanSync(IEnumerable<string> bookFiles, IReadOnlyDictionary<string, string?> localShas,
+        internal static SyncPlan PlanSync(IEnumerable<string> bookFiles, IReadOnlyDictionary<string, LocalBook> local,
             IReadOnlyDictionary<string, FileCommitInfo>? tracked, IReadOnlyDictionary<string, string> repoShas)
         {
             var toDownload = new List<string>();
             var repairs = new List<string>();
-            var upToDate = new Dictionary<string, FileCommitInfo>();
+            var notInRepository = new List<string>();
+            var tracking = new Dictionary<string, FileCommitInfo>();
             foreach (var name in bookFiles)
             {
-                if (!repoShas.TryGetValue(name, out var repoSha)) continue;
-                localShas.TryGetValue(name, out var local);
+                var book = local.TryGetValue(name, out var b) ? b : new LocalBook(null);
                 FileCommitInfo? info = null;
                 tracked?.TryGetValue(name, out info);
 
-                if (local == repoSha)
+                if (!repoShas.TryGetValue(name, out var repoSha))
                 {
-                    upToDate[name] = info != null && info.CommitHash == repoSha
+                    notInRepository.Add(name);
+                    if (info != null && !string.IsNullOrEmpty(info.CommitHash))
+                        tracking[name] = info;
+                    else if (book.Sha != null)
+                        tracking[name] = new FileCommitInfo { LastIndexedTimestamp = info?.LastIndexedTimestamp, CommitHash = book.Sha };
+                    continue;
+                }
+
+                if (book.Sha == repoSha)
+                {
+                    tracking[name] = info != null && info.CommitHash == repoSha
                         ? info
                         : new FileCommitInfo { LastIndexedTimestamp = null, CommitHash = repoSha };
                     continue;
@@ -513,7 +588,7 @@ namespace CST.Avalonia.Services
                 toDownload.Add(name);
                 if (info?.CommitHash == repoSha) repairs.Add(name);
             }
-            return new SyncPlan(toDownload, repairs, upToDate);
+            return new SyncPlan(toDownload, repairs, notInRepository, tracking);
         }
 
         private async Task DownloadUpdatedFilesDirectAsync(List<TreeItem> filesToUpdate, Dictionary<string, FileCommitInfo> upToDateFiles, string latestCommitHash, string owner, string repo, string branch)
