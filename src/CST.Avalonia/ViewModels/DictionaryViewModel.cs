@@ -378,7 +378,10 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
                 ? Array.Empty<DictionaryEntry>()
                 // The source returns Headword already in the requested output script and the definition as
                 // MeaningHtml (for flat-file, the same <see>-tagged text the native renderer handles). (#466)
-                : await source.LookupAsync(new DictionaryRequest(source.Id, query ?? "", _scriptService.CurrentScript, 500));
+                // Trimmed: a word pasted with a space - which a Windows double-click selects along with
+                // it - must look up exactly as the bare word does. Only DPD trimmed for itself; the flat-file
+                // dictionaries fell back to a near-match list instead. (#1096)
+                : await source.LookupAsync(new DictionaryRequest(source.Id, (query ?? "").Trim(), _scriptService.CurrentScript, 500));
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
