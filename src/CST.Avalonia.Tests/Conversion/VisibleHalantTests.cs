@@ -252,7 +252,10 @@ public class VisibleHalantTests
             var fast = p.To(deva);
             if (fast != p.ToRef(deva)) { misses.Add($"fast!=ref {Cp(deva)}"); continue; }
             if (p.VisibleSign != null && !fast.Contains(p.VisibleSign)) { misses.Add($"no sign {Cp(deva)} -> {Cp(fast)}"); continue; }
-            var back = p.Back(fast);
+            // The words were read with their joiners stripped, but the reverse converters put back the
+            // corpus's ZWJ in the conjuncts that carry one (C + U+094D + U+200D + C, e.g. nya+ja, ca+ca). Strip
+            // them from the result too, or a correct round trip of e0201n's "byanjanassin" reads as a miss.
+            var back = StripJoiners(p.Back(fast));
             if (back != deva) misses.Add($"{Cp(deva)} -> {Cp(fast)} -> {Cp(back)}");
         }
         Assert.True(misses.Count == 0, $"{script}: {misses.Count} of {words.Count}:\n" + string.Join("\n", misses.Take(20)));
@@ -282,6 +285,8 @@ public class VisibleHalantTests
         }
         return set.ToList();
     });
+
+    private static string StripJoiners(string s) => s.Replace("\u200C", "").Replace("\u200D", "");
 
     private static string Cp(string s) => string.Join(" ", s.Select(c => ((int)c).ToString("X4")));
 }
