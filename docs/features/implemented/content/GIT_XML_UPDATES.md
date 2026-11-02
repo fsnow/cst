@@ -100,8 +100,9 @@ This plan details the creation of a new service, `XmlUpdateService`, responsible
 
 2.  **Check for Updates (`CheckForUpdatesAsync`)**:
     - This method will be called after ensuring XML data exists locally.
-    - First checks the `EnableAutomaticUpdates` setting. If `false`, skip update checking.
+    - First checks the `EnableAutomaticUpdates` setting. If `false`, skip update checking: the books on disk are left exactly as they are, which is how local edits are kept.
     - Reads `file-dates.json` to load the `LastKnownRepositoryCommitHash` and file hashes into memory (may not exist on first download).
+    - **Local check (#1093).** Hashes every book on disk (Git blob SHA, about a third of a second for all 217) and compares it with the `CommitHash` recorded when it was downloaded. An edited, damaged, missing or unrecorded book is a *deviation*. This needs no network, so it is logged even offline. [fsnow, 2026-11-02] "as long as "Enable automatic updates" is checked, any deviation from upstream should be detected and repaired."
 
 3.  **Phase 1: Check the Top-Level Commit (Fast Path)**
     - Use `Octokit.net` to fetch the latest commit for the configured directory path on the configured branch, using the repository settings from `ISettingsService`.
@@ -119,8 +120,8 @@ This plan details the creation of a new service, `XmlUpdateService`, responsible
       var commits = await client.Repository.Commit.GetAll(owner, repo, commitRequest);
       var latestRemoteCommitHash = commits.FirstOrDefault()?.Sha;
       ```
-    - **Compare Hashes**: If `latestRemoteCommitHash` matches the locally stored `LastKnownRepositoryCommitHash`, the process stops. No updates needed.
-    - **First Download**: If no `file-dates.json` exists (first download), proceed to download all files.
+    - **Compare Hashes**: If `latestRemoteCommitHash` matches the locally stored `LastKnownRepositoryCommitHash` **and the local check found no deviation**, the process stops. No updates needed.
+    - **First Download**: If the first book in `Books.Inst` is missing from the XML directory (`CheckForLocalXmlData`), every file is downloaded, before the `EnableAutomaticUpdates` setting is consulted. A missing `file-dates.json` alone does not trigger it: the books on disk are then compared with upstream like any others.
 
 4.  **Phase 2: Check Individual File Hashes (Deeper Check)**
     - If the top-level hash has changed or this is a first download, get the contents of the configured directory from the repository.
@@ -129,8 +130,8 @@ This plan details the creation of a new service, `XmlUpdateService`, responsible
           ? await client.Repository.Content.GetAllContents(owner, repo)
           : await client.Repository.Content.GetAllContents(owner, repo, path);
       ```
-    - **For Updates**: Iterate through the remote `contents` and compare their `Sha` with the locally stored `CommitHash` for each file to build a list of files that need to be downloaded.
-    - **For First Download**: Download all XML files found in the directory.
+    - **For Updates**: Compare each remote `Sha` with the hash of the **file on disk** (from the local check), not with the recorded `CommitHash`. Every book that differs is downloaded: an upstream change, or a *repair* when upstream still has the copy that was recorded. A book that matches keeps its tracking entry. (#1093; before, the recorded hash was compared, so a local edit survived until upstream changed that same book.)
+    - **For First Download** (the first book missing, as above): Download all XML files found in the directory.
 
 5.  **Phase 3: Download and Save Files**
     - **For Updates**: If files need downloading, notify the user of pending updates.
