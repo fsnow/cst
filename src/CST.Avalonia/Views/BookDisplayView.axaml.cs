@@ -3733,6 +3733,25 @@ public partial class BookDisplayView : UserControl
                                 // to cancel can only be made in the handler. (fable review)
                                 }, { capture: true, passive: false });
                             }
+
+                            // #1096: on Windows, Chromium follows the platform convention that a double-click
+                            // selects the word AND the whitespace after it; macOS selects only the word. A
+                            // reader who double-clicks to copy a word for lookup then carries the space along.
+                            // Shrink the selection back to the word. A no-op where nothing trails, so macOS
+                            // (and a word followed by punctuation) is unaffected.
+                            document.addEventListener('dblclick', function() {
+                                var sel = window.getSelection();
+                                if (!sel || sel.isCollapsed || !sel.modify) { return; }
+                                var text = sel.toString();
+                                if (!/\s$/.test(text) || /^\s*$/.test(text)) { return; }
+                                // Each step drops one character from the selection's end; the guard bounds
+                                // the loop should a step fail to shorten it.
+                                for (var guard = 0; guard < 8 && /\s$/.test(sel.toString()); guard++) {
+                                    var before = sel.toString().length;
+                                    sel.modify('extend', 'backward', 'character');
+                                    if (sel.toString().length >= before) { break; }
+                                }
+                            });
                             
                             window.cstLogger.log('DEBUG', 'Keyboard capture initialized');
                         }
