@@ -80,7 +80,9 @@ namespace CST.Avalonia.Services
                     return;
                 }
                 
-                // Step 2: Check if automatic updates are enabled
+                // Step 2: Check if automatic updates are enabled. With them off, the books on disk are left exactly
+                // as they are: this is how local edits are kept. With them on, any difference from upstream is
+                // repaired. (#1093)
                 if (!settings.XmlUpdateSettings.EnableAutomaticUpdates)
                 {
                     _logger.LogInformation("Automatic updates are disabled");
@@ -309,8 +311,31 @@ namespace CST.Avalonia.Services
             }
         }
 
+        /// <summary>
+        /// Brings the local books into line with upstream. (#1093)
+        ///
+        /// <para>[fsnow, 2026-11-02] "as long as "Enable automatic updates" is checked, any deviation from upstream
+        /// should be detected and repaired." So every run hashes the books on disk rather than trusting the record
+        /// of what it last downloaded. A local edit, a truncated or damaged file, or a missing one is replaced by
+        /// upstream's copy, whether or not upstream has changed that book. Keeping local edits is what turning
+        /// automatic updates off is for (see <see cref="CheckForUpdatesAsync"/>).</para>
+        /// </summary>
         private async Task CheckGitHubForUpdatesAsync()
         {
+            var xmlDir = _settingsService.Settings.XmlBooksDirectory;
+
+            // STEP 0: the books on disk against the copies last downloaded. No network needed, so it is reported
+            // even offline. Hashing all 217 books takes about a third of a second.
+            var bookFiles = Books.Inst.Select(b => b.FileName).ToList();
+            var localShas = ComputeLocalShas(xmlDir, bookFiles);
+            var fileDatesData = await _xmlFileDatesService.GetFileDatesDataAsync();
+            var deviations = FindLocalDeviations(bookFiles, localShas, fileDatesData?.Files);
+            if (deviations.Count > 0)
+            {
+                _logger.LogInformation("Local check: {Count} book(s) differ from the copies last downloaded: {Files}",
+                    deviations.Count, Summarize(deviations));
+            }
+
             try
             {
                 var settings = _settingsService.Settings.XmlUpdateSettings;
@@ -318,9 +343,9 @@ namespace CST.Avalonia.Services
                 var repo = settings.XmlRepositoryName;
                 var targetPath = settings.XmlRepositoryPath;
                 var branch = string.IsNullOrEmpty(settings.XmlRepositoryBranch) ? "main" : settings.XmlRepositoryBranch;
-                
+
                 _logger.LogInformation("Using hybrid approach: minimal API calls + direct downloads");
-                
+
                 // STEP 1: Get latest commit SHA (1 API call) with timeout
                 UpdateStatusChanged?.Invoke("Getting repository information...");
 
@@ -331,6 +356,7 @@ namespace CST.Avalonia.Services
                 if (completedTask == timeoutTask)
                 {
                     _logger.LogWarning("GitHub API call timed out after 15 seconds");
+                    WarnUnrepaired(deviations);
                     UpdateStatusChanged?.Invoke("Network request timed out - skipping updates");
                     return;
                 }
@@ -338,18 +364,15 @@ namespace CST.Avalonia.Services
                 var branchInfo = await branchTask;
                 var commitSha = branchInfo.Commit.Sha;
                 _logger.LogInformation("Latest commit SHA: {CommitSha}", commitSha.Substring(0, 7));
-                
-                // Get current file dates data
-                var fileDatesData = await _xmlFileDatesService.GetFileDatesDataAsync();
-                
-                // Check if we've already synced this commit
-                if (fileDatesData?.LastKnownRepositoryCommitHash == commitSha)
+
+                // Nothing to do only when upstream has not moved AND every book on disk is the copy we recorded.
+                if (fileDatesData?.LastKnownRepositoryCommitHash == commitSha && deviations.Count == 0)
                 {
                     _logger.LogInformation("Already up to date with commit {Hash}", commitSha.Substring(0, 7));
                     UpdateStatusChanged?.Invoke("XML data is up to date");
                     return;
                 }
-                
+
                 // STEP 2: Get complete repository tree (1 API call) with timeout
                 UpdateStatusChanged?.Invoke("Fetching repository tree...");
 
@@ -360,177 +383,137 @@ namespace CST.Avalonia.Services
                 if (treeCompletedTask == treeTimeoutTask)
                 {
                     _logger.LogWarning("GitHub tree API call timed out after 30 seconds");
+                    WarnUnrepaired(deviations);
                     UpdateStatusChanged?.Invoke("Network request timed out - skipping updates");
                     return;
                 }
 
                 var tree = await treeTask;
                 _logger.LogInformation("Tree retrieved with {TotalItems} total items", tree.Tree.Count);
-                
+
                 // Filter to target path XML files
                 var targetFiles = tree.Tree
-                    .Where(item => item.Type == TreeType.Blob && 
+                    .Where(item => item.Type == TreeType.Blob &&
                                    item.Path.StartsWith(targetPath + "/") &&
                                    item.Path.EndsWith(".xml"))
                     .ToList();
-                
+
                 _logger.LogInformation("Found {XmlFileCount} XML files in '{TargetPath}'", targetFiles.Count, targetPath);
-                
-                // Create a dictionary for quick lookup of repository files by name
+
                 var repoFilesByName = targetFiles.ToDictionary(f => Path.GetFileName(f.Path), f => f);
-                
-                // Check only the book files we need from the Books collection
-                var filesToUpdate = new List<TreeItem>();
-                var xmlDir = _settingsService.Settings.XmlBooksDirectory;
-                _logger.LogInformation("XML directory for comparison: {XmlDir}", xmlDir);
-                var xmlFileCount = Directory.Exists(xmlDir) ? Directory.GetFiles(xmlDir, "*.xml").Length : 0;
-                _logger.LogInformation("Found {Count} XML files in directory", xmlFileCount);
-                
-                // Check if we need to do hash comparison for missing commit hash tracking data
-                // IndexingService may have created file-dates.json with timestamps but no commit hashes
-                bool needsHashComparison = fileDatesData?.Files == null || 
-                    fileDatesData.Files.Count == 0 ||
-                    fileDatesData.Files.Values.Any(f => string.IsNullOrEmpty(f.CommitHash));
-                    
-                if (needsHashComparison)
-                {
-                    _logger.LogInformation("No commit hash tracking data found. Will hash-compare existing files to avoid unnecessary downloads.");
-                    UpdateStatusChanged?.Invoke("Checking existing files...");
-                }
-                
-                // Track files that are already up-to-date (for saving to file-dates.json)
-                var upToDateFiles = new Dictionary<string, FileCommitInfo>();
-                int filesChecked = 0, filesFound = 0, shaMatches = 0;
-                
-                _logger.LogInformation("Processing {Count} books from Books.Inst", Books.Inst.Count());
-                
-                int booksProcessed = 0, booksNotFound = 0;
-                foreach (var book in Books.Inst)
-                {
-                    booksProcessed++;
-                    if (!repoFilesByName.TryGetValue(book.FileName, out var repoFile))
-                    {
-                        booksNotFound++;
-                        if (booksNotFound <= 5) // Only log first 5 to avoid spam
-                        {
-                            _logger.LogWarning("Book file {FileName} not found in repository", book.FileName);
-                        }
-                        continue;
-                    }
-                    
-                    bool needsUpdate = false;
-                    
-                    if (!needsHashComparison && fileDatesData?.Files != null && fileDatesData.Files.TryGetValue(book.FileName, out var localFile))
-                    {
-                        // We have tracking data with valid commit hashes - use stored SHA
-                        needsUpdate = localFile.CommitHash != repoFile.Sha;
-                        if (needsUpdate)
-                        {
-                            _logger.LogDebug("File {Name} needs update (tracked SHA: {LocalSha} vs remote: {RemoteSha})", 
-                                book.FileName, localFile.CommitHash, repoFile.Sha.Substring(0, 7));
-                        }
-                        else
-                        {
-                            // File is up-to-date, keep it in tracking with existing timestamp
-                            upToDateFiles[book.FileName] = localFile;
-                        }
-                    }
-                    else
-                    {
-                        // No tracking data - check if local file exists
-                        var localPath = Path.Combine(xmlDir, book.FileName);
-                        filesChecked++;
-                        if (File.Exists(localPath))
-                        {
-                            filesFound++;
-                            // Hash-compare existing file against remote SHA
-                            _logger.LogDebug("Hash-comparing existing file: {FileName}", book.FileName);
-                            var localSha = GitBlobHash.Compute(File.ReadAllBytes(localPath));
-                            needsUpdate = localSha != repoFile.Sha;
-                            if (!needsUpdate) shaMatches++;
-                            
-                            _logger.LogDebug("SHA comparison for {FileName}: Local={LocalSha}, Remote={RemoteSha}, NeedsUpdate={NeedsUpdate}", 
-                                book.FileName, localSha.Substring(0, 7), repoFile.Sha.Substring(0, 7), needsUpdate);
-                            
-                            if (needsUpdate)
-                            {
-                                _logger.LogDebug("File {Name} needs update (local SHA: {LocalSha} vs remote: {RemoteSha})", 
-                                    book.FileName, localSha.Substring(0, 7), repoFile.Sha.Substring(0, 7));
-                            }
-                            else
-                            {
-                                _logger.LogDebug("File {Name} is up to date (SHA: {Sha})", 
-                                    book.FileName, localSha.Substring(0, 7));
-                                // File matches - save it as up-to-date
-                                // Set CommitHash, leave LastIndexedTimestamp as null for indexer to manage
-                                upToDateFiles[book.FileName] = new FileCommitInfo
-                                {
-                                    LastIndexedTimestamp = null,  // null = not indexed yet, indexer will set when it runs
-                                    CommitHash = repoFile.Sha
-                                };
-                            }
-                        }
-                        else
-                        {
-                            // File doesn't exist locally - needs download
-                            needsUpdate = true;
-                            _logger.LogWarning("File {Name} not found at {Path}, needs download", book.FileName, localPath);
-                        }
-                    }
-                    
-                    if (needsUpdate)
-                    {
-                        filesToUpdate.Add(repoFile);
-                    }
-                }
-                
-                if (filesToUpdate.Count == 0)
+
+                var missingFromRepo = bookFiles.Where(f => !repoFilesByName.ContainsKey(f)).ToList();
+                foreach (var name in missingFromRepo.Take(5)) // Only log first 5 to avoid spam
+                    _logger.LogWarning("Book file {FileName} not found in repository", name);
+
+                // STEP 3: the books on disk against the tree. Every run compares the actual files.
+                var plan = PlanSync(bookFiles, localShas, fileDatesData?.Files,
+                    repoFilesByName.ToDictionary(kv => kv.Key, kv => kv.Value.Sha));
+
+                if (plan.ToDownload.Count == 0)
                 {
                     _logger.LogInformation("No files need updating");
                     UpdateStatusChanged?.Invoke("No files need updating");
-                    
-                    // If we did hash comparison (no tracking data), rebuild file-dates.json with current SHAs
-                    if (needsHashComparison)
-                    {
-                        _logger.LogInformation("Rebuilding file tracking data from hash comparison results");
-                        UpdateStatusChanged?.Invoke("Updating file tracking data...");
-                        
-                        var rebuiltFiles = new Dictionary<string, FileCommitInfo>();
-                        foreach (var book in Books.Inst)
-                        {
-                            if (repoFilesByName.TryGetValue(book.FileName, out var repoFile))
-                            {
-                                rebuiltFiles[book.FileName] = new FileCommitInfo
-                                {
-                                    LastIndexedTimestamp = null,  // Let indexer determine if these need indexing
-                                    CommitHash = repoFile.Sha
-                                };
-                            }
-                        }
-                        await _xmlFileDatesService.SaveFileDatesDataAsync(rebuiltFiles, commitSha);
-                        _logger.LogInformation("Rebuilt tracking data for {Count} files", rebuiltFiles.Count);
-                    }
-                    else if (fileDatesData != null)
-                    {
-                        // Update the repository commit hash even if no files changed
-                        await _xmlFileDatesService.SaveFileDatesDataAsync(fileDatesData.Files, commitSha);
-                    }
+                    // Saves the new repository commit, and a rebuilt tracking entry for any book that lacked one.
+                    await _xmlFileDatesService.SaveFileDatesDataAsync(plan.UpToDate, commitSha);
                     return;
                 }
-                
-                _logger.LogInformation("Book processing: Processed={Processed}, NotFoundInRepo={NotFound}", booksProcessed, booksNotFound);
-                _logger.LogInformation("Hash comparison results: Checked={Checked}, Found={Found}, Matches={Matches}", filesChecked, filesFound, shaMatches);
-                _logger.LogInformation("Files needing update: {UpdateCount}/{TotalBooks}", filesToUpdate.Count, Books.Inst.Count());
-                _logger.LogInformation("Files already up-to-date: {UpToDateCount}/{TotalBooks}", upToDateFiles.Count, Books.Inst.Count());
-                
-                // STEP 3: Download updated files via direct HTTPS (no API calls)
-                await DownloadUpdatedFilesDirectAsync(filesToUpdate, upToDateFiles, commitSha, owner, repo, branch);
+
+                _logger.LogInformation(
+                    "Files needing update: {UpdateCount}/{TotalBooks}, of which {RepairCount} repair(s) of local copies upstream has not changed: {RepairFiles}",
+                    plan.ToDownload.Count, bookFiles.Count, plan.Repairs.Count, Summarize(plan.Repairs));
+                _logger.LogInformation("Files already up-to-date: {UpToDateCount}/{TotalBooks}", plan.UpToDate.Count, bookFiles.Count);
+
+                // STEP 4: Download updated files via direct HTTPS (no API calls)
+                var filesToUpdate = plan.ToDownload.Select(f => repoFilesByName[f]).ToList();
+                await DownloadUpdatedFilesDirectAsync(filesToUpdate, plan.UpToDate, commitSha, owner, repo, branch);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking GitHub for updates");
+                WarnUnrepaired(deviations);
                 UpdateStatusChanged?.Invoke($"Error checking for updates: {ex.Message}");
             }
+        }
+
+        private void WarnUnrepaired(List<string> deviations)
+        {
+            if (deviations.Count > 0)
+                _logger.LogWarning(
+                    "{Count} book(s) differ from upstream and were not repaired now; they will be at the next start with a connection: {Files}",
+                    deviations.Count, Summarize(deviations));
+        }
+
+        private static string Summarize(IReadOnlyCollection<string> names, int max = 10) =>
+            names.Count <= max ? string.Join(", ", names) : string.Join(", ", names.Take(max)) + $" and {names.Count - max} more";
+
+        /// <summary>The Git blob SHA of each book on disk; null for a book with no local file. (#1093)</summary>
+        internal static Dictionary<string, string?> ComputeLocalShas(string xmlDir, IEnumerable<string> bookFiles)
+        {
+            var shas = new Dictionary<string, string?>();
+            foreach (var name in bookFiles)
+            {
+                var path = Path.Combine(xmlDir, name);
+                shas[name] = File.Exists(path) ? GitBlobHash.Compute(File.ReadAllBytes(path)) : null;
+            }
+            return shas;
+        }
+
+        /// <summary>
+        /// Books whose file on disk is not the copy last downloaded: edited, damaged, missing, or never recorded.
+        /// (#1093)
+        /// </summary>
+        internal static List<string> FindLocalDeviations(IEnumerable<string> bookFiles,
+            IReadOnlyDictionary<string, string?> localShas, IReadOnlyDictionary<string, FileCommitInfo>? tracked)
+        {
+            var deviations = new List<string>();
+            foreach (var name in bookFiles)
+            {
+                localShas.TryGetValue(name, out var local);
+                FileCommitInfo? info = null;
+                tracked?.TryGetValue(name, out info);
+                if (local == null || string.IsNullOrEmpty(info?.CommitHash) || local != info.CommitHash)
+                    deviations.Add(name);
+            }
+            return deviations;
+        }
+
+        internal sealed record SyncPlan(List<string> ToDownload, List<string> Repairs,
+            Dictionary<string, FileCommitInfo> UpToDate);
+
+        /// <summary>
+        /// Which books to download: every book whose file on disk is not upstream's, whatever the tracking data
+        /// says. A download is a <i>repair</i> when upstream's copy is the one we recorded: upstream has not changed
+        /// the book, the local file has. A book that matches keeps its tracking entry, so the indexer does not
+        /// re-index it; one that matches but was recorded under another hash, or not at all, gets upstream's hash
+        /// and a null index timestamp, leaving the indexer to decide. Books not in the repository are left out.
+        /// (#1093)
+        /// </summary>
+        internal static SyncPlan PlanSync(IEnumerable<string> bookFiles, IReadOnlyDictionary<string, string?> localShas,
+            IReadOnlyDictionary<string, FileCommitInfo>? tracked, IReadOnlyDictionary<string, string> repoShas)
+        {
+            var toDownload = new List<string>();
+            var repairs = new List<string>();
+            var upToDate = new Dictionary<string, FileCommitInfo>();
+            foreach (var name in bookFiles)
+            {
+                if (!repoShas.TryGetValue(name, out var repoSha)) continue;
+                localShas.TryGetValue(name, out var local);
+                FileCommitInfo? info = null;
+                tracked?.TryGetValue(name, out info);
+
+                if (local == repoSha)
+                {
+                    upToDate[name] = info != null && info.CommitHash == repoSha
+                        ? info
+                        : new FileCommitInfo { LastIndexedTimestamp = null, CommitHash = repoSha };
+                    continue;
+                }
+
+                toDownload.Add(name);
+                if (info?.CommitHash == repoSha) repairs.Add(name);
+            }
+            return new SyncPlan(toDownload, repairs, upToDate);
         }
 
         private async Task DownloadUpdatedFilesDirectAsync(List<TreeItem> filesToUpdate, Dictionary<string, FileCommitInfo> upToDateFiles, string latestCommitHash, string owner, string repo, string branch)
