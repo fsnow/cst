@@ -112,6 +112,13 @@ public sealed class AiContextBundler : IAiContextBundler
 
         var parts = new List<BundlePart>();
 
+        // Cut ONCE, before the window is built, and the same text used for both. The window's search for the
+        // selection restarts at every position, so its cost grows with the selection: on repetitive text a
+        // 130,000-character selection that did not match took 3.1 s, a 20,000-character one 0.86 s. (#827)
+        var (selectionText, selectionCut) = request.SelectionUnavailable
+            ? (null, false)
+            : CapSelection(request.SelectionText);
+
         // Latin to the model (AI_INTEGRATION §11); StructuredNotes so the Pāli comes back brace-free and
         // quotable with the print apparatus as separate data — which is what you want a model translating.
         var passage = await _passage.FetchPassageAsync(
@@ -126,7 +133,7 @@ public sealed class AiContextBundler : IAiContextBundler
                 StructuredNotes: true,
                 // The window is built AROUND this, so the selection is inside the context by construction
                 // rather than by luck. (#649)
-                SelectionText: request.SelectionUnavailable ? null : request.SelectionText),
+                SelectionText: selectionText),
             ct).ConfigureAwait(false);
 
         // The passage tool signals every failure the same way — empty text, with the reason left in
@@ -158,7 +165,7 @@ public sealed class AiContextBundler : IAiContextBundler
             passage.NoteCount > 0 ? BundlePartState.Included : BundlePartState.Empty,
             passage.NoteCount > 0 ? $"{passage.NoteCount} print note(s)" : "no apparatus in this window"));
 
-        var selection = BuildSelection(request, parts);
+        var selection = BuildSelection(request.SelectionUnavailable, selectionText, selectionCut, parts);
         var lemmas = GatherLemmas(request.Task, selection?.Text ?? passage.Text, parts);
 
         var bookName = ScriptConverter.Convert(book.LongNavPath, Script.Devanagari, Script.Latin);
@@ -202,28 +209,52 @@ public sealed class AiContextBundler : IAiContextBundler
     /// view, the second means the words the user highlighted were dropped on the floor. Only the second is
     /// something to tell them about. (§3.1)</para>
     /// </summary>
-    private static SelectionContext? BuildSelection(AiContextRequest request, List<BundlePart> parts)
+    private static SelectionContext? BuildSelection(
+        bool unavailable, string? text, bool cut, List<BundlePart> parts)
     {
-        if (request.SelectionUnavailable)
+        if (unavailable)
         {
             parts.Add(new BundlePart(
                 BundlePartNames.Selection,
                 BundlePartState.Unavailable,
-                // No speculative cause. This reaches the model, and the two causes it used to name were
-                // guesses that #824 and #827 both found to be wrong in the case at hand; a third (the title
-                // cap) was not among them. What the model needs is that the selection is absent. (#827)
+                // No cause. This reaches the model, and the causes it used to name were guesses that #824 and
+                // #827 found to be wrong in the case at hand. What the model needs is that the selection is
+                // absent; the cause is logged where it is known, in BookDisplayView's read. (#827)
                 "the reader could not read the selection"));
             return new SelectionContext(null, SelectionState.Unavailable);
         }
 
-        // Already Latin, composed and whitespace-collapsed by SelectionPipeline.Normalize; run it again rather
-        // than trust the caller, since it is idempotent.
-        var text = SelectionPipeline.Normalize(request.SelectionText, Script.Latin);
         if (text is null) return null;
 
-        parts.Add(new BundlePart(BundlePartNames.Selection, BundlePartState.Included, null));
+        parts.Add(cut
+            ? new BundlePart(
+                BundlePartNames.Selection, BundlePartState.TrimmedForBudget,
+                $"your selection was longer than {TeiPassageReader.MaxSelectionChars:N0} characters; "
+                + $"the first {text.Length:N0} were used")
+            : new BundlePart(BundlePartNames.Selection, BundlePartState.Included, null));
 
         return new SelectionContext(text, SelectionState.Located);
+    }
+
+    /// <summary>
+    /// The selection as the model will see it, and whether it was cut to get there.
+    ///
+    /// <para><b>Cut at the limit the window already uses, and said so.</b> Once the selection stopped being
+    /// capped by the title channel (#827), a select-all could arrive whole — a book is hundreds of thousands of
+    /// characters — while the window beside it was cut at <see cref="TeiPassageReader.MaxSelectionChars"/> and
+    /// the reader told so. The two must agree, or "cut to fit" is false about the very text the model answers.
+    /// The start is kept — what the reader selected first — and the cut falls on a space near the limit.</para>
+    /// </summary>
+    internal static (string? Text, bool Cut) CapSelection(string? selection)
+    {
+        // Already Latin, composed and whitespace-collapsed by SelectionPipeline.Normalize; run it again rather
+        // than trust the caller, since it is idempotent.
+        var text = SelectionPipeline.Normalize(selection, Script.Latin);
+        var cap = TeiPassageReader.MaxSelectionChars;
+        if (text is null || text.Length <= cap) return (text, false);
+
+        var space = text.LastIndexOf(' ', cap - 1, Math.Min(200, cap));
+        return (text[..(space > 0 ? space : cap)].TrimEnd(), true);
     }
 
     /// <summary>

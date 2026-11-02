@@ -35,12 +35,6 @@ public partial class BookDisplayView : UserControl
     private bool _isShutDown;   // set once the tab is really closed; prevents WebView resurrection (BOOK-1)
     // Completes when OnTitleChanged receives the CST_LOOKUP_SEL selection pushed for a Cmd+D lookup. (#25)
     private TaskCompletionSource<string?>? _lookupSelectionTcs;
-
-    // The assistant's selection round-trip (#649). A SEPARATE slot from the lookup one above, deliberately:
-    // that field is already documented as a shared single slot a concurrent Cmd+D clobbers, and the assistant
-    // reads the selection while the user is free to press Cmd+D. Two single-slot channels cannot race; one
-    // shared slot would silently hand one caller the other's answer.
-    private TaskCompletionSource<(string? Text, int? Paragraph)>? _aiSelectionTcs;
     private ScrollViewer? _fallbackBrowser;
     private int _lastScrollPosition = 0;
     private bool _isBrowserInitialized = false;
@@ -276,256 +270,77 @@ public partial class BookDisplayView : UserControl
     /// it would attribute a selection in the first hundred pixels of a paragraph to the previous one.</para>
     /// </summary>
     /// <returns>
-    /// Text null means the selection could not be read at all (browser not ready, or the round trip timed
-    /// out) — distinct from an empty string, which means the reader genuinely selected nothing. Paragraph
-    /// null means the anchor cache could not place it, in which case the caller falls back to the reading
-    /// position, exactly as before this existed.
+    /// Text null means the selection could not be read — the browser was not ready, the read timed out, or
+    /// the book was reloaded or its browser replaced while it ran — distinct from an empty string, which means
+    /// the reader genuinely selected nothing. Paragraph null means no paragraph anchor precedes the selection,
+    /// in which case the caller falls back to the reading position.
     /// </returns>
+    /// <remarks>
+    /// Read by evaluating a script and taking its return value, not through <c>document.title</c>, whose
+    /// 4096-character cap made a medium paragraph too long to read. (#827) See
+    /// <see cref="CST.Avalonia.Services.Ai.WebViewSelectionReader"/>.
+    /// </remarks>
     public async Task<(string? Text, int? Paragraph)> GetWebViewSelectionWithParagraphAsync()
     {
-        var answer = await GetWebViewSelectionViaTitleAsync();
-        // #827 probe: off unless CST_PROBE_827=1. Reads the selection a second time the planned way and logs
-        // both; the title read's answer is what the caller gets either way. Remove with the probe.
-        if (Probe827.Enabled) await Probe827ReadAsync(answer);
-        return answer;
-    }
-
-    private async Task<(string? Text, int? Paragraph)> GetWebViewSelectionViaTitleAsync()
-    {
-        // EVERY WAY THIS CAN FAIL NOW SAYS WHICH ONE IT WAS. Two of the three returned a bare null, so a
-        // reader who was told "the page was not ready, or the request timed out" could not learn which, and
-        // neither could anyone reading the log: the sentence names two causes because nothing distinguished
-        // them. Same shape of defect as #817 and #824 — a failure with nowhere to report itself.
-        if (_webView == null || !_isBrowserInitialized)
+        // EVERY WAY THIS CAN FAIL SAYS WHICH ONE IT WAS — a failure with nowhere to report itself is the
+        // shape of #817 and #824.
+        var webView = _webView;
+        if (webView == null || !_isBrowserInitialized || _isShutDown)
         {
             _logger.Information(
-                "AI selection unavailable: webView={HasWebView} browserInitialized={Initialized} tab={Tab}",
-                _webView != null, _isBrowserInitialized, _tabId);
+                "AI selection unavailable: webView={HasWebView} browserInitialized={Initialized} "
+                + "shutDown={ShutDown} tab={Tab}",
+                webView != null, _isBrowserInitialized, _isShutDown, _tabId);
             return (null, null);
         }
-        try
+
+        // A read that crosses a reload, a re-script or a rebind to another book is about a document that is
+        // no longer there. The generation moves when LoadHtmlContent STARTS; _navGeneration moves only on
+        // Navigated, too late to see a load that began during the read.
+        var loadGeneration = Volatile.Read(ref _loadGeneration);
+        string? Staleness() =>
+            _isShutDown ? "the tab was closed"
+            : !ReferenceEquals(webView, _webView) ? "the browser was replaced"
+            : Volatile.Read(ref _loadGeneration) != loadGeneration ? "the book was reloaded"
+            : null;
+
+        var result = await CST.Avalonia.Services.Ai.WebViewSelectionReader.ReadAsync(
+            (script, timeout) => webView.EvaluateScript<string>(script, null, timeout)!,
+            Staleness,
+            CST.Avalonia.Services.Ai.WebViewSelectionReader.Timeout,
+            _logger);
+
+        if (result.Failure != CST.Avalonia.Services.Ai.WebViewSelectionReader.Failure.None)
         {
-            var tcs = new TaskCompletionSource<(string? Text, int? Paragraph)>();
-            _aiSelectionTcs = tcs;
-
-            var script = @"
-                (function() {
-                try {
-                    var sel = window.getSelection ? window.getSelection() : null;
-                    var text = sel ? sel.toString() : '';
-                    var para = '';
-                    if (sel && sel.rangeCount > 0 && text.length > 0) {
-                        // DOCUMENT ORDER, not geometry. Comparing the selection's pixel top against an
-                        // anchor's was a race between an empty inline <a> box and a text line, with the
-                        // anchor positions rounded when the cache was built -- so a selection at the very
-                        // start of a paragraph resolved to the PREVIOUS one. That is not a cosmetic
-                        // off-by-one: the previous paragraph can be in the previous sutta, and then the
-                        // search for the selection is walled off from it by that sutta's own boundary and
-                        // the window is built in the wrong section entirely.
-                        var startNode = sel.getRangeAt(0).startContainer;
-                        var anchors = document.querySelectorAll('a[name]');
-                        var best = null;
-                        for (var i = 0; i < anchors.length; i++) {
-                            var a = anchors[i];
-                            if (!a.name || a.name.indexOf('para') !== 0) continue;
-                            var rel = a.compareDocumentPosition(startNode);
-                            // The selection's node comes after this anchor, so the anchor precedes it.
-                            if (rel === 0 || (rel & Node.DOCUMENT_POSITION_FOLLOWING)) best = a;
-                            // querySelectorAll returns document order: once one stops preceding, so do the rest.
-                            else break;
-                        }
-                        if (!best && anchors.length > 0) {
-                            for (var j = 0; j < anchors.length; j++) {
-                                if (anchors[j].name && anchors[j].name.indexOf('para') === 0) { best = anchors[j]; break; }
-                            }
-                        }
-
-                        // Anchor names are not plain numbers: a book-code suffix in Multi volumes
-                        // (para548_dn1) and the printed number can be a range (para548-9).
-                        var name = best ? (best.name || '') : '';
-                        if (name.indexOf('para') === 0) {
-                            var t = name.substring(4);
-                            var underscore = t.indexOf('_');
-                            if (underscore !== -1) t = t.substring(0, underscore);
-                            var dash = t.indexOf('-');
-                            if (dash !== -1) t = t.substring(0, dash);
-                            para = t;
-                        }
-                    }
-                    var b64 = '';
-                    try {
-                        var bytes = new TextEncoder().encode(text), raw = '';
-                        for (var bi = 0; bi < bytes.length; bi++) raw += String.fromCharCode(bytes[bi]);
-                        b64 = btoa(raw);
-                    } catch (be) { b64 = ''; }
-                    document.title = 'CST_AI_SEL:|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1) + '|PARA=' + para + '|LEN=' + b64.length + '|B64:' + b64;
-                } catch (e) {
-                    document.title = 'CST_AI_SEL:|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1) + '|PARA=|LEN=0|B64:';
-                }
-                })();";
-            script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
-            _webView.ExecuteScript(script);
-
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-            var done = await Task.WhenAny(tcs.Task, Task.Delay(AiSelectionTimeout));
-            _aiSelectionTcs = null;
-            watch.Stop();
-
-            if (done != tcs.Task)
-            {
-                // The title channel is shared — status updates and the dictionary lookup write it too — so a
-                // response that never arrives is worth recording rather than reporting as a generic timeout.
-                _logger.Information(
-                    "AI selection timed out after {Elapsed}ms waiting on the title channel, tab={Tab}",
-                    watch.ElapsedMilliseconds, _tabId);
-                return (null, null);
-            }
-
-            var answer = await tcs.Task;
-            _logger.Debug(
-                "AI selection read in {Elapsed}ms: {Length} char(s), paragraph {Paragraph}, tab={Tab}",
-                watch.ElapsedMilliseconds, answer.Text?.Length ?? 0, answer.Paragraph, _tabId);
-            return answer;
-        }
-        catch (Exception ex)
-        {
-            _logger.Information(ex, "GetWebViewSelectionWithParagraph failed, tab={Tab}", _tabId);
+            _logger.Information(
+                "AI selection unavailable: {Failure}{Detail} after {Elapsed}ms, load generation {Before}->{After}, tab={Tab}",
+                result.Failure, result.Detail is { } d ? " (" + d + ")" : "", result.ElapsedMs,
+                loadGeneration, Volatile.Read(ref _loadGeneration), _tabId);
             return (null, null);
         }
+
+        _logger.Information(
+            "AI selection read in {Elapsed}ms: {Length} char(s), paragraph {Paragraph}, tab={Tab}",
+            result.ElapsedMs, result.Text?.Length ?? 0, result.Paragraph?.ToString() ?? "(none)", _tabId);
+        return (result.Text, result.Paragraph);
     }
 
     /// <summary>
-    /// How long to wait for the book WebView to answer with the current selection.
+    /// How long to wait for the book WebView to answer a Cmd+D / Cmd+Shift+F selection request.
     ///
     /// <para>Named rather than inline so the number is arguable. It is a round trip through
     /// <c>ExecuteScript</c> and back out through <c>document.title</c>, and the channel is shared with status
-    /// updates and the dictionary lookup, so the wait is not really "how long does the script take".</para>
+    /// updates, so the wait is not really "how long does the script take".</para>
     /// </summary>
-    private static readonly TimeSpan AiSelectionTimeout = TimeSpan.FromMilliseconds(700);
-
-    // ---- #827 probe: diagnostic only, removed when the feature lands -------------------------------------
-
-    /// <summary>Environment switches for the #827 probe. Read once; unset means the probe never runs.</summary>
-    private static class Probe827
-    {
-        public static readonly bool Enabled = Environment.GetEnvironmentVariable("CST_PROBE_827") == "1";
-        public static readonly int BusyMs =
-            int.TryParse(Environment.GetEnvironmentVariable("CST_PROBE_827_BUSY_MS"), out var ms) && ms > 0 ? ms : 0;
-        public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
-    }
-
-    /// <summary>
-    /// The planned read (#827, docs/features/in-progress/827-selection-native-bridge.md): the same selection
-    /// and document-order paragraph logic as the title script, returned by EvaluateScript instead of written
-    /// to document.title. CefGlue evaluates a script as a function body, so it must end in a top-level return.
-    /// </summary>
-    private const string Probe827Script = @"
-        var sel = window.getSelection ? window.getSelection() : null;
-        var text = sel ? sel.toString() : '';
-        var para = '';
-        if (sel && sel.rangeCount > 0 && text.length > 0) {
-            var startNode = sel.getRangeAt(0).startContainer;
-            var anchors = document.querySelectorAll('a[name]');
-            var best = null;
-            for (var i = 0; i < anchors.length; i++) {
-                var a = anchors[i];
-                if (!a.name || a.name.indexOf('para') !== 0) continue;
-                var rel = a.compareDocumentPosition(startNode);
-                if (rel === 0 || (rel & Node.DOCUMENT_POSITION_FOLLOWING)) best = a;
-                else break;
-            }
-            if (!best && anchors.length > 0) {
-                for (var j = 0; j < anchors.length; j++) {
-                    if (anchors[j].name && anchors[j].name.indexOf('para') === 0) { best = anchors[j]; break; }
-                }
-            }
-            var name = best ? (best.name || '') : '';
-            if (name.indexOf('para') === 0) {
-                var t = name.substring(4);
-                var underscore = t.indexOf('_');
-                if (underscore !== -1) t = t.substring(0, underscore);
-                var dash = t.indexOf('-');
-                if (dash !== -1) t = t.substring(0, dash);
-                para = t;
-            }
-        }
-        return JSON.stringify({ t: text, p: para });";
-
-    private async Task Probe827ReadAsync((string? Text, int? Paragraph) titleAnswer)
-    {
-        var webView = _webView;
-        var script = _viewModel?.BookScript.ToString() ?? "?";
-        string outcome;
-        string? evalText = null;
-        int? evalPara = null;
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        try
-        {
-            if (webView == null || !_isBrowserInitialized || _isShutDown)
-            {
-                outcome = "not-ready";
-            }
-            else
-            {
-                var js = (Probe827.BusyMs > 0
-                             ? "var __e = Date.now() + " + Probe827.BusyMs + "; while (Date.now() < __e) {}\n"
-                             : "")
-                         + Probe827Script;
-                // The library's timeout does not bound the wait on its own (its timer starts when the script
-                // is dequeued), so the same value bounds our own wait as well.
-                var call = webView.EvaluateScript<string>(js, null, Probe827.Timeout);
-                var done = await Task.WhenAny(call, Task.Delay(Probe827.Timeout));
-                if (done != call)
-                {
-                    outcome = "timeout";
-                    _ = call.ContinueWith(t => _logger.Information(
-                        "PROBE-827 abandoned eval finished later: status {Status}, error {Error}",
-                        t.Status, t.Exception?.GetBaseException().Message), TaskScheduler.Default);
-                }
-                else if (!ReferenceEquals(webView, _webView) || _isShutDown)
-                {
-                    outcome = "browser-changed";
-                }
-                else
-                {
-                    var raw = await call;
-                    if (raw == null)
-                    {
-                        outcome = "script-null";
-                    }
-                    else
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(raw);
-                        evalText = doc.RootElement.GetProperty("t").GetString();
-                        var p = doc.RootElement.GetProperty("p").GetString();
-                        evalPara = int.TryParse(p, out var n) ? n : null;
-                        outcome = "ok";
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            outcome = "exception: " + ex.GetType().Name + ": " + ex.Message;
-        }
-        watch.Stop();
-
-        _logger.Information(
-            "PROBE-827 script {Script} busy {BusyMs}ms | title: {TitleLen} char(s), para {TitlePara} | eval: "
-            + "{Outcome}, {EvalLen} char(s), para {EvalPara}, {Elapsed}ms | text equal {Equal}, para equal {ParaEqual}, tab={Tab}",
-            script, Probe827.BusyMs,
-            titleAnswer.Text?.Length.ToString() ?? "null", titleAnswer.Paragraph?.ToString() ?? "(none)",
-            outcome, evalText?.Length.ToString() ?? "null", evalPara?.ToString() ?? "(none)", watch.ElapsedMilliseconds,
-            titleAnswer.Text != null && evalText != null ? (titleAnswer.Text == evalText).ToString() : "n/a",
-            titleAnswer.Text != null && evalText != null ? (titleAnswer.Paragraph == evalPara).ToString() : "n/a",
-            _tabId);
-    }
+    private static readonly TimeSpan LookupSelectionTimeout = TimeSpan.FromMilliseconds(700);
 
     /// <summary>
     /// Returns the text the user has selected inside the book WebView (or null/empty if none). Used by
-    /// the "Look Up in Dictionary" command (Cmd+D). Routes the selection back through the document.title
-    /// channel (EvaluateScript returns null in this WebView build) and awaits the round-trip, so it never
-    /// blocks the UI thread on CEF.
+    /// the "Look Up in Dictionary" command (Cmd+D) and Search for Selection (Cmd+Shift+F). Routes the
+    /// selection back through the document.title channel and awaits the round-trip, so it never blocks the UI
+    /// thread on CEF. A word or a phrase fits well inside the title's 4096-character cap; the assistant's
+    /// selection, which does not, is read by EvaluateScript instead (#827,
+    /// <see cref="GetWebViewSelectionWithParagraphAsync"/>).
     /// </summary>
     public async Task<string?> GetWebViewSelectionAsync()
     {
@@ -533,8 +348,8 @@ public partial class BookDisplayView : UserControl
             return null;
         try
         {
-            // EvaluateScript returns null in this CEF binding, so push the selection out through the
-            // document.title channel (same mechanism as CST_STATUS_UPDATE) and await the round-trip.
+            // Push the selection out through the document.title channel (same mechanism as
+            // CST_STATUS_UPDATE) and await the round-trip.
             var tcs = new TaskCompletionSource<string?>();
             _lookupSelectionTcs = tcs;
 
@@ -558,7 +373,7 @@ public partial class BookDisplayView : UserControl
             script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
             _webView.ExecuteScript(script);
 
-            var done = await Task.WhenAny(tcs.Task, Task.Delay(AiSelectionTimeout));
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(LookupSelectionTimeout));
             _lookupSelectionTcs = null;
 
             if (done != tcs.Task)
@@ -571,7 +386,7 @@ public partial class BookDisplayView : UserControl
                 _logger.Information(
                     "Lookup selection timed out after {Elapsed}ms waiting on the title channel — the "
                     + "caller will see this as no selection, tab={Tab}",
-                    AiSelectionTimeout.TotalMilliseconds, _tabId);
+                    LookupSelectionTimeout.TotalMilliseconds, _tabId);
                 return null;
             }
 
@@ -985,6 +800,10 @@ public partial class BookDisplayView : UserControl
     // Bumped on every completed navigation. A deferred scroll restoration records the generation that armed
     // it, so one belonging to a superseded document can be recognised and dropped. -1 means none pending.
     private int _navGeneration = 0;
+    // Bumped when LoadHtmlContent STARTS a load — before the document goes, where _navGeneration moves only
+    // once the new one has arrived. A selection read compares it before and after, so a read that crossed a
+    // reload, re-script or rebind is reported as failed rather than as "nothing selected". (#827)
+    private int _loadGeneration = 0;
     private int _deferredScrollGeneration = -1;
     // 1 while a finished zoom burst is waiting for the reflow to land before restoring the position.
     private int _zoomAwaitingCacheBuilt = 0;
@@ -1697,6 +1516,9 @@ public partial class BookDisplayView : UserControl
             Dispatcher.UIThread.Post(LoadHtmlContent);
             return;
         }
+
+        // A load is starting: a selection read in flight is now about a document that is going away. (#827)
+        Interlocked.Increment(ref _loadGeneration);
 
         try
         {
@@ -2910,86 +2732,14 @@ public partial class BookDisplayView : UserControl
         var title = _webView?.Title ?? "";
         _logger.Debug("Page title changed | {Details}", title);
 
-        // The assistant's selection round-trip: text plus the paragraph the selection itself sits in. (#649)
-        if (title != null && title.StartsWith("CST_AI_SEL:"))
-        {
-            try
-            {
-                // ROUTING BEFORE PAYLOAD, and the order is the whole of this. Chromium caps document.title
-                // at 4096 characters and truncates the tail; the selection used to come first, so a long one
-                // pushed |TAB: off the end, the tab check below rejected its own answer, and the request sat
-                // there until it timed out. Every observed failure had a title of exactly 4096 and no TAB.
-                // Myanmar percent-encodes to nine characters apiece, so ~455 characters were enough to do it
-                // — which is why it looked intermittent and script-dependent. (#827)
-                var data = title.Substring("CST_AI_SEL:".Length);
-
-                // Split only the routing half: base64 contains no '|', but taking the payload by index keeps
-                // that from being a thing anyone has to remember.
-                var payloadAt = data.IndexOf("|B64:", StringComparison.Ordinal);
-                var routing = (payloadAt >= 0 ? data.Substring(0, payloadAt) : data).Split('|');
-
-                string messageTabId = "";
-                foreach (var p in routing)
-                    if (p.StartsWith("TAB:")) { messageTabId = p.Substring(4); break; }
-                if (messageTabId != _tabId)
-                    return;   // not for this tab
-
-                int? para = null;
-                foreach (var p in routing)
-                    if (p.StartsWith("PARA=") && int.TryParse(p.Substring(5), out var n)) { para = n; break; }
-
-                var declaredLength = -1;
-                foreach (var p in routing)
-                    if (p.StartsWith("LEN=") && int.TryParse(p.Substring(4), out var l)) { declaredLength = l; break; }
-
-                var encoded = payloadAt >= 0 ? data.Substring(payloadAt + "|B64:".Length) : "";
-
-                // The payload can still be cut at the cap; base64 buys roughly 2.25x over percent-encoding
-                // for Myanmar but does not remove the ceiling. Say so rather than hand the model a half
-                // sentence — a silently shortened selection is a worse answer than an admitted failure,
-                // because nothing downstream can tell it apart from what the reader meant. Chunking is the
-                // real fix and is its own issue.
-                if (declaredLength >= 0 && encoded.Length != declaredLength)
-                {
-                    _logger.Warning(
-                        "CST_AI_SEL truncated by the title cap: {Got} of {Declared} base64 char(s), "
-                        + "title length {TitleLength}, tab={Tab}",
-                        encoded.Length, declaredLength, title.Length, _tabId);
-                    _aiSelectionTcs?.TrySetResult((null, null));
-                    return;
-                }
-
-                string sel;
-                try { sel = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded)); }
-                catch (Exception decodeEx)
-                {
-                    _logger.Warning(decodeEx, "CST_AI_SEL payload did not decode, tab={Tab}", _tabId);
-                    _aiSelectionTcs?.TrySetResult((null, null));
-                    return;
-                }
-
-                _logger.Information(
-                    "CST_AI_SEL: {Length} char(s) selected, paragraph {Para}",
-                    sel?.Length ?? 0, para?.ToString() ?? "(none)");
-                _aiSelectionTcs?.TrySetResult((sel, para));
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed to parse CST_AI_SEL");
-                _aiSelectionTcs?.TrySetResult((null, null));
-            }
-            return;
-        }
-
         // Cmd+D lookup: the page pushed the current selection back to us through the title. (#25)
         if (title != null && title.StartsWith("CST_LOOKUP_SEL:"))
         {
             try
             {
-                // Same layout as CST_AI_SEL and for the same reason — routing ahead of the payload, so the
-                // title cap costs selection characters rather than the ability to route the answer. Less
-                // likely to bite here, since a lookup is a word and a search is a phrase, but #827 wants
-                // searching a few sentences to be workable and that is the length where it starts to.
+                // Routing ahead of the payload, so the title cap costs selection characters rather than the
+                // ability to route the answer. A lookup is a word and a search a phrase, so the cap is not
+                // reached in ordinary use; the assistant's unbounded selection no longer comes this way. (#827)
                 var data = title.Substring("CST_LOOKUP_SEL:".Length);
 
                 var payloadAt = data.IndexOf("|B64:", StringComparison.Ordinal);
@@ -4257,8 +4007,8 @@ public partial class BookDisplayView : UserControl
 
     /// <summary>
     /// #112 native-print probe: open the platform print dialog for the whole book via window.print(). Uses
-    /// ExecuteScript (fire-and-forget) — EvaluateScript returns null in this CEF build, and printing needs no
-    /// return value, so this rides the same JS path the rest of the view uses. On macOS this routes into
+    /// ExecuteScript (fire-and-forget): printing needs no return value, so this rides the same JS path the rest
+    /// of the view uses. On macOS this routes into
     /// Chromium's platform print; whether that dialog is usable in this CEF-120 build is exactly what this
     /// probe validates. If inadequate, the fallback is CefBrowserHost.PrintToPdf (#112).
     /// </summary>

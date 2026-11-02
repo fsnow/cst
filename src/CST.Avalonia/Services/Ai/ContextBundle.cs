@@ -54,8 +54,8 @@ public enum SelectionState
     Located,
 
     /// <summary>
-    /// The reader could not say what was selected — the WebView was not ready, or the round trip through the
-    /// <c>document.title</c> channel timed out. <b>Deliberately distinct from "nothing was selected"</b>: those
+    /// The reader could not say what was selected — the WebView was not ready, the read failed or timed out, or
+    /// the book was reloaded while it ran. <b>Deliberately distinct from "nothing was selected"</b>: those
     /// two were the same null before #581, and the difference is the difference between an answer about the
     /// whole passage (correct) and an answer that quietly ignored the words the user highlighted (which the
     /// user experiences as "the AI ignored my selection").

@@ -65,6 +65,9 @@ Historical planning documents for implemented features. Actual implementation ma
 - **ui/** - User interface features
   - [View Menu Panel Management](features/implemented/ui/VIEW_MENU_PANEL_MANAGEMENT.md)
 
+- **ai/** - The Assistant
+  - [Selection without the title cap](features/implemented/ai/SELECTION_WITHOUT_TITLE_CAP.md) - #827: the assistant reads the selection by `EvaluateScript` instead of the 4096-character `document.title` channel; decisions, library facts, probe measurements, the 20,000 cut
+
 #### **features/in-progress/** - Current Development
 Active work happening now:
 
@@ -75,7 +78,6 @@ Active work happening now:
 - [Dictionaries](features/in-progress/DICTIONARIES.md) - Pali-English and Pali-Hindi dictionaries (core ships; #25/#109 open)
 - [AI Surface B](features/in-progress/AI_SURFACE_B.md) - The in-app Assistant (explain/translate/grammar over the open passage) — v1 by context injection; the beta 6 headline feature
 - [Assistant Sessions](features/in-progress/ASSISTANT_SESSIONS.md) - The Assistant's conversations: replayed history, persistence, the session list, compaction (#849, #997, #998); take-me-back (P5) and the shutdown drain still open
-- [#827 Selection without the title cap](features/in-progress/827-selection-native-bridge.md) - Plan: read the assistant's selection through `EvaluateScript` (or a registered object) instead of the 4096-character `document.title` channel; alternatives, lifecycle, probe, tests
 
 - **windows/** - Windows 11 port — planning now tracked in [GitHub issue #28](https://github.com/fsnow/cst/issues/28) (Windows epic + child issues), not docs. The `WindowsFontService` design is folded into [#29](https://github.com/fsnow/cst/issues/29).
 
