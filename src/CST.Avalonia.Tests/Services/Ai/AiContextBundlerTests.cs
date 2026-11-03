@@ -333,6 +333,46 @@ public class AiContextBundlerTests : IDisposable
 
     // ---- a selection longer than the limit (#827) ---------------------------------------------------------
 
+    [Fact]
+    public void A_selection_at_the_limit_is_not_cut()
+    {
+        var text = new string('a', CST.Search.TeiPassageReader.MaxSelectionChars);
+
+        var (cut, wasCut) = AiContextBundler.CapSelection(text);
+
+        Assert.False(wasCut);
+        Assert.Equal(text, cut);
+    }
+
+    /// <summary>The cut falls on the last space before the limit, so no word is split.</summary>
+    [Fact]
+    public void A_cut_falls_on_a_space()
+    {
+        var cap = CST.Search.TeiPassageReader.MaxSelectionChars;
+        var text = string.Concat(Enumerable.Repeat("abcdefghi ", cap / 10 + 50));
+
+        var (cut, wasCut) = AiContextBundler.CapSelection(text);
+
+        Assert.True(wasCut);
+        Assert.InRange(cut!.Length, cap - 10, cap - 1);
+        Assert.EndsWith("abcdefghi", cut);
+        Assert.Equal(' ', text[cut.Length]);
+    }
+
+    /// <summary>With no space within 200 characters of the limit, the cut is at the limit itself.</summary>
+    [Fact]
+    public void Without_a_space_near_the_limit_the_cut_is_at_the_limit()
+    {
+        var cap = CST.Search.TeiPassageReader.MaxSelectionChars;
+        var text = "word " + new string('a', cap + 1000);
+
+        var (cut, wasCut) = AiContextBundler.CapSelection(text);
+
+        Assert.True(wasCut);
+        Assert.Equal(cap, cut!.Length);
+    }
+
+
     /// <summary>
     /// A selection is no longer bounded by the title channel's 4096 characters, so a select-all can arrive
     /// whole. It is cut at the limit the window uses, before the window is built, and the reader is told once —
@@ -360,7 +400,9 @@ public class AiContextBundlerTests : IDisposable
             CST.Search.TeiPassageReader.MaxSelectionChars);
         Assert.Equal(BundlePartState.TrimmedForBudget, Part(bundle, BundlePartNames.Selection).State);
         Assert.Contains(bundle.Selection.Text, prompt.UserContent);
-        Assert.Single(prompt.Notices, n => n.Contains("longer than 20,000 characters"));
+        Assert.Single(prompt.Notices, n => n.Contains("Your selection was very long"));
+        // Unquantified: the limit is counted in Latin, which is not what a Devanagari reader counted.
+        Assert.DoesNotContain(prompt.Notices, n => n.Contains("20,000") || n.Contains("20000"));
         Assert.DoesNotContain(prompt.Notices, n => n.Contains("passage was cut to fit"));
         // The whole selection never reaches the model: the prompt is the cut selection and its window.
         Assert.True(prompt.UserContent.Length < 4 * CST.Search.TeiPassageReader.MaxSelectionChars,

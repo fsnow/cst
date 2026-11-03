@@ -265,7 +265,7 @@ public sealed class PromptBuilder : IPromptBuilder
     private static bool HasSelectionText(SelectionContext? selection) =>
         !string.IsNullOrWhiteSpace(selection?.Text);
 
-    /// <summary>Whether the bundler cut the selection at <c>TeiPassageReader.MaxSelectionChars</c>. (#827)</summary>
+    /// <summary>Whether the bundler cut the selection at its limit. (#827)</summary>
     private static bool SelectionWasCut(AiContextBundle bundle) =>
         bundle.Budget.Parts.Any(p =>
             string.Equals(p.Name, BundlePartNames.Selection, System.StringComparison.Ordinal)
@@ -534,9 +534,10 @@ public sealed class PromptBuilder : IPromptBuilder
             case SelectionState.Located when SelectionWasCut(bundle):
                 // An answer about the start of a selection, captioned as being about all of it, is the outcome
                 // the bundle exists to prevent. (#827)
-                notices.Add(
-                    $"Your selection was longer than {TeiPassageReader.MaxSelectionChars:N0} characters, "
-                    + "so only its beginning was used.");
+                // No number: the limit is counted in Latin, after conversion, so a figure would be untrue for a
+                // reader counting what they selected in Devanagari or Myanmar. [fsnow, 2026-11-02: "Let's not
+                // quantify the text limit in the message. Something like 'Your selection was very long ...'"]
+                notices.Add("Your selection was very long, so only its beginning was used.");
                 break;
         }
 

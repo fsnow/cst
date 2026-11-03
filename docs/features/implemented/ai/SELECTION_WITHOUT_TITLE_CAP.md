@@ -34,6 +34,10 @@ characters over 44 samples) and stays on the title channel. The status and contr
 2. [fsnow, picked "Cut to 20,000, notice true (Recommended)"] `{{selection}}` is cut at
    `TeiPassageReader.MaxSelectionChars` (20,000), so the notice about it is true.
 3. [fsnow, picked "Kestrel and Merlin (Recommended)"] The probe ran on macOS arm64 and on Windows.
+4. [fsnow, 2026-11-02: "Let's not quantify the text limit in the message. Something like 'Your selection
+   was very long ...'"] The notice names no number. [observed, #827 review] The limit counts the Latin sent
+   to the model, which is about 11% longer than the same Devanāgarī and 13% longer than Myanmar, so a figure
+   would be untrue for a reader counting what they selected.
 
 ## 3. How it works now
 
@@ -42,11 +46,12 @@ characters over 44 samples) and stays on the title channel. The status and contr
 | Caller | `ReaderState.ReadSelectionAsync(document, ct)`, on the UI thread, reached from `GetCurrentAsync` (assistant turns, and `LocalApiServer` for agents). `ct` is honoured before and after the read. |
 | Read | `BookDisplayView.GetWebViewSelectionWithParagraphAsync` → `WebViewSelectionReader.ReadAsync`, with `webView.EvaluateScript<string>` as the transport. |
 | Script | `WebViewSelectionReader.Script`: `window.getSelection()`, and the paragraph from the selection's start node by document order against `a[name^=para]` (#649). It ends `return JSON.stringify({ t: text, p: para });`. |
-| Bound | `WebViewSelectionReader.Timeout` (2 s) is passed to the library **and** used for our own `Task.WhenAny`. An abandoned call gets a continuation that logs its outcome when it eventually finishes. |
+| Bound | `WebViewSelectionReader.Timeout` (2 s) is passed to the library **and** used for our own `Task.WhenAny`. An abandoned call gets a continuation that logs its outcome when it eventually finishes. The continuation runs on the UI thread, so the 2 s is not a wall-clock guarantee while that thread is busy. |
 | Staleness | `_loadGeneration` is incremented at the start of `LoadHtmlContent`. After the answer, a changed generation, a different WebView instance, or `_isShutDown` makes the read a failure. |
 | Result | `null` = could not read, with the cause logged (`Timeout`, `LibraryTimeout`, `ScriptNull`, `Parse`, `Exception`, `Stale`, or browser not ready). `""` = nothing selected (#581). |
-| Cap | `AiContextBundler.CapSelection` normalizes the selection and cuts it once, before the passage fetch, so `{{selection}}` and the window's search use the same text. The cut keeps the start and falls on a space within 200 characters of 20,000. |
-| Notice | A selection that was cut gets one notice, "Your selection was longer than 20,000 characters, so only its beginning was used." The passage's own "cut to fit" notice is suppressed then, so the reader isn't told about the same cut twice. The partial-passage badge still follows `PassageTrimmed`. |
+| Cap | `AiContextBundler.CapSelection` normalizes the selection and cuts it once, before the passage fetch, so `{{selection}}` and the window's search use the same text. The cut keeps the start and falls on a space within 200 characters of 20,000 Latin characters, or at 20,000 if there is none. |
+| Window cap | [observed, #827 review] `TeiPassageReader.ReadWindowAroundSelection` keeps its own 20,000 cap, counted in the book's script with notes included. It doesn't usually fire on a selection already cut, since the Latin is longer. On text heavy with notes it can; the window then ends before the end of the cut selection, and the partial-passage badge says so. |
+| Notice | A selection that was cut gets one notice, "Your selection was very long, so only its beginning was used." The passage's own "cut to fit" notice is suppressed then, so the reader isn't told about the same cut twice. The partial-passage badge still follows `PassageTrimmed`. |
 
 [observed, decompiled WebViewControl.Avalonia 3.120.9 / CefGlue.Common.ARM64 120.6099.207] These facts about
 the library shape the design:
@@ -69,7 +74,7 @@ racing `SplitToWindow`'s dispose-and-recreate funnel.
 
 | What | Result |
 |---|---|
-| Probe, macOS arm64 (Kestrel) | eval matched the title read wherever both worked; Myanmar selections of 1,775 and 5,238 characters in 1 ms; the whole book (661,884 characters) in 22 ms; float, re-dock or close mid-read → "browser changed", no crash |
+| Probe, macOS arm64 (Kestrel) | eval matched the title read wherever both worked; Myanmar selections of 1,775 and 5,238 characters in 1 ms; the whole book (661,884 characters) in 22 ms; float, re-dock or close mid-read → "browser changed" after 1.6–2.9 s, no crash. The probe's bound was 10 s, not the shipped 2 s |
 | Probe, Windows arm64 (Merlin) | 403,195 characters in 39 ms; every case passed |
 | Busy renderer | during a 5 s busy hold, the Welcome page (same renderer process) didn't repaint until clicked — the reason the bound is short |
 | Reads per turn | about 4 reader-state reads per assistant turn |
@@ -90,7 +95,7 @@ short.
   - null → `ScriptNull`;
   - `TimeoutException` → `LibraryTimeout`;
   - other exceptions, thrown synchronously or not;
-  - a parse failure;
+  - a parse failure, including a lone surrogate in the reply;
   - a stale read across a reload → `Stale`, null;
   - the library is given the same bound;
   - the script ends in a top-level `return`;
@@ -99,9 +104,12 @@ short.
   It runs bundler → `PromptBuilder` and checks four things:
   - the selection is cut to within 200 characters of 20,000 and marked `TrimmedForBudget`;
   - the prompt carries the cut text;
-  - there is exactly one "longer than 20,000" notice and no passage "cut to fit" duplicate;
+  - there is exactly one "very long" notice, with no number in it, and no passage "cut to fit" duplicate;
   - the prompt is bounded.
-- There is no CEF harness (#829), so the browser side is checked by hand.
+- `CapSelection` directly: a selection at the limit is not cut; the cut falls on a space; with no space near
+  the limit the cut is at the limit.
+- There is no CEF harness (#829), so the browser side is checked by hand. That includes `BookDisplayView`'s
+  part of the staleness check (`_loadGeneration` and the WebView instance); the tests drive it through a fake.
 
 Out of scope [observed]: `/ai/context-preview` passes `reader.Paragraph` rather than `SelectionParagraph`
 (`LocalApiServer`).

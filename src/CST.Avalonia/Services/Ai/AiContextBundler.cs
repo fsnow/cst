@@ -156,8 +156,8 @@ public sealed class AiContextBundler : IAiContextBundler
             BundlePartNames.Passage,
             passage.SelectionTruncated ? BundlePartState.TrimmedForBudget : BundlePartState.Included,
             passage.SelectionTruncated
-                ? $"reading window from {passage.NormalizedReference} \u2014 your selection was longer than "
-                  + $"{TeiPassageReader.MaxSelectionChars:N0} characters and was cut to fit"
+                ? $"reading window from {passage.NormalizedReference} \u2014 your selection was very long "
+                  + "and was cut to fit"
                 : $"reading window from {passage.NormalizedReference}"));
 
         parts.Add(new BundlePart(
@@ -229,8 +229,7 @@ public sealed class AiContextBundler : IAiContextBundler
         parts.Add(cut
             ? new BundlePart(
                 BundlePartNames.Selection, BundlePartState.TrimmedForBudget,
-                $"your selection was longer than {TeiPassageReader.MaxSelectionChars:N0} characters; "
-                + $"the first {text.Length:N0} were used")
+                "your selection was very long; only its beginning was used")
             : new BundlePart(BundlePartNames.Selection, BundlePartState.Included, null));
 
         return new SelectionContext(text, SelectionState.Located);
@@ -242,8 +241,14 @@ public sealed class AiContextBundler : IAiContextBundler
     /// <para><b>Cut at the limit the window already uses, and said so.</b> Once the selection stopped being
     /// capped by the title channel (#827), a select-all could arrive whole — a book is hundreds of thousands of
     /// characters — while the window beside it was cut at <see cref="TeiPassageReader.MaxSelectionChars"/> and
-    /// the reader told so. The two must agree, or "cut to fit" is false about the very text the model answers.
-    /// The start is kept — what the reader selected first — and the cut falls on a space near the limit.</para>
+    /// the reader told so. The start is kept — what the reader selected first — and the cut falls on a space near
+    /// the limit.</para>
+    ///
+    /// <para>[observed] The two limits are not in the same unit. This one counts the Latin the model gets; the
+    /// window's counts the book's own script, notes included. Conversion to Latin lengthens Devanagari by about
+    /// 11% and Myanmar by about 13%, so the window's cap does not usually fire on a selection cut here. On text
+    /// heavy with notes it can, and the window then ends before the end of the cut selection; the badge says
+    /// so. The number is kept out of what the reader sees for the same reason. (#827 review)</para>
     /// </summary>
     internal static (string? Text, bool Cut) CapSelection(string? selection)
     {

@@ -167,7 +167,10 @@ public static class WebViewSelectionReader
                 ? n : null;
             return (t.GetString()!, paragraph);
         }
-        catch (JsonException) { return null; }
+        // Not only JsonException: GetString() throws InvalidOperationException on a lone surrogate, and
+        // JSON.stringify writes one for an unpaired half in the page. Any reply that is not the script's JSON is
+        // a Parse failure, never an exception out of the read. (#827 review)
+        catch (Exception) { return null; }
     }
 
     /// <summary>WebViewControl's own timeout is a <c>JavascriptException</c> named "Timeout", whose constructors

@@ -156,8 +156,8 @@ The selection is the one input that genuinely is scraped from the DOM, and it ne
 usable. `BookDisplayView.GetWebViewSelectionWithParagraphAsync` returns the selection **in the user's display
 script**, read by evaluating a script in the book's browser (`WebViewSelectionReader`, #827) with a **2 s
 timeout that returns null on failure** — and null too if the book was reloaded during the read. It no longer
-goes through the 4096-character `document.title` channel, so its size is bounded by
-`TeiPassageReader.MaxSelectionChars` (20,000), where the bundler cuts it and says so. So:
+goes through the 4096-character `document.title` channel, so it arrives whole, however long; the bundler
+then cuts it at `TeiPassageReader.MaxSelectionChars` (20,000 Latin characters) and says so. So:
 
 1. **Convert display script → Latin** before any dictionary or lemma lookup. For a Burmese-script reader this
    is a hard prerequisite, not a refinement — which means it is a prerequisite for the two presets that

@@ -128,6 +128,20 @@ public class WebViewSelectionReaderTests
     }
 
     /// <summary>
+    /// JSON.stringify writes an unpaired surrogate as an escape, and reading it back as a string throws
+    /// InvalidOperationException rather than JsonException. It is a parse failure, not an exception out of the
+    /// read. (#827 review)
+    /// </summary>
+    [Fact]
+    public async Task A_lone_surrogate_in_the_reply_is_a_parse_failure()
+    {
+        var r = await Read(Answers("{\"t\":\"a\\ud800b\",\"p\":\"1\"}"));
+
+        Assert.Equal(Failure.Parse, r.Failure);
+        Assert.Null(r.Text);
+    }
+
+    /// <summary>
     /// A read that crossed a reload is about a document that is gone. An empty selection from it would tell
     /// the assistant the reader selected nothing; it must be a failure. (#827)
     /// </summary>
