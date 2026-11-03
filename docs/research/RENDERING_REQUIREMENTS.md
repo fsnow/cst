@@ -476,17 +476,12 @@ if (!string.IsNullOrEmpty(selectedText))
 }
 ```
 
-**Current implementation (CEF WebView):**
-```csharp
-// Uses JavaScript bridge to get selection
-var script = @"
-    (function() {
-        var selection = window.getSelection();
-        return selection ? selection.toString() : '';
-    })();
-";
-var result = await _webView.EvaluateScriptAsync(script);
-```
+**Current implementation (CEF WebView):** the assistant's selection is read by evaluating a script and
+taking its return value — `WebViewSelectionReader` through `WebView.EvaluateScript<string>` (#827). CefGlue
+evaluates a script as a function body, so it must end in a top-level `return`; an IIFE expression with no
+`return` (the shape CefSharp's `EvaluateScriptAsync` takes) yields `undefined`, which arrives as null. The
+Cmd+D / Cmd+Shift+F selection still travels through `document.title` (`GetWebViewSelectionAsync`), where a
+word or phrase fits the title's 4096-character cap.
 
 **Difference from Copy/Paste:**
 - Copy: User explicitly puts text on clipboard (OS-level operation)

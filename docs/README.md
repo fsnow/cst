@@ -65,6 +65,9 @@ Historical planning documents for implemented features. Actual implementation ma
 - **ui/** - User interface features
   - [View Menu Panel Management](features/implemented/ui/VIEW_MENU_PANEL_MANAGEMENT.md)
 
+- **ai/** - The Assistant
+  - [Selection without the title cap](features/implemented/ai/SELECTION_WITHOUT_TITLE_CAP.md) - #827: the assistant reads the selection by `EvaluateScript` instead of the 4096-character `document.title` channel; decisions, library facts, probe measurements, the 20,000 cut
+
 #### **features/in-progress/** - Current Development
 Active work happening now:
 

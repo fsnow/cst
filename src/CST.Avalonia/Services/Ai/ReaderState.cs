@@ -38,8 +38,8 @@ public enum ReaderStateProblem
 /// <param name="Paragraph">The paragraph the viewport is on.</param>
 /// <param name="SelectionText">The user's selection, already through <c>SelectionPipeline.Normalize</c> —
 /// Latin, composed, whitespace-collapsed. Null means <i>nothing was selected</i>.</param>
-/// <param name="SelectionUnavailable">The selection could not be read at all — the WebView was not ready, or
-/// the <c>document.title</c> round trip timed out. <b>Not the same as a null
+/// <param name="SelectionUnavailable">The selection could not be read at all — the WebView was not ready, the
+/// read timed out, or the book was reloaded while it ran. <b>Not the same as a null
 /// <paramref name="SelectionText"/></b>: conflating them is what makes a dropped selection look to the user
 /// like "the AI ignored my selection". (#581)</param>
 /// <param name="SelectionParagraph">
@@ -170,14 +170,14 @@ public sealed class ReaderStateService : IReaderStateService
         ReaderFocusSignal focus = ReaderFocusSignal.None, CancellationToken ct = default)
     {
         // ONE resolution of the active document. An earlier version read the book and then re-resolved it to
-        // fetch the selection, which let a tab switch during the selection round-trip (up to 700 ms) attribute
+        // fetch the selection, which let a tab switch during the selection round-trip (up to two seconds) attribute
         // one book's selection to another book's paragraph.
         var (result, document) = await Dispatcher.UIThread.InvokeAsync(() => ReadActiveBook(focus));
         if (result.State is null || document is null) return result;
 
         ct.ThrowIfCancellationRequested();
 
-        var (selection, unavailable, selectionParagraph) = await ReadSelectionAsync(document);
+        var (selection, unavailable, selectionParagraph) = await ReadSelectionAsync(document, ct);
 
         // Logged at Information because the difference between these two numbers is the whole of #649: the
         // scroll paragraph is where the viewport is, the selection paragraph is where the reader pointed, and
@@ -305,23 +305,24 @@ public sealed class ReaderStateService : IReaderStateService
     /// <summary>
     /// Ask the WebView for the selection and put it through <see cref="SelectionPipeline"/>.
     ///
-    /// <para><b>The channel distinguishes two failures and so does this.</b>
-    /// <c>GetWebViewSelectionAsync</c> returns an empty string when the user genuinely selected nothing, and
-    /// <c>null</c> when it could not find out — the browser was not initialised, the script threw, or the
-    /// <c>document.title</c> round trip exceeded its 700 ms budget. Collapsing both to "no selection" is what
-    /// produces the report "the AI ignored my selection", so the distinction is carried upward. (#581)</para>
+    /// <para><b>The read distinguishes two failures and so does this.</b>
+    /// <c>GetWebViewSelectionWithParagraphAsync</c> returns an empty string when the user genuinely selected
+    /// nothing, and <c>null</c> when it could not find out — the browser was not initialised, the script failed
+    /// or timed out, or the book was reloaded during the read; the view logs which. Collapsing both to "no
+    /// selection" is what produces the report "the AI ignored my selection", so the distinction is carried
+    /// upward. (#581, #827)</para>
     ///
     /// <para><b>Conversion happens here because the display script is only known here</b>, and it is not a
     /// refinement: hand the bundler Devanagari and every lookup misses and every window match fails, which makes
     /// the two grammatical presets Latin-readers-only — the opposite of the user who prompted surface B.</para>
     ///
-    /// <para>Run entirely on the UI thread: every other caller of the selection channel is a UI-thread command
-    /// handler, it drives CEF, and it writes a single-slot completion source a concurrent Cmd+D would
-    /// otherwise clobber.</para>
+    /// <para>Run on the UI thread: the read checks, after its answer arrives, that the browser and its document
+    /// are the ones it started on, and those are UI-thread state.</para>
     /// </summary>
     private static async Task<(string? Text, bool Unavailable, int? Paragraph)> ReadSelectionAsync(
-        BookDisplayViewModel document)
+        BookDisplayViewModel document, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var (raw, paragraph) = await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             var control = document.BookDisplayControl;
@@ -329,6 +330,7 @@ public sealed class ReaderStateService : IReaderStateService
                 ? ((string?)null, (int?)null)
                 : await control.GetWebViewSelectionWithParagraphAsync();
         });
+        ct.ThrowIfCancellationRequested();
 
         // null = could not read it; "" = read it, and there was nothing to read.
         if (raw is null) return (null, true, null);

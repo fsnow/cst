@@ -9,8 +9,8 @@ namespace CST.Avalonia.Services.Ai;
 /// Turns what the WebView reports into something the rest of surface B can use. (#581, AI_SURFACE_B.md §3.1)
 ///
 /// <para><b>The selection is the one bundler input genuinely scraped from the DOM.</b> Everything else comes
-/// from the tool layer, which owns its formats; this arrives in the user's display script, through a
-/// <c>document.title</c> round trip, with a timeout. So it gets the handling that deserves.</para>
+/// from the tool layer, which owns its formats; this arrives in the user's display script, read from the
+/// browser by a script with a timeout (#827). So it gets the handling that deserves.</para>
 ///
 /// <para><b>Normalization only, since #649.</b> This class used to carry a second phase — asking whether the
 /// normalized selection appeared in the passage window — because the window was built from scroll position and

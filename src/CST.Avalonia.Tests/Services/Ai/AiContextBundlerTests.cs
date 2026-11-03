@@ -330,4 +330,91 @@ public class AiContextBundlerTests : IDisposable
         Assert.Contains("appam\u0101do", bundle.Passage.Text);
         Assert.DoesNotContain("\uFFFD", bundle.Passage.Text);
     }
+
+    // ---- a selection longer than the limit (#827) ---------------------------------------------------------
+
+    [Fact]
+    public void A_selection_at_the_limit_is_not_cut()
+    {
+        var text = new string('a', CST.Search.TeiPassageReader.MaxSelectionChars);
+
+        var (cut, wasCut) = AiContextBundler.CapSelection(text);
+
+        Assert.False(wasCut);
+        Assert.Equal(text, cut);
+    }
+
+    /// <summary>The cut falls on the last space before the limit, so no word is split.</summary>
+    [Fact]
+    public void A_cut_falls_on_a_space()
+    {
+        var cap = CST.Search.TeiPassageReader.MaxSelectionChars;
+        var text = string.Concat(Enumerable.Repeat("abcdefghi ", cap / 10 + 50));
+
+        var (cut, wasCut) = AiContextBundler.CapSelection(text);
+
+        Assert.True(wasCut);
+        Assert.InRange(cut!.Length, cap - 10, cap - 1);
+        Assert.EndsWith("abcdefghi", cut);
+        Assert.Equal(' ', text[cut.Length]);
+    }
+
+    /// <summary>With no space within 200 characters of the limit, the cut is at the limit itself.</summary>
+    [Fact]
+    public void Without_a_space_near_the_limit_the_cut_is_at_the_limit()
+    {
+        var cap = CST.Search.TeiPassageReader.MaxSelectionChars;
+        var text = "word " + new string('a', cap + 1000);
+
+        var (cut, wasCut) = AiContextBundler.CapSelection(text);
+
+        Assert.True(wasCut);
+        Assert.Equal(cap, cut!.Length);
+    }
+
+
+    /// <summary>
+    /// A selection is no longer bounded by the title channel's 4096 characters, so a select-all can arrive
+    /// whole. It is cut at the limit the window uses, before the window is built, and the reader is told once —
+    /// not twice, which reads as two things having gone wrong. (#827)
+    /// </summary>
+    [Theory]
+    [InlineData(25_000)]
+    [InlineData(130_000)]
+    public async Task A_selection_over_the_limit_is_cut_and_said_once(int length)
+    {
+        var dir = Path.Combine(_dir, "long");
+        Directory.CreateDirectory(dir);
+        var paragraph = string.Concat(Enumerable.Repeat(Verse, 160_000 / Verse.Length + 1));
+        File.WriteAllText(Path.Combine(dir, BookId),
+            "<body><div id=\"dn1\" type=\"book\"><pb ed=\"V\" n=\"1.0001\"/>" +
+            "<p rend=\"bodytext\" n=\"5\">" + paragraph + "</p></div></body>", Encoding.Unicode);
+        var selection = paragraph[..length];
+
+        var bundle = await Bundler(booksDir: dir).BuildAsync(Request(selection: selection));
+        var prompt = new PromptBuilder(
+                new PromptTemplateStore(Path.Combine(_dir, "templates"), NullLogger<PromptTemplateStore>.Instance))
+            .Build(bundle);
+
+        Assert.InRange(bundle.Selection!.Text!.Length, CST.Search.TeiPassageReader.MaxSelectionChars - 200,
+            CST.Search.TeiPassageReader.MaxSelectionChars);
+        Assert.Equal(BundlePartState.TrimmedForBudget, Part(bundle, BundlePartNames.Selection).State);
+        Assert.Contains(bundle.Selection.Text, prompt.UserContent);
+        Assert.Single(prompt.Notices, n => n.Contains("Your selection was very long"));
+        // Unquantified: the limit is counted in Latin, which is not what a Devanagari reader counted.
+        Assert.DoesNotContain(prompt.Notices, n => n.Contains("20,000") || n.Contains("20000"));
+        Assert.DoesNotContain(prompt.Notices, n => n.Contains("passage was cut to fit"));
+        // The whole selection never reaches the model: the prompt is the cut selection and its window.
+        Assert.True(prompt.UserContent.Length < 4 * CST.Search.TeiPassageReader.MaxSelectionChars,
+            $"prompt is {prompt.UserContent.Length:N0} characters");
+    }
+
+    [Fact]
+    public async Task A_selection_within_the_limit_is_untouched()
+    {
+        var bundle = await Bundler().BuildAsync(Request(selection: "appam\u0101do amatapada\u1E41"));
+
+        Assert.Equal(BundlePartState.Included, Part(bundle, BundlePartNames.Selection).State);
+        Assert.Equal("appam\u0101do amatapada\u1E41", bundle.Selection!.Text);
+    }
 }

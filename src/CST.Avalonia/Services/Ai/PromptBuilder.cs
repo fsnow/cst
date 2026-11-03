@@ -265,6 +265,12 @@ public sealed class PromptBuilder : IPromptBuilder
     private static bool HasSelectionText(SelectionContext? selection) =>
         !string.IsNullOrWhiteSpace(selection?.Text);
 
+    /// <summary>Whether the bundler cut the selection at its limit. (#827)</summary>
+    private static bool SelectionWasCut(AiContextBundle bundle) =>
+        bundle.Budget.Parts.Any(p =>
+            string.Equals(p.Name, BundlePartNames.Selection, System.StringComparison.Ordinal)
+            && p.State == BundlePartState.TrimmedForBudget);
+
     private static string Citation(CitationRef citation)
     {
         var pages = citation.Pages.Count == 0
@@ -506,6 +512,13 @@ public sealed class PromptBuilder : IPromptBuilder
             if (string.Equals(part.Name, BundlePartNames.Selection, System.StringComparison.Ordinal))
                 continue;
 
+            // A selection cut at the limit also cuts the passage window around it, for the same reason. The
+            // selection's own sentence below says it; the passage's generic one would be a second notice for
+            // the same fact. (#827)
+            if (string.Equals(part.Name, BundlePartNames.Passage, System.StringComparison.Ordinal)
+                && part.State == BundlePartState.TrimmedForBudget && SelectionWasCut(bundle))
+                continue;
+
             if (part.State == BundlePartState.Unavailable)
                 notices.Add($"The {PartLabel(part.Name)} could not be gathered: {part.Detail ?? "not available"}.");
             else if (part.State == BundlePartState.TrimmedForBudget)
@@ -517,6 +530,14 @@ public sealed class PromptBuilder : IPromptBuilder
             case SelectionState.Unavailable:
                 // The one the user most needs: otherwise this reads as "the AI ignored my selection".
                 notices.Add("Your selection could not be read, so the answer covers the whole passage.");
+                break;
+            case SelectionState.Located when SelectionWasCut(bundle):
+                // An answer about the start of a selection, captioned as being about all of it, is the outcome
+                // the bundle exists to prevent. (#827)
+                // No number: the limit is counted in Latin, after conversion, so a figure would be untrue for a
+                // reader counting what they selected in Devanagari or Myanmar. [fsnow, 2026-11-02: "Let's not
+                // quantify the text limit in the message. Something like 'Your selection was very long ...'"]
+                notices.Add("Your selection was very long, so only its beginning was used.");
                 break;
         }
 
