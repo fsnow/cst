@@ -65,6 +65,8 @@ Two categories were excluded deliberately:
 - Arrays are **per PDF, not per book**. Correcting one edition must not be taken to imply the other.
 - `PdfPageFor` stops counting at the first entry ≥ the target, so an array must stay ascending. A test
   guards this against hand-edits during QA.
+- **Not every missing page is a blank.** The 1957 Netti scan lacks print pages 156–157, which are text
+  pages, so the XML has markers for them and no gap predicted them. Found in QA, not by the seed (#1101).
 
 ---
 
@@ -144,6 +146,9 @@ rather than storing both, should this ever be built.
   bar shows a `2.NNNN` page in one of the twelve volume-restart books.
 
 ## Related
+
+- #1099 — the 1957 Sagāthāvagga-Nidānavagga scan holds only 6 pages of the Nidānavagga
+- #1100 — the Sīhaḷa books are mapped by O page; e1201 and e1209 drift, pending Myanmar markers
 
 - #540 — missing pages (this fix)
 - #546 — 12 books whose Myanmar numbering restarts per volume; `MissingPages` should move to a segment
