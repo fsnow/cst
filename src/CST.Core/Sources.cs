@@ -347,7 +347,7 @@ public class Sources
 		addSource("s0515m.mul.xml", SourceType.Burmese1957, 5, $"{Burmese1957Sutta}/{KN_Mahaniddesa_1957}");
 		addSource("s0516m.mul.xml", SourceType.Burmese1957, 6, $"{Burmese1957Sutta}/{KN_Culaniddesa_1957}");
 		addSource("s0517m.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Sutta}/{KN_Patisambhidamagga_1957}");
-		addSource("s0519m.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Sutta}/{KN_NettiPetakopadesa_1957}");
+		addSource("s0519m.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Sutta}/{KN_NettiPetakopadesa_1957}", new[] { 156, 157 });
 		addSource("s0518m.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Sutta}/{KN_Milindapanha_1957}");
 		addSource("s0520m.nrf.xml", SourceType.Burmese1957, 5, $"{Burmese1957Sutta}/{KN_NettiPetakopadesa_1957}");
 
@@ -714,8 +714,9 @@ public class Sources
 		public int PageStart { get; set; }
 
 		/// <summary>
-		/// Print page numbers that exist in the printed volume but have NO page in this PDF — blank
-		/// pages the scanner passed over. Ascending. (#540)
+		/// Print page numbers that exist in the printed volume but have NO page in this PDF — pages
+		/// the scanner passed over. Ascending. (#540) Mostly blank pages, but not always: the 1957
+		/// Netti scan (s0519m) lacks print pages 156-157, which carry text.
 		///
 		/// <para>Without this, one skipped page throws off every page after it, and the error accumulates:
 		/// s0402a has blanks at 68 and 248, so Tikanipāta landed one page late and Catukkanipāta two.</para>
