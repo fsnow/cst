@@ -100,6 +100,9 @@ This could be done by:
 | Blank pages removed | Multiple PDFs | Causes decreasing `startPage` pattern across books in combined PDFs |
 | Zero-byte files | Dhammasaṅgaṇī, Yamaka-3 | 0 bytes in SharePoint; need replacement |
 | Two-volume span | MN Tika 1 (`s0201t.tik.xml`) | Spans two PDF files; needs volume-based PDF selection |
+| Truncated scan | 1957 Sagāthāvagga-Nidānavagga | Holds only the first 6 printed pages of the Nidānavagga (`s0302m`, 1.0243–1.0248); the SharePoint copy is the same size, so it is short at the source (#1099) |
+| Text pages missing | 1957 Netti-Peṭakopadesa | Print pages 156–157 are absent, and they are text pages, not blanks; listed in `MissingPages` for `s0519m` (#1101) |
+| No Myanmar pages | Sīhaḷa: e1201, e1203, e1205, e1209 | The XML has only `ed="O"` pages, so these are mapped by O page (#1100). The O numbers are not the scans' pagination: e1201 drifts by up to +11 pages. e1209's PDF is a Burmese edition with translations and commentary that omits the XML's verse 1. The fix is Myanmar page markers in the XML, deferred |
 
 ## Page Marker Format Reference
 
