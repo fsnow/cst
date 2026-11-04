@@ -1,5 +1,9 @@
+using System;
+using System.IO;
 using System.Linq;
 using CST;
+using CST.Navigation;
+using CST.Search;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Models
@@ -138,6 +142,52 @@ namespace CST.Avalonia.Tests.Models
             Assert.NotNull(s);
             Assert.Equal(new[] { 68, 248 }, s!.MissingPages);
             Assert.Equal(19, s.PageStart);
+        }
+
+        [Fact]
+        public void TheSihalaBooksAreMappedByTheirOtherPages()
+        {
+            // They have no Myanmar page markers, only ed="O", so a Myanmar mapping left their PDF button
+            // greyed out for good. (#1100)
+            foreach (var book in new[] { "e1201n.nrf.xml", "e1203n.nrf.xml", "e1205n.nrf.xml", "e1209n.nrf.xml" })
+            {
+                var s = Sources.Inst.GetSource(book, Sources.SourceType.BurmeseAnya);
+                Assert.NotNull(s);
+                Assert.Equal(PageEdition.Other, s!.PageEdition);
+            }
+            Assert.Equal(PageEdition.Myanmar,
+                Sources.Inst.GetSource("s0101m.mul.xml", Sources.SourceType.Burmese1957)!.PageEdition);
+        }
+
+        [Fact]
+        public void EveryMappedBookCarriesThePageMarkersItsSourceCountsIn()
+        {
+            // A source whose page numbering the book lacks has a PDF button that can never turn on: the page
+            // it waits for never resolves. (#1100) Reads the installed corpus; nothing to check without one.
+            var dir = Environment.GetEnvironmentVariable("CST_XML_DIR")
+                      ?? Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "", "Library/Application Support/CSTReader/xml");
+            if (!Directory.Exists(dir))
+                return;
+
+            int checkedSources = 0;
+            var lacking = new System.Collections.Generic.List<string>();
+            foreach (var file in Directory.GetFiles(dir, "*.xml").OrderBy(f => f, StringComparer.Ordinal))
+            {
+                var name = Path.GetFileName(file);
+                var types = Sources.Inst.GetAvailableSources(name);
+                if (types.Count == 0)
+                    continue;
+                var editions = BookMarkers.Build(File.ReadAllText(file)).Editions();
+                foreach (var t in types)
+                {
+                    var edition = Sources.Inst.GetSource(name, t)!.PageEdition;
+                    checkedSources++;
+                    if (!editions.Contains(edition))
+                        lacking.Add($"{name} {t}: no {edition} pages");
+                }
+            }
+            Assert.Empty(lacking);
+            Assert.True(checkedSources > 0);
         }
     }
 }

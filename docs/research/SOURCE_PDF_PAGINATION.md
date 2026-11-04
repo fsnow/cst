@@ -33,6 +33,11 @@ Catukkanipāta two.
 pdfPage = PageStart + (printPage - 1) - |{ missing pages < printPage }|
 ```
 
+`printPage` is the book's current page in the numbering named by `Source.PageEdition`. That is the
+Myanmar page for every book except the four Sīhaḷa books (e1201, e1203, e1205, e1209). Those have no
+Myanmar page markers, only `ed="O"`, so they are mapped by their O pages (#1100). The PDF button stays
+greyed out until that page resolves.
+
 ### How the seed values were derived
 
 **A blank page leaves two traces, and we hold one of them.** It has no text, so it produces no `<pb>`
