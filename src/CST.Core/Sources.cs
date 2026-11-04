@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using CST.Navigation;
 
 namespace CST;
 
@@ -630,21 +631,26 @@ public class Sources
 		addSource("e1103n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaPakinnaka}/3. Vessantaragīti.pdf");
 
 		// Sīhaḷa. e1203 (Dāṭhāvaṃsa) + e1205 (Dhātuvaṃsa) share one combined PDF. The other 11 texts have no PDF.
-		addSource("e1201n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSihala}/1. Moggallāna vuttivivaraṇapañcikā (with Moggallānabyākaraṇaṃ).pdf");
-		addSource("e1203n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSihala}/3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf");
-		addSource("e1205n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSihala}/3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf");
-		addSource("e1209n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSihala}/9. Telakaṭāhagāthā Pali Burmese English.pdf");
+		// These four carry no Myanmar page markers, only ed="O", so they are mapped by their O pages. (#1100)
+		// The O numbers are not this scan's pagination: e1201 opens on the right page at O 1 but drifts by
+		// up to 11 pages further in (#1100). The fix is Myanmar page markers in the XML, deferred.
+		// e1209's PDF is a Burmese edition with Burmese and English translations: it omits the XML's verse 1
+		// (laṅkissaro jayatu…), so its verse N is the XML's N+1, and its pages run far longer than the O pages.
+		addSource("e1201n.nrf.xml", SourceType.BurmeseAnya, 48, $"{BurmeseAnyaSihala}/1. Moggallāna vuttivivaraṇapañcikā (with Moggallānabyākaraṇaṃ).pdf", pageEdition: PageEdition.Other);
+		addSource("e1203n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaSihala}/3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf", pageEdition: PageEdition.Other);
+		addSource("e1205n.nrf.xml", SourceType.BurmeseAnya, 145, $"{BurmeseAnyaSihala}/3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf", pageEdition: PageEdition.Other);
+		addSource("e1209n.nrf.xml", SourceType.BurmeseAnya, 20, $"{BurmeseAnyaSihala}/9. Telakaṭāhagāthā Pali Burmese English.pdf", pageEdition: PageEdition.Other);
 	}
 
 	private void addSource(string filename, SourceType sourceType, int pageStart, string path,
-		int[]? missingPages = null)
+		int[]? missingPages = null, PageEdition pageEdition = PageEdition.Myanmar)
 	{
 		if (!sourcesMap.TryGetValue(filename, out var d))
 		{
 			d = new Dictionary<SourceType, Source>();
 			sourcesMap[filename] = d;
 		}
-		d[sourceType] = new Source(sourceType, pageStart, path, missingPages);
+		d[sourceType] = new Source(sourceType, pageStart, path, missingPages, pageEdition);
 	}
 
 	public Source? GetSource(string filename, SourceType sourceType)
@@ -696,8 +702,10 @@ public class Sources
 
 	public class Source
 	{
-		public Source(SourceType sourceType, int pageStart, string path, int[]? missingPages = null)
+		public Source(SourceType sourceType, int pageStart, string path, int[]? missingPages = null,
+			PageEdition pageEdition = PageEdition.Myanmar)
 		{
+			PageEdition = pageEdition;
 			SourceType = sourceType;
 			PageStart = pageStart;
 			Path = path;
@@ -711,6 +719,15 @@ public class Sources
 		public string Path { get; set; }
 
 		public SourceType SourceType { get; set; }
+
+		/// <summary>
+		/// The page numbering whose page numbers are this PDF's printed pages: what <see cref="PageStart"/>,
+		/// <see cref="MissingPages"/> and <see cref="PdfPageFor"/> count in. Myanmar for every book except
+		/// the four Sīhaḷa books (e1201, e1203, e1205, e1209), which have no Myanmar page markers and are
+		/// mapped by their ed="O" pages. (#1100)
+		/// </summary>
+		public PageEdition PageEdition { get; }
+
 		public int PageStart { get; set; }
 
 		/// <summary>

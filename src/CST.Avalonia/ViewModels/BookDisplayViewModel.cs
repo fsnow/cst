@@ -248,12 +248,14 @@ namespace CST.Avalonia.ViewModels
             CopyCommand = ReactiveCommand.Create(ExecuteCopy);
             SelectAllCommand = ReactiveCommand.Create(ExecuteSelectAll);
 
-            // View Source PDF commands — disabled until the current Myanmar page resolves (the status bar
-            // shows "*" until then, and the target PDF page is derived from it). Clicking before that was a
-            // silent no-op; gating canExecute makes ReactiveCommand grey the buttons out and re-enable them
-            // automatically once the page is known. (#54)
-            var canShowSource = this.WhenAnyValue(x => x.MyanmarPage,
-                page => !string.IsNullOrEmpty(page) && page != "*");
+            // View Source PDF commands — disabled until the current page resolves in the numbering the
+            // book's PDFs count in (the status bar shows "*" until then, and the target PDF page is derived
+            // from it). Clicking before that was a silent no-op; gating canExecute makes ReactiveCommand grey
+            // the buttons out and re-enable them automatically once the page is known. (#54) That numbering
+            // is Myanmar except for the Sīhaḷa books, which have only ed="O" pages; gating on Myanmar
+            // left their button greyed out for good. (#1100)
+            var canShowSource = this.WhenAnyValue(x => x.MyanmarPage, x => x.OtherPage, (_, _) => true)
+                .Select(_ => SourcePagesKnown(Sources.Inst.GetAvailableSources(_book.FileName)));
             ShowSourceCommand = ReactiveCommand.Create<Sources.SourceType>(ShowSource, canShowSource);
 
             // Populate the source buttons from what this book actually has (empty → no buttons shown).
@@ -1796,7 +1798,7 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
             var sourceType = sources[index];
-            if (_myanmarPage != "*" && !string.IsNullOrEmpty(_myanmarPage))
+            if (SourcePagesKnown(new[] { sourceType }))
             {
                 ShowSource(sourceType);
                 return;
@@ -1809,8 +1811,8 @@ namespace CST.Avalonia.ViewModels
 
             if (_pendingSourceSubscription != null) return;   // already waiting; the list above will be flushed
 
-            _pendingSourceSubscription = this.WhenAnyValue(x => x.MyanmarPage)
-                .Where(p => p != "*" && !string.IsNullOrEmpty(p))
+            _pendingSourceSubscription = this.WhenAnyValue(x => x.MyanmarPage, x => x.OtherPage, (_, _) => true)
+                .Where(_ => SourcePagesKnown(_pendingSourceRequests))
                 .Take(1)   // auto-completes after the first resolved value
                 .Subscribe(_ =>
                 {
@@ -1824,54 +1826,29 @@ namespace CST.Avalonia.ViewModels
                         foreach (var t in pending) ShowSource(t);
                     });
                 });
-            _logger.Debug("View Source queued ({Source}) until the Myanmar page resolves", sourceType);
+            _logger.Debug("View Source queued ({Source}) until its page resolves", sourceType);
         }
+
+        // The status-bar page in the numbering a source's PDF counts in (Sources.Source.PageEdition). (#1100)
+        private string PageFor(PageEdition edition) => edition switch
+        {
+            PageEdition.Vri => VriPage,
+            PageEdition.Myanmar => MyanmarPage,
+            PageEdition.Pts => PtsPage,
+            PageEdition.Thai => ThaiPage,
+            PageEdition.Other => OtherPage,
+            _ => "*",
+        };
+
+        private static bool IsResolved(string page) => !string.IsNullOrEmpty(page) && page != "*";
+
+        // True when every one of these sources has its current page resolved.
+        private bool SourcePagesKnown(IEnumerable<Sources.SourceType> sourceTypes) =>
+            sourceTypes.All(st =>
+                Sources.Inst.GetSource(_book.FileName, st) is { } src && IsResolved(PageFor(src.PageEdition)));
 
         private void ShowSource(Sources.SourceType sourceType)
         {
-            _logger.Information("ShowSource called - raw _myanmarPage value: '{MyanmarPage}', book: {Book}",
-                _myanmarPage, _book.FileName);
-
-            // Get current Myanmar page from status bar
-            // Format can be "123" (single volume) or "3.10" (volume.page for multi-volume)
-            int currentPage = 1;
-            if (_myanmarPage != "*" && !string.IsNullOrEmpty(_myanmarPage))
-            {
-                if (_myanmarPage.Contains('.'))
-                {
-                    // Multi-volume format: "3.10" means volume 3, page 10
-                    // We need just the page number (part after the decimal)
-                    var parts = _myanmarPage.Split('.');
-                    if (parts.Length >= 2 && int.TryParse(parts[1], out int pageNum))
-                    {
-                        currentPage = pageNum;
-                        _logger.Debug("Parsed multi-volume Myanmar page: {Volume}.{Page} -> page {CurrentPage}",
-                            parts[0], parts[1], currentPage);
-                    }
-                    else
-                    {
-                        _logger.Warning("Failed to parse multi-volume Myanmar page: {MyanmarPage}", _myanmarPage);
-                        return;  // Don't proceed with unparseable page
-                    }
-                }
-                else if (int.TryParse(_myanmarPage, out int pageNum))
-                {
-                    // Single volume format: just the page number
-                    currentPage = pageNum;
-                }
-                else
-                {
-                    _logger.Warning("Cannot show source: Myanmar page number not parseable (current: {MyanmarPage})", _myanmarPage);
-                    return;  // Don't proceed with unparseable page
-                }
-            }
-            else
-            {
-                _logger.Warning("Cannot show source: Myanmar page number not available yet (current: {MyanmarPage})", _myanmarPage);
-                return;  // Don't proceed with default page 1 - wait for page to load
-            }
-
-            // Get source info from Sources.cs
             var source = Sources.Inst.GetSource(_book.FileName, sourceType);
             if (source == null)
             {
@@ -1879,13 +1856,48 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
+            // The current page in the numbering this PDF counts in: Myanmar for almost every book, ed="O"
+            // for the Sīhaḷa books (#1100). Format is "123" (single volume) or "3.10" (volume.page).
+            var page = PageFor(source.PageEdition);
+            _logger.Information("ShowSource called - {Edition} page '{Page}', book: {Book}",
+                source.PageEdition, page, _book.FileName);
+
+            int currentPage;
+            if (!IsResolved(page))
+            {
+                _logger.Warning("Cannot show source: {Edition} page number not available yet (current: {Page})",
+                    source.PageEdition, page);
+                return;  // Don't proceed with default page 1 - wait for page to load
+            }
+            if (page.Contains('.'))
+            {
+                // Multi-volume format: "3.10" means volume 3, page 10. We need just the page number.
+                var parts = page.Split('.');
+                if (parts.Length >= 2 && int.TryParse(parts[1], out int pageNum))
+                {
+                    currentPage = pageNum;
+                    _logger.Debug("Parsed multi-volume page: {Volume}.{Page} -> page {CurrentPage}",
+                        parts[0], parts[1], currentPage);
+                }
+                else
+                {
+                    _logger.Warning("Failed to parse multi-volume page: {Page}", page);
+                    return;  // Don't proceed with unparseable page
+                }
+            }
+            else if (!int.TryParse(page, out currentPage))
+            {
+                _logger.Warning("Cannot show source: page number not parseable (current: {Page})", page);
+                return;  // Don't proceed with unparseable page
+            }
+
             // CST4's formula was PageStart + (page - 1), which assumes every printed page occupies a page
             // of the PDF. Blank pages the scanner passed over break that, and the error accumulates down
             // the volume, so the page count comes from the source itself now. (#540)
             int pdfPage = source.PdfPageFor(currentPage);
 
-            _logger.Information("Showing source PDF: {SourceType} for {BookFilename}, Myanmar page {MyanmarPage} -> PDF page {PdfPage}",
-                sourceType, _book.FileName, currentPage, pdfPage);
+            _logger.Information("Showing source PDF: {SourceType} for {BookFilename}, {Edition} page {Page} -> PDF page {PdfPage}",
+                sourceType, _book.FileName, source.PageEdition, currentPage, pdfPage);
 
             // Request PDF window to be opened
             OpenPdfRequested?.Invoke(_book.FileName, sourceType, pdfPage);
