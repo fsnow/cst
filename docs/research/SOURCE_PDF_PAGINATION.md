@@ -56,6 +56,14 @@ Two categories were excluded deliberately:
 
 ### Caveats
 
+- **Not every dropped page is blank, and the derivation cannot find the ones with text.** The 1957
+  Netti-Peṭakopadesa scan has no pages for print pages 156–157, which carry text, so the XML has
+  markers for them and no gap. [observed, 2026-11-04: s0519m's markers run 1–166 with no gap, and print
+  page 160 sat on PDF page 164, two pages before `PdfPageFor` put it.] [fsnow, 2026-11-04: "pages 156
+  and 157 of the Netti book are missing from the PDF. Not blank pages."] Listed in `MissingPages`
+  (#1101), so navigation after them is right; the two pages themselves cannot be shown, and a request
+  for either lands on print page 158. Pages like these only turn up when someone checks the scan
+  against the print.
 - **The derivation is a correlation, not proof.** An XML gap could be a *dropped marker* rather than a
   blank leaf, in which case we subtract where we shouldn't. That failure looks like a page that was
   right before and is now one *early*.
