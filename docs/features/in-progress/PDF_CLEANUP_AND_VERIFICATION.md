@@ -99,6 +99,7 @@ This could be done by:
 | 100 duplicate pages | KN combined (Khuddakapāṭha–Suttanipāta) | Myanmar pages 120–219 repeated; Suttanipāta `startPage` is 117 as workaround |
 | Blank pages removed | Multiple PDFs | Causes decreasing `startPage` pattern across books in combined PDFs |
 | Zero-byte files | Dhammasaṅgaṇī, Yamaka-3 | 0 bytes in SharePoint; need replacement |
+| Text pages missing from the scan | Netti-Peṭakopadesa 1957 (`s0519m`) | Print pages 156–157 are not in the PDF and are not blank. `MissingPages` `{ 156, 157 }` keeps later pages right (#1101); `s0520m` shares the PDF and its `startPage` 5 already absorbs the gap. [fsnow: VRI "probably have the physical book but not a better scan"] [suggestion] Scan the two pages from the volume and insert them; then `s0519m`'s `MissingPages` entry comes out and `s0520m`'s `startPage` goes from 5 to 7. |
 | Two-volume span | MN Tika 1 (`s0201t.tik.xml`) | Spans two PDF files; needs volume-based PDF selection |
 | Truncated scan | 1957 Sagāthāvagga-Nidānavagga | Holds only the first 6 printed pages of the Nidānavagga (`s0302m`, 1.0243–1.0248); the SharePoint copy is the same size, so it is short at the source (#1099) |
 | Text pages missing | 1957 Netti-Peṭakopadesa | Print pages 156–157 are absent, and they are text pages, not blanks; listed in `MissingPages` for `s0519m` (#1101) |
