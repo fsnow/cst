@@ -120,7 +120,7 @@ public class Sources
 
 	// Vinaya Atthakatha
 	private const string Att_Vin_Parajika1_1957 = "Pārājikakaṇḍa-aṭṭhakathā-1.pdf";
-	private const string Att_Vin_Parajika2_1957 = "Pārājikakaṇḍa-aṭṭhakathā-2.pdf"; // TODO(#76): vol-2 mapping pending upstream pagination redesign; the multi-volume book currently opens vol.1
+	private const string Att_Vin_Parajika2_1957 = "Pārājikakaṇḍa-aṭṭhakathā-2.pdf"; // vin01a vol. 2 (M 2.0001-2.0312) starts on PDF page 6 (verified by hand, 2026-11-09). Unmapped until #546: the multi-volume book currently opens vol. 1
 	private const string Att_Vin_Pacittiyadi_1957 = "Pācityādi-aṭṭhakathā.pdf";
 	private const string Att_Vin_Culavagga_1957 = "Cūḷavaggādi-aṭṭhakathā.pdf";
 
@@ -547,6 +547,7 @@ public class Sources
 
 		// --- KN Tika ---
 		addSource("s0519t.tik.xml", SourceType.Burmese1957, 7, $"{Burmese1957Tika}/{Tik_KN_Netti_1957}");
+		addSource("s0501t.nrf.xml", SourceType.Burmese1957, 166, $"{Burmese1957Tika}/{Tik_KN_Netti_1957}");
 
 		// --- Vinaya Tika (Saratthadipani) ---
 		addSource("vin01t1.tik.xml", SourceType.Burmese1957, 14, $"{Burmese1957Tika}/{Tik_Vin_Saratthadipani1_1957}");
