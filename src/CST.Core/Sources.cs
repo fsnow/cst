@@ -215,6 +215,28 @@ public class Sources
 	private const string Tik_Abh_Vibhanga_1957 = "Vibhaṅga-mūlaṭīkā-anuṭīkā.pdf";
 	private const string Tik_Abh_Pancappakarana_1957 = "Pañcappakaraṇa-mūlaṭīkā-anuṭīkā.pdf";
 
+	// Ṭīkā folder: the Sīlakkhandhavagga-abhinavaṭīkā, the Vinaya ṭīkās and the later Abhidhamma texts
+	private const string Tik_DN_SilakkhandhaAbhinava1_1957 = "Sīlakkhandhavagga-abhinavaṭīkā-1.pdf";
+	private const string Tik_DN_SilakkhandhaAbhinava2_1957 = "Sīlakkhandhavagga-abhinavaṭīkā-2.pdf";
+	private const string Tik_Vin_Dvematika_1957 = "Dvematika_Bhikkhupatimokkha_Bhikkhunipatimokkhapatha.pdf";
+	private const string Tik_Vin_Vinayasangaha_1957 = "Vinayasaṅgahaṭṭhakathā.pdf";
+	private const string Tik_Vin_Vajirabuddhi_1957 = "Vajirabuddhi-ṭīkā.pdf";
+	private const string Tik_Vin_Vimativinodani1_1957 = "Vimativinodanī-ṭīkā-1.pdf";
+	private const string Tik_Vin_Vimativinodani2_1957 = "Vimativinodanī-ṭīkā-2.pdf"; // vin07t vol. 2, unmapped until #546
+	private const string Tik_Vin_Vinayalankara1_1957 = "Vinayalankara Tika Part - 1.pdf";
+	private const string Tik_Vin_Vinayalankara2_1957 = "Vinayalankara Tika - 2.pdf"; // vin08t vol. 2, unmapped until #546
+	private const string Tik_Vin_KankhaPurana_1957 = "Kaṅkhāvitaraṇī purāṇa-abhinava-ṭīkā.pdf";
+	private const string Tik_Vin_Vinayavinicchaya_1957 = "Vinayavinicchayo-uttaravinicchayo.pdf";
+	private const string Tik_Vin_VinayavinicchayaTika1_1957 = "Vinayavinicchaya Tika Part 1.pdf";
+	private const string Tik_Vin_VinayavinicchayaTika2_1957 = "Vinayavinicchaya Tika Part 2.pdf"; // vin11t vol. 2, unmapped until #546
+	private const string Tik_Vin_Pacityadiyojana_1957 = "Pacityadiyojanapali-1-2.pdf";
+	private const string Tik_Vin_Khuddasikkha_1957 = "Khuddasikkhā-mūlasikkhā.pdf";
+	private const string Tik_Abh_Abhidhammavatara_1957 = "Abhidhammavatara etc..pdf";
+	private const string Tik_Abh_AbhidhammatthaSangaha_1957 = "Tika-Abhidhammatthasangaho.pdf";
+	private const string Tik_Abh_AbhidhammavataraTika1_1957 = "Abhidhammāvatāra purāṇa-abhinava-ṭīkā-1.pdf";
+	private const string Tik_Abh_AbhidhammavataraTika2_1957 = "Abhidhammavatara Abhinava Tika-2.pdf"; // abh08t vol. 2, unmapped until #546
+	private const string Tik_Abh_Mohavicchedani_1957 = "Mohavicchedanī (abhidhammamātikā).pdf";
+
 	// ===========================================
 	// Anya (Other Texts) PDF filenames
 	// ===========================================
@@ -262,7 +284,7 @@ public class Sources
 	private const string KN_KhuddakaSuttanipata_2010 = "019-Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf";
 	private const string KN_VimanavattuTherigatha_2010 = "020-Vimānavatthu-PetavatthuTheragāthā-Therīgāthāpāḷi.pdf";
 	private const string KN_Apadana1_2010 = "021-Apadānapāḷi - 1.pdf";
-	private const string KN_Apadana2Buddhavamsa_2010 = "022-Apadānapāḷi – 2 Buddhavaṃsa- Cariyāpiṭakapāḷi.pdf";
+	private const string KN_Apadana2Buddhavamsa_2010 = "022-Apadānapāḷi – 2 Buddhavaṃsa- Cariyāpiṭakapāḷi (2010).pdf"; // SharePoint also holds a (2005) printing
 	private const string KN_Jataka1_2010 = "023-Jātakapāḷi-1.pdf";
 	private const string KN_Jataka2_2010 = "024-Jātakapāḷi-2.pdf";
 	private const string KN_Mahaniddesa_2010 = "025-Mahāniddesapāḷi.pdf";
@@ -558,6 +580,34 @@ public class Sources
 		addSource("abh01t.tik.xml", SourceType.Burmese1957, 16, $"{Burmese1957Tika}/{Tik_Abh_Dhammasangani_1957}");
 		addSource("abh02t.tik.xml", SourceType.Burmese1957, 9, $"{Burmese1957Tika}/{Tik_Abh_Vibhanga_1957}");
 		addSource("abh03t.tik.xml", SourceType.Burmese1957, 20, $"{Burmese1957Tika}/{Tik_Abh_Pancappakarana_1957}", new[] { 46 });
+
+		// --- Ṭīkā-folder books first mapped 2026-11-10 ---
+		// A start page of 1 means "not yet measured", not "starts on page 1"; each is being found by hand.
+		// The missing pages are the isolated gaps in each book's Myanmar page markers, seeded as in #540.
+		// Not yet handled:
+		//  - vin07t, vin08t, vin11t and abh08t restart their numbering in a second volume, so their
+		//    volume-2 PDFs (named above) wait for #546. vin07t's and vin11t's volume-2 gaps wait with them.
+		//  - abh06t holds four texts, each numbered from 1 (pages 1-186, 1-160, 1-100, 1-34); abh09t
+		//    holds the Abhidhammamātikā (1-95) and then the Mohavicchedanī (1-488). Only the first
+		//    text of each can be reached until a source can tell those runs apart.
+		addSource("abh04t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_Dhammasangani_1957}");
+		addSource("abh05t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_Pancappakarana_1957}", new[] { 34, 56, 158 });
+		addSource("abh06t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_Abhidhammavatara_1957}");
+		addSource("abh07t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_AbhidhammatthaSangaha_1957}");
+		addSource("abh08t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_AbhidhammavataraTika1_1957}");
+		addSource("abh09t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_Mohavicchedani_1957}");
+		addSource("s0104t.nrf.xml", SourceType.Burmese1957, 5, $"{Burmese1957Tika}/{Tik_DN_SilakkhandhaAbhinava1_1957}");
+		addSource("s0105t.nrf.xml", SourceType.Burmese1957, 8, $"{Burmese1957Tika}/{Tik_DN_SilakkhandhaAbhinava2_1957}");
+		addSource("vin04t.nrf.xml", SourceType.Burmese1957, 30, $"{Burmese1957Tika}/{Tik_Vin_Dvematika_1957}", new[] { 82 });
+		addSource("vin05t.nrf.xml", SourceType.Burmese1957, 6, $"{Burmese1957Tika}/{Tik_Vin_Vinayasangaha_1957}");
+		addSource("vin06t.nrf.xml", SourceType.Burmese1957, 23, $"{Burmese1957Tika}/{Tik_Vin_Vajirabuddhi_1957}", new[] { 390, 506 });
+		addSource("vin07t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Vimativinodani1_1957}");
+		addSource("vin08t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Vinayalankara1_1957}");
+		addSource("vin09t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_KankhaPurana_1957}", new[] { 118, 450 });
+		addSource("vin10t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Vinayavinicchaya_1957}");
+		addSource("vin11t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_VinayavinicchayaTika1_1957}");
+		addSource("vin12t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Pacityadiyojana_1957}", new[] { 408, 546 });
+		addSource("vin13t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Khuddasikkha_1957}", new[] { 58, 236, 442 });
 
 		// =============================================
 		// Anya (Other Texts) Mappings
