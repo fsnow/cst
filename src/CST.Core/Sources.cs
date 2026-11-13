@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using CST.Navigation;
 
 namespace CST;
@@ -89,6 +90,8 @@ public class Sources
 
 	// Sutta - KN
 	private const string KN_KhuddakaSuttanipata_1957 = "Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf";
+	private static readonly int[] KN_KhuddakaSuttanipata_1957_Missing = { 276, 277, 278 };
+	private static readonly int[] KN_KhuddakaSuttanipata_1957_Extra = Enumerable.Repeat(219, 99).ToArray();
 	private const string KN_VimanavattuTherigatha_1957 = "Vimānavatthu-Petavatthu-Theragāthā-Therīgāthāpāḷi.pdf";
 	private const string KN_Apadana1_1957 = "Apadānapāḷi–1.pdf";
 	private const string KN_Apadana2Buddhavamsa_1957 = "Apadānapāḷi–2- Buddhavaṃsa- Cariyāpiṭakapāḷi.pdf";
@@ -355,8 +358,16 @@ public class Sources
 		addSource("s0501m.mul.xml", SourceType.Burmese1957, 25, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}");
 		addSource("s0502m.mul.xml", SourceType.Burmese1957, 24, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}");
 		addSource("s0503m.mul.xml", SourceType.Burmese1957, 24, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}");
-		addSource("s0504m.mul.xml", SourceType.Burmese1957, 23, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}");
-		addSource("s0505m.mul.xml", SourceType.Burmese1957, 117, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}"); // PDF has 100 duplicate pages; startPage should be ~23 once fixed
+		// Checked by hand in the scan (2026-11-13):
+		//  - after print 219 (PDF 241) the scan starts over at print 120 (PDF 242) and reaches print 220
+		//    at PDF 341: 99 extra pages;
+		//  - print 275 is labelled "279" in the scan; it holds the start of ¶112, as the XML's M 275 does;
+		//  - print 276-277, the end of the Itivuttaka, are not in the scan, nor is the blank 278; the
+		//    next PDF page is the first page of the Suttanipāta.
+		addSource("s0504m.mul.xml", SourceType.Burmese1957, 23, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}",
+			KN_KhuddakaSuttanipata_1957_Missing, extraPagesAfter: KN_KhuddakaSuttanipata_1957_Extra);
+		addSource("s0505m.mul.xml", SourceType.Burmese1957, 23, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}",
+			KN_KhuddakaSuttanipata_1957_Missing, extraPagesAfter: KN_KhuddakaSuttanipata_1957_Extra);
 		addSource("s0506m.mul.xml", SourceType.Burmese1957, 17, $"{Burmese1957Sutta}/{KN_VimanavattuTherigatha_1957}");
 		addSource("s0507m.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{KN_VimanavattuTherigatha_1957}");
 		addSource("s0508m.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{KN_VimanavattuTherigatha_1957}");
@@ -385,7 +396,7 @@ public class Sources
 		addSource("abh03m5.mul.xml", SourceType.Burmese1957, 12, $"{Burmese1957Abhidhamma}/{Abh_Yamaka2_1957}");
 		addSource("abh03m6.mul.xml", SourceType.Burmese1957, 1, $"{Burmese1957Abhidhamma}/{Abh_Yamaka3_1957}"); // TODO: PDF is 0 bytes in SharePoint
 		addSource("abh03m7.mul.xml", SourceType.Burmese1957, 30, $"{Burmese1957Abhidhamma}/{Abh_Patthana1_1957}");
-		addSource("abh03m8.mul.xml", SourceType.Burmese1957, 28, $"{Burmese1957Abhidhamma}/{Abh_Patthana2_1957}");
+		addSource("abh03m8.mul.xml", SourceType.Burmese1957, 28, $"{Burmese1957Abhidhamma}/{Abh_Patthana2_1957}", extraPagesAfter: new[] { 95, 95 }); // scan repeats print pages 94-95
 		addSource("abh03m9.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Abhidhamma}/{Abh_Patthana3_1957}");
 		addSource("abh03m10.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Abhidhamma}/{Abh_Patthana4_1957}", new[] { 466 });
 		addSource("abh03m11.mul.xml", SourceType.Burmese1957, 6, $"{Burmese1957Abhidhamma}/{Abh_Patthana5_1957}", new[] { 62, 122, 158, 196, 214, 306, 326, 348, 376, 402, 424 });
@@ -694,14 +705,14 @@ public class Sources
 	}
 
 	private void addSource(string filename, SourceType sourceType, int pageStart, string path,
-		int[]? missingPages = null, PageEdition pageEdition = PageEdition.Myanmar)
+		int[]? missingPages = null, PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null)
 	{
 		if (!sourcesMap.TryGetValue(filename, out var d))
 		{
 			d = new Dictionary<SourceType, Source>();
 			sourcesMap[filename] = d;
 		}
-		d[sourceType] = new Source(sourceType, pageStart, path, missingPages, pageEdition);
+		d[sourceType] = new Source(sourceType, pageStart, path, missingPages, pageEdition, extraPagesAfter);
 	}
 
 	public Source? GetSource(string filename, SourceType sourceType)
@@ -754,8 +765,9 @@ public class Sources
 	public class Source
 	{
 		public Source(SourceType sourceType, int pageStart, string path, int[]? missingPages = null,
-			PageEdition pageEdition = PageEdition.Myanmar)
+			PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null)
 		{
+			ExtraPagesAfter = extraPagesAfter ?? Array.Empty<int>();
 			PageEdition = pageEdition;
 			SourceType = sourceType;
 			PageStart = pageStart;
@@ -798,7 +810,16 @@ public class Sources
 		public int[] MissingPages { get; set; }
 
 		/// <summary>
-		/// PDF page for a printed page number, accounting for pages absent from the scan.
+		/// The counterpart of <see cref="MissingPages"/>: one entry per EXTRA page in this PDF, giving the
+		/// print page it follows. Every print page after it opens one PDF page later. Ascending; a value may
+		/// repeat. The 1957 abh03m8 scan runs 93, 94, 95, 94, 95, 96, so its entry is { 95, 95 }: print pages
+		/// 94 and 95 open their first copies and 96 onward open two pages later.
+		/// </summary>
+		public int[] ExtraPagesAfter { get; set; }
+
+		/// <summary>
+		/// PDF page for a printed page number, accounting for pages absent from the scan and pages
+		/// the scan holds twice.
 		/// </summary>
 		public int PdfPageFor(int printPage)
 		{
@@ -808,7 +829,13 @@ public class Sources
 				if (p >= printPage) break;   // MissingPages is ascending
 				skipped++;
 			}
-			int pdfPage = PageStart + (printPage - 1) - skipped;
+			int extra = 0;
+			foreach (int p in ExtraPagesAfter)
+			{
+				if (p >= printPage) break;   // ExtraPagesAfter is ascending
+				extra++;
+			}
+			int pdfPage = PageStart + (printPage - 1) - skipped + extra;
 			return pdfPage < 1 ? 1 : pdfPage;
 		}
 	}
