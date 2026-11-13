@@ -104,7 +104,7 @@ Revised 2026-10-13, after the original Aalekh files were recovered from the CSCD
 
 1. **Source**: Myanmar-script printed editions, which include the Sanskrit letters in quoted Sanskrit.
 2. **Typing**: Devanagari typed into Aalekh, a DOS-based word processor, in India in the early 1990s. Most Sanskrit letters were not typed: ś and ṣ became other letters, and ṛ and some vowel signs were dropped. Visarga, ai and au were typed.
-3. **First Conversion**: Aalekh → Unicode Devanagari, early 2007, by fsnow's C# converter (`VriDevToUni` in `VipassanaTech/tipitaka-xml`). The converter had no Sanskrit entries at that time, so the typed visargas in Sanskrit passages became `?`.
+3. **First Conversion**: Aalekh → Unicode Devanagari, early 2007, by fsnow's C# converter (`VriDevToUni`: the standalone project in `VipassanaTech/tipitaka-xml` at `code/VriDevToUni/`, with copies at `code/converters/CstConversion/VriDevToUni.cs` there and [`src/CST.Core/Conversion/VriDevToUni.cs`](../../src/CST.Core/Conversion/VriDevToUni.cs) here). `VriDevToUni` had no Sanskrit entries at that time, so the typed visargas in Sanskrit passages became `?`. (`aalekh2uni` in tipitaka-xml's `conversion scripts/` is a different, earlier converter.)
 4. **Current corpus**: about 20 years of VRI corrections on top of that conversion.
 
 ## Deliverables
