@@ -109,6 +109,51 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
+        public void PagesTheScanHoldsTwice_PushLaterPagesBack()
+        {
+            // The 1957 abh03m8 scan runs 93, 94, 95, 94, 95, 96: two extra pages after print page 95.
+            var s = new Sources.Source(Sources.SourceType.Burmese1957, 28, "x.pdf", extraPagesAfter: new[] { 95, 95 });
+            Assert.Equal(28 + 92, s.PdfPageFor(93));
+            Assert.Equal(28 + 93, s.PdfPageFor(94));   // the first copy
+            Assert.Equal(28 + 94, s.PdfPageFor(95));   // the first copy
+            Assert.Equal(28 + 97, s.PdfPageFor(96));   // after both repeats
+            Assert.Empty(new Sources.Source(Sources.SourceType.Burmese1957, 1, "x.pdf").ExtraPagesAfter);
+        }
+
+        [Fact]
+        public void MissingAndExtraPagesCombine()
+        {
+            var s = new Sources.Source(Sources.SourceType.Burmese1957, 10, "x.pdf", new[] { 20 }, extraPagesAfter: new[] { 30 });
+            Assert.Equal(10 + 18, s.PdfPageFor(19));
+            Assert.Equal(10 + 19, s.PdfPageFor(21));   // one skipped
+            Assert.Equal(10 + 30, s.PdfPageFor(31));   // one skipped, one extra: they cancel
+        }
+
+        [Fact]
+        public void Abh03m8_1957_AccountsForItsRepeatedPages()
+        {
+            var s = Sources.Inst.GetSource("abh03m8.mul.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 95, 95 }, s.ExtraPagesAfter);
+            Assert.Empty(Sources.Inst.GetSource("abh03m8.mul.xml", Sources.SourceType.Burmese2010)!.ExtraPagesAfter);
+        }
+
+        [Fact]
+        public void S0504m_1957_LandsOnThePagesTheScanActuallyHas()
+        {
+            // Checked by hand: print 219 is PDF 241, the repeat begins with print 120 at PDF 242,
+            // print 220 is PDF 341, and the run is right up to print 274.
+            var s = Sources.Inst.GetSource("s0504m.mul.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(241, s.PdfPageFor(219));
+            Assert.Equal(341, s.PdfPageFor(220));
+            Assert.Equal(395, s.PdfPageFor(274));
+            Assert.Equal(396, s.PdfPageFor(275));   // labelled "279" in the scan
+
+            // print 276-278 are not in the scan, so the Suttanipāta opens on the next PDF page
+            var sn = Sources.Inst.GetSource("s0505m.mul.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(397, sn.PdfPageFor(279));
+        }
+
+        [Fact]
         public void MissingPagesPropagateToSiblingBooksSharingOnePdf()
         {
             // A missing page belongs to the PDF, not the book. Where several books share one scan and

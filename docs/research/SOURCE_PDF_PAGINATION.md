@@ -30,7 +30,7 @@ Catukkanipāta two.
 `Sources.Source.PdfPageFor()` subtracts the skips recorded in a per-PDF `MissingPages` array:
 
 ```
-pdfPage = PageStart + (printPage - 1) - |{ missing pages < printPage }|
+pdfPage = PageStart + (printPage - 1) - |{ missing pages < printPage }| + |{ extra pages after p < printPage }|
 ```
 
 `printPage` is the book's current page in the numbering named by `Source.PageEdition`. That is the
@@ -75,6 +75,13 @@ Two categories were excluded deliberately:
   guards this against hand-edits during QA.
 - **Not every missing page is a blank.** The 1957 Netti scan lacks print pages 156–157, which are text
   pages, so the XML has markers for them and no gap predicted them. Found in QA, not by the seed (#1101).
+- **A scan can also hold pages twice.** The 1957 `abh03m8` scan runs 93, 94, 95, 94, 95, 96.
+  `Source.ExtraPagesAfter` is the counterpart of `MissingPages`: one entry per extra PDF page, naming the
+  print page it follows, so `{ 95, 95 }` there. Nothing in the XML predicts these; they are found in QA.
+  The 1957 KN combined scan has a long one: after print 219 it starts over at print 120, for 99 extra
+  pages, so `s0504m` and `s0505m` carry 99 entries of 219.
+- **A printed page number can be wrong.** In the same scan, print 275 is labelled "279". Map by content,
+  not by the number on the page.
 
 ---
 
