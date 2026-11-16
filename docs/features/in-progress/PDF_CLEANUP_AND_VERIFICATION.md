@@ -55,8 +55,6 @@ The source PDFs have inconsistencies that break the simple page formula:
 
 3. **Combined PDFs spanning multiple books**: Several PDFs contain multiple logical books end-to-end with continuous Myanmar page numbering. For example, one PDF contains Khuddakapāṭha, Dhammapada, Udāna, Itivuttaka, and Suttanipāta. Each book has its own `startPage` in `Sources.cs`.
 
-4. **Two zero-byte PDFs**: Dhammasaṅgaṇī and Yamaka-3 in the 1957 Abhidhamma folder are 0 bytes.
-
 ## Project Scope
 
 ### Phase 1: PDF Surgery
@@ -98,7 +96,6 @@ This could be done by:
 |-------|-----|---------|
 | 99 duplicate pages, a mislabelled page, and the end of the Itivuttaka missing | KN combined 1957 (Khuddakapāṭha–Suttanipāta) | Checked by hand 2026-11-13. After print 219 (PDF 241) the scan starts again at print 120 (PDF 242); print 219 recurs at PDF 340 and print 220 is PDF 341, so the repeat is 99 PDF pages. Print 275 is labelled "279". Print 276–277 (the end of the Itivuttaka, from ¶112) and the blank 278 are not in the scan. Recorded as `ExtraPagesAfter` (99 × 219) and `MissingPages` `{ 276, 277, 278 }` for `s0504m` and `s0505m`, both now at `startPage` 23; `s0505m`'s old workaround of 117 opened the Suttanipāta two pages early. [suggestion] Remove PDF 242–340 and insert the two missing pages |
 | Blank pages removed | Multiple PDFs | Causes decreasing `startPage` pattern across books in combined PDFs |
-| Zero-byte files | Dhammasaṅgaṇī, Yamaka-3 | 0 bytes in SharePoint; need replacement |
 | Text pages missing from the scan | Netti-Peṭakopadesa 1957 (`s0519m`) | Print pages 156–157 are not in the PDF and are not blank. `MissingPages` `{ 156, 157 }` keeps later pages right (#1101); `s0520m` shares the PDF and its `startPage` 5 already absorbs the gap. [fsnow: VRI "probably have the physical book but not a better scan"] [suggestion] Scan the two pages from the volume and insert them; then `s0519m`'s `MissingPages` entry comes out and `s0520m`'s `startPage` goes from 5 to 7. |
 | Two-volume span | MN Tika 1 (`s0201t.tik.xml`) | Spans two PDF files; needs volume-based PDF selection |
 | Truncated scan | 1957 Sagāthāvagga-Nidānavagga | Holds only the first 6 printed pages of the Nidānavagga (`s0302m`, 1.0243–1.0248); the SharePoint copy is the same size, so it is short at the source (#1099) |

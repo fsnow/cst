@@ -68,7 +68,7 @@ This document records the PDF source mappings implemented in `Sources.cs`. The `
 | s0502m.mul.xml | Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf | 24 |
 | s0503m.mul.xml | Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf | 24 |
 | s0504m.mul.xml | Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf | 23 |
-| s0505m.mul.xml | Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf | 117 |
+| s0505m.mul.xml | Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf | 23 |
 | s0506m.mul.xml | Vimānavatthu-Petavatthu-Theragāthā-Therīgāthāpāḷi.pdf | 17 |
 | s0507m.mul.xml | Vimānavatthu-Petavatthu-Theragāthā-Therīgāthāpāḷi.pdf | 16 |
 | s0508m.mul.xml | Vimānavatthu-Petavatthu-Theragāthā-Therīgāthāpāḷi.pdf | 16 |
@@ -90,14 +90,14 @@ This document records the PDF source mappings implemented in `Sources.cs`. The `
 
 | XML File | PDF File | startPage | Notes |
 |----------|----------|-----------|-------|
-| abh01m.mul.xml | Dhammasaṅgaṇīpāḷi.pdf | 1 | PDF is 0 bytes in SharePoint |
+| abh01m.mul.xml | Dhammasaṅgaṇīpāḷi.pdf | 19 | |
 | abh02m.mul.xml | Vibhaṅgapāḷi.pdf | 11 | |
 | abh03m1.mul.xml | Dhātukathā-Puggalapaññattipāḷi.pdf | 8 | |
 | abh03m2.mul.xml | Dhātukathā-Puggalapaññattipāḷi.pdf | 8 | |
 | abh03m3.mul.xml | Kathāvatthupāḷi.pdf | 16 | |
 | abh03m4.mul.xml | Yamakapāḷi-1.pdf | 10 | |
 | abh03m5.mul.xml | Yamakapāḷi-2.pdf | 12 | |
-| abh03m6.mul.xml | Yamakapāḷi-3.pdf | 1 | PDF is 0 bytes in SharePoint |
+| abh03m6.mul.xml | Yamakapāḷi-3.pdf | 10 | |
 | abh03m7.mul.xml | Paṭṭhānapāḷi-1.pdf | 30 | |
 | abh03m8.mul.xml | Paṭṭhānapāḷi-2.pdf | 28 | |
 | abh03m9.mul.xml | Paṭṭhānapāḷi-3.pdf | 7 | |
@@ -392,12 +392,8 @@ The following Anya folders have not yet been mapped to XML files:
 
 ## Known Issues
 
-1. **0-byte PDFs**: Two 1957 Abhidhamma PDFs are 0 bytes in SharePoint:
-   - Dhammasaṅgaṇīpāḷi.pdf (abh01m.mul.xml)
-   - Yamakapāḷi-3.pdf (abh03m6.mul.xml)
+1. **MN Tika spanning volumes**: s0201t.tik.xml spans two PDF volumes (Mūlapaṇṇāsa-ṭīkā-1 and Mūlapaṇṇāsa-ṭīkā-2). Requires special handling to select PDF based on volume number in page marker (1.x vs 2.x).
 
-2. **MN Tika spanning volumes**: s0201t.tik.xml spans two PDF volumes (Mūlapaṇṇāsa-ṭīkā-1 and Mūlapaṇṇāsa-ṭīkā-2). Requires special handling to select PDF based on volume number in page marker (1.x vs 2.x).
+2. **2010 MN incomplete**: 009-Mūlapaṇṇāsapāḷi is noted as "(only pp1-197)" - may be incomplete.
 
-3. **2010 MN incomplete**: 009-Mūlapaṇṇāsapāḷi is noted as "(only pp1-197)" - may be incomplete.
-
-4. **Duplicate pages in KN combined PDF**: Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf has 100 duplicate pages (Myanmar pages 120-219 repeated after page 219). The startPage for s0505m (Suttanipāta) is 117 to work around this; should be ~23 once the PDF is fixed.
+3. **Duplicate pages in KN combined PDF**: Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf repeats 99 pages (after print 219 it starts again at print 120) and lacks print 276-278. s0504m and s0505m both use startPage 23, with `ExtraPagesAfter` and `MissingPages` compensating (#1116).

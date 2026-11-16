@@ -386,7 +386,7 @@ public class Sources
 		addSource("s0520m.nrf.xml", SourceType.Burmese1957, 5, $"{Burmese1957Sutta}/{KN_NettiPetakopadesa_1957}");
 
 		// --- Abhidhamma Pitaka ---
-		addSource("abh01m.mul.xml", SourceType.Burmese1957, 1, $"{Burmese1957Abhidhamma}/{Abh_Dhammasangani_1957}"); // TODO: PDF is 0 bytes in SharePoint
+		addSource("abh01m.mul.xml", SourceType.Burmese1957, 19, $"{Burmese1957Abhidhamma}/{Abh_Dhammasangani_1957}");
 		addSource("abh02m.mul.xml", SourceType.Burmese1957, 11, $"{Burmese1957Abhidhamma}/{Abh_Vibhanga_1957}");
 		// abh03m1 = Dhatukatha, abh03m2 = Puggalapannatti (both in combined PDF)
 		addSource("abh03m1.mul.xml", SourceType.Burmese1957, 8, $"{Burmese1957Abhidhamma}/{Abh_DhatukathaPuggalapannatti_1957}");
@@ -394,7 +394,7 @@ public class Sources
 		addSource("abh03m3.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Abhidhamma}/{Abh_Kathavatthu_1957}");
 		addSource("abh03m4.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Abhidhamma}/{Abh_Yamaka1_1957}", new[] { 16 });
 		addSource("abh03m5.mul.xml", SourceType.Burmese1957, 12, $"{Burmese1957Abhidhamma}/{Abh_Yamaka2_1957}");
-		addSource("abh03m6.mul.xml", SourceType.Burmese1957, 1, $"{Burmese1957Abhidhamma}/{Abh_Yamaka3_1957}"); // TODO: PDF is 0 bytes in SharePoint
+		addSource("abh03m6.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Abhidhamma}/{Abh_Yamaka3_1957}");
 		addSource("abh03m7.mul.xml", SourceType.Burmese1957, 30, $"{Burmese1957Abhidhamma}/{Abh_Patthana1_1957}");
 		addSource("abh03m8.mul.xml", SourceType.Burmese1957, 28, $"{Burmese1957Abhidhamma}/{Abh_Patthana2_1957}", extraPagesAfter: new[] { 95, 95 }); // scan repeats print pages 94-95
 		addSource("abh03m9.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Abhidhamma}/{Abh_Patthana3_1957}");
