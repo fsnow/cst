@@ -94,6 +94,7 @@ Revised 2026-10-13, after the original Aalekh files were recovered from the CSCD
   - [observed] The Aalekh files use the visarga byte both as a colon-like mark in Pāli and as a true visarga in Sanskrit passages.
   - The 18 that survive in today's XML (abh01m 11, s0504m 6, s0519m 1) are the punctuation use.
   - The Sanskrit visargas became `?` in the 2007 conversion.
+  - The per-occurrence list is in [`docs/research/aalekh/aalekh-visarga-1046.csv`](../research/aalekh/aalekh-visarga-1046.csv): 346 places where the Aalekh text has the visarga byte. The `today` column is what the XML has there now. [observed] By its counts most of the `?` are the Pāli punctuation use, not Sanskrit: Pāli colon 196, after *kiṃ* 116, Sanskrit 8, Burmese words 4. A further 18 are still visarga and 3 have nothing.
 - **The Sanskrit letters that are absent** (ś, ṣ, and ṛ in Sanskrit). [observed] They are absent because they were never typed, not because the conversion stripped them.
   - The Aalekh files contain no ś or ṣ at all.
   - The Myanmar-script source print does contain them. The e0105n quotation of the Puruṣasūkta prints ś, ṛ, ai and visarga; the typing has ग for ś and drops ṛ and ai.
