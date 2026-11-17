@@ -2,15 +2,14 @@
 
 This document describes the complete process for releasing a new version of CST Reader.
 
-**Last Updated:** November 16, 2026
-**Current Version:** 5.0.0-beta.9 (in development; Beta 8 released 2026-10-07)
+**Last Updated:** November 17, 2026
+**Current Version:** 5.0.0-beta.10 (in development; Beta 9 released 2026-11-17)
 
-> **Clean-start status for Beta 9: none needed from Beta 5–8, but the index rebuilds once** [observed
-> 2026-11-16]. IPE version 2 (#1049) renumbered the encoding the index is built in. That needs no wipe:
-> `IndexIpeStamp` sees an index built with another IPE version, then deletes and rebuilds it on first launch,
-> and the state file's 1.0 → 2 migration rewrites stored search terms. The release notes and welcome page
-> say the first launch rebuilds the index. **Beta 4 and earlier still need a wipe** (the Beta 5
-> index-offset change, #53). Re-derive this at the start of each cycle rather than carrying the line forward: a
+> **Clean-start status for Beta 10: none needed from Beta 5–9, so far** [observed 2026-11-17, at the
+> opening of the cycle]. Nothing in `src/CST.Lucene`, `src/CST.Lexicon`, `src/CST.Core/Conversion`, or the
+> indexing and search services has changed since `v5.0.0-beta.9`. Upgraders from Beta 5–8 still get one
+> automatic index rebuild, from Beta 9's IPE version 2 (#1049; `IndexIpeStamp`). **Beta 4 and earlier
+> still need a wipe** (the Beta 5 index-offset change, #53). Re-derive this at the start of each cycle rather than carrying the line forward: a
 > tokenizer or index-format change is what flips it to a mandatory clean start, because no migration can
 > absorb that one.
 >
@@ -74,8 +73,15 @@ architectures cross-build fine from a single host of the right OS.
 |----------|-------|-----------------------|-------------------|-----------|
 | macOS    | arm64 | Kestrel or Caracara   | Egret / Kestrel   | `CST-Reader-arm64.dmg` (notarized) |
 | macOS    | x64   | Kestrel or Caracara   | Caracara          | `CST-Reader-x64.dmg` (notarized) |
-| Windows  | x64   | Placid (Win 10 x64 VM)| Kingfisher        | `CST-Reader-<ver>-win-x64-setup.exe`, `…-win-x64-portable.zip` |
-| Windows  | arm64 | Placid                | Merlin (arm64 VM) | `CST-Reader-<ver>-win-arm64-setup.exe`, `…-win-arm64-portable.zip` |
+| Windows  | x64   | Merlin or Placid      | Kingfisher        | `CST-Reader-<ver>-win-x64-setup.exe`, `…-win-x64-portable.zip` |
+| Windows  | arm64 | Merlin or Placid      | Merlin (arm64 VM) | `CST-Reader-<ver>-win-arm64-setup.exe`, `…-win-arm64-portable.zip` |
+
+**The whole release can run on one Mac.** [fsnow, 2026-11-17: "Now I can do the whole release on Kestrel
+and Merlin (Fusion VM on Kestrel)"] Kestrel builds and notarizes both DMGs, and Merlin builds both Windows
+packages. Both are arm64, so on that pair the x64 builds run only under emulation (Rosetta for the DMG,
+Windows' x64 emulation for the installer). [suggestion] A native x64 smoke test still needs Caracara or
+Kingfisher/Placid, and appearance checks still need a machine other than Merlin (below). [fsnow,
+2026-11-17: "dark mode for example can only be tested on Placid"]
 
 **Building is cross-architecture; testing is not.** Nothing in either packaging pipeline is bound to
 the host's architecture: `dotnet publish -r <rid>` pulls the target runtime pack from NuGet, the CEF
@@ -507,8 +513,8 @@ rebuild replaces cleanly rather than erroring or appending a second asset with a
 
 ## Step 2b: Build Windows Packages
 
-**Machine:** any Windows machine — Placid (the Windows 10 x64 VM on Caracara) builds **both**
-architectures. Run the script once per architecture on that one host; it does not need to match the
+**Machine:** any Windows machine — Merlin (the Windows arm64 VM on Kestrel) or Placid (the Windows 10
+x64 VM on Caracara) builds **both** architectures. Run the script once per architecture on that one host; it does not need to match the
 target. See the shipping matrix above for why, and for what still has to be tested natively.
 
 ### Pull Latest Code
