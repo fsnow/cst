@@ -1,8 +1,9 @@
 # macOS Notarization Ticket Failure on Kestrel
 
 **Status:** Resolved 2026-10-22 (#1081). The cause was an admin-domain trust-settings override on
-**Apple Root CA - G3**. Removing it fixed ticket validation on Kestrel. Stapling a freshly notarized build there
-is the one step not yet re-run. Until it is, release DMGs are notarized on Caracara as before.
+**Apple Root CA - G3**. Removing it fixed ticket validation on Kestrel. A fresh build confirmed it on 2026-11-17: both Beta 9 DMGs
+were notarized and stapled on Kestrel, and `stapler validate` and `spctl` (`Notarized Developer ID`) pass.
+Kestrel can produce releases again.
 
 ## Symptoms
 

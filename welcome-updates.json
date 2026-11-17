@@ -1,57 +1,63 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-10-07T21:45:00Z",
+  "lastUpdated": "2026-11-17T21:30:00Z",
   "currentVersion": {
     "stable": "4.5.0-this-version-is-not-real",
-    "beta": "5.0.0-beta.8"
+    "beta": "5.0.0-beta.9"
   },
   "messages": {
     "5.0.0-beta.1": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.8",
-      "content": "CST Reader 5.0.0-beta.8 is available. Betas 6 to 8 add an AI Assistant you can ask about the text you are reading — which now remembers your conversations — your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.8"
+      "title": "New Beta Available - 5.0.0-beta.9",
+      "content": "CST Reader 5.0.0-beta.9 is available. Beta 9 brings Sanskrit letters (ś, ṣ, ṛ, ai, au and visarga) to every script, adds Odia as the fifteenth script, and lets the AI Assistant read selections of any length. Betas 6 to 8 added an AI Assistant you can ask about the text you are reading, which remembers your conversations, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.9"
     },
     "5.0.0-beta.2": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.8",
-      "content": "CST Reader 5.0.0-beta.8 is available. Betas 6 to 8 add an AI Assistant you can ask about the text you are reading — which now remembers your conversations — your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.8"
+      "title": "New Beta Available - 5.0.0-beta.9",
+      "content": "CST Reader 5.0.0-beta.9 is available. Beta 9 brings Sanskrit letters (ś, ṣ, ṛ, ai, au and visarga) to every script, adds Odia as the fifteenth script, and lets the AI Assistant read selections of any length. Betas 6 to 8 added an AI Assistant you can ask about the text you are reading, which remembers your conversations, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.9"
     },
     "5.0.0-beta.3": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.8",
-      "content": "CST Reader 5.0.0-beta.8 is available. Betas 6 to 8 add an AI Assistant you can ask about the text you are reading — which now remembers your conversations — your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.8"
+      "title": "New Beta Available - 5.0.0-beta.9",
+      "content": "CST Reader 5.0.0-beta.9 is available. Beta 9 brings Sanskrit letters (ś, ṣ, ṛ, ai, au and visarga) to every script, adds Odia as the fifteenth script, and lets the AI Assistant read selections of any length. Betas 6 to 8 added an AI Assistant you can ask about the text you are reading, which remembers your conversations, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.9"
     },
     "5.0.0-beta.4": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.8",
-      "content": "CST Reader 5.0.0-beta.8 is available. Betas 6 to 8 add an AI Assistant you can ask about the text you are reading — which now remembers your conversations — your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.8"
+      "title": "New Beta Available - 5.0.0-beta.9",
+      "content": "CST Reader 5.0.0-beta.9 is available. Beta 9 brings Sanskrit letters (ś, ṣ, ṛ, ai, au and visarga) to every script, adds Odia as the fifteenth script, and lets the AI Assistant read selections of any length. Betas 6 to 8 added an AI Assistant you can ask about the text you are reading, which remembers your conversations, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.9"
     },
     "5.0.0-beta.5": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.8",
-      "content": "CST Reader 5.0.0-beta.8 is available. Betas 6 to 8 add an AI Assistant you can ask about the text you are reading — which now remembers your conversations — your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.8"
+      "title": "New Beta Available - 5.0.0-beta.9",
+      "content": "CST Reader 5.0.0-beta.9 is available. Beta 9 brings Sanskrit letters (ś, ṣ, ṛ, ai, au and visarga) to every script, adds Odia as the fifteenth script, and lets the AI Assistant read selections of any length. Betas 6 to 8 added an AI Assistant you can ask about the text you are reading, which remembers your conversations, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, a book font per script, and Digital Pāḷi Dictionary roots.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across. The first launch rebuilds the search index once, which takes a few minutes.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.9"
     },
     "5.0.0-beta.6": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.8",
-      "content": "CST Reader 5.0.0-beta.8 is available. The AI Assistant now remembers your conversations — follow-up questions build on earlier answers, conversations are kept when you quit, and you can keep several by name — and Digital Pāḷi Dictionary entries show the word's root. It also includes Beta 7's fix for the AI Assistant's text in dark mode.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.8"
+      "title": "New Beta Available - 5.0.0-beta.9",
+      "content": "CST Reader 5.0.0-beta.9 is available. Beta 9 brings Sanskrit letters (ś, ṣ, ṛ, ai, au and visarga) to every script, adds Odia as the fifteenth script, and lets the AI Assistant read selections of any length. Beta 8 added AI Assistant conversations that are kept when you quit, and Digital Pāḷi Dictionary roots.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across. The first launch rebuilds the search index once, which takes a few minutes.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.9"
     },
     "5.0.0-beta.7": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.8",
-      "content": "CST Reader 5.0.0-beta.8 is available. The AI Assistant now remembers your conversations — follow-up questions build on earlier answers, conversations are kept when you quit, and you can keep several by name — and Digital Pāḷi Dictionary entries show the word's root.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.8"
+      "title": "New Beta Available - 5.0.0-beta.9",
+      "content": "CST Reader 5.0.0-beta.9 is available. Beta 9 brings Sanskrit letters (ś, ṣ, ṛ, ai, au and visarga) to every script, adds Odia as the fifteenth script, and lets the AI Assistant read selections of any length. Beta 8 added AI Assistant conversations that are kept when you quit, and Digital Pāḷi Dictionary roots.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across. The first launch rebuilds the search index once, which takes a few minutes.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.9"
     },
     "5.0.0-beta.8": {
+      "type": "upgrade",
+      "title": "New Beta Available - 5.0.0-beta.9",
+      "content": "CST Reader 5.0.0-beta.9 is available. Beta 9 brings Sanskrit letters (ś, ṣ, ṛ, ai, au and visarga) to every script, adds Odia as the fifteenth script, and lets the AI Assistant read selections of any length.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across. The first launch rebuilds the search index once, which takes a few minutes.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.9"
+    },
+    "5.0.0-beta.9": {
       "type": "info",
-      "title": "You're Running Beta 8",
-      "content": "Thank you for testing CST Reader Beta 8. AI Assistant conversations are the newest part of the app — reports on those are especially useful. Please report anything you find on GitHub."
+      "title": "You're Running Beta 9",
+      "content": "Thank you for testing CST Reader Beta 9. Sanskrit letters and Odia are the newest parts of the app; reports on those are especially useful. Please report anything you find on GitHub."
     },
     "default": {
       "type": "warning",
@@ -62,11 +68,11 @@
   },
   "announcements": [
     {
-      "id": "2026-10-beta8-release",
-      "date": "2026-10-07T00:00:00Z",
-      "title": "CST Reader Beta 8 Released",
-      "content": "Beta 8: the AI Assistant now remembers your conversations, and Digital Pāḷi Dictionary entries show the word's root. Coming from Beta 5 or earlier, Betas 6 to 8 also bring the AI Assistant itself, your choice of AI provider, and Windows as a first-class target on x64 and ARM64. From Beta 5, 6 or 7, install over the top; from Beta 4 or earlier, delete the data directory first — see the release notes.",
-      "showUntil": "2027-01-31T00:00:00Z",
+      "id": "2026-11-beta9-release",
+      "date": "2026-11-17T00:00:00Z",
+      "title": "CST Reader Beta 9 Released",
+      "content": "Beta 9: Sanskrit letters in every script, Odia as the fifteenth script, and AI Assistant selections of any length. From Beta 5 to 8, install over the top; the first launch rebuilds the search index once. From Beta 4 or earlier, delete the data directory first. See the release notes.",
+      "showUntil": "2027-02-28T00:00:00Z",
       "targetVersions": [
         "5.0.0-beta.1",
         "5.0.0-beta.2",
@@ -74,7 +80,8 @@
         "5.0.0-beta.4",
         "5.0.0-beta.5",
         "5.0.0-beta.6",
-        "5.0.0-beta.7"
+        "5.0.0-beta.7",
+        "5.0.0-beta.8"
       ]
     }
   ],

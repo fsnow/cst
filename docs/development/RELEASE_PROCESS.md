@@ -25,7 +25,7 @@ This document describes the complete process for releasing a new version of CST 
 The release process consists of six main steps, **in this order**:
 1. **Create the GitHub release AS A DRAFT**, with release notes — before anything is built
 2. **Build packages and attach each one to the draft as it is produced** — macOS (build + notarize on
-   Caracara), Windows (build on a Windows machine)
+   Kestrel or Caracara), Windows (build on a Windows machine)
 3. **Download from the draft onto each test machine** and run the validation pass
 4. **Tag the tested commit**, then **publish** the release (flip draft → published)
 5. **Post-publish: update `welcome-updates.json`** to notify users
@@ -72,8 +72,8 @@ architectures cross-build fine from a single host of the right OS.
 
 | Platform | Arch  | Build on              | Test on           | Artifacts |
 |----------|-------|-----------------------|-------------------|-----------|
-| macOS    | arm64 | Caracara (Intel)      | Egret / Kestrel   | `CST-Reader-arm64.dmg` (notarized) |
-| macOS    | x64   | Caracara              | Caracara          | `CST-Reader-x64.dmg` (notarized) |
+| macOS    | arm64 | Kestrel or Caracara   | Egret / Kestrel   | `CST-Reader-arm64.dmg` (notarized) |
+| macOS    | x64   | Kestrel or Caracara   | Caracara          | `CST-Reader-x64.dmg` (notarized) |
 | Windows  | x64   | Placid (Win 10 x64 VM)| Kingfisher        | `CST-Reader-<ver>-win-x64-setup.exe`, `…-win-x64-portable.zip` |
 | Windows  | arm64 | Placid                | Merlin (arm64 VM) | `CST-Reader-<ver>-win-arm64-setup.exe`, `…-win-arm64-portable.zip` |
 
@@ -405,14 +405,16 @@ Found an error in the Pāli text itself? That is a text correction: help@tipitak
 ---
 ---
 
-## Step 2a: Build, Notarize, and Staple macOS Packages (Caracara)
+## Step 2a: Build, Notarize, and Staple macOS Packages (Kestrel or Caracara)
 
-**Machine:** Caracara (macOS build machine with notarization credentials)
+**Machine:** Kestrel or Caracara. Either Mac builds both architectures and holds the notarization
+credentials. Beta 9's DMGs were built, notarized and stapled on Kestrel (2026-11-17), the first since its
+stapling failure was fixed (#1081).
 
 ### Pull Latest Code
 
 ```bash
-# Ensure Caracara has latest code
+# Ensure the build Mac has latest code
 git checkout main
 git pull
 ```
@@ -454,7 +456,7 @@ After building, run the notarization script:
 4. **Staples** the notarization ticket to the DMG
 
 **Important:** This step requires:
-- Apple Developer ID certificate installed on Caracara
+- Apple Developer ID certificate installed on the build Mac
 - App-specific password for notarization API
 - Network connectivity to Apple's servers
 
