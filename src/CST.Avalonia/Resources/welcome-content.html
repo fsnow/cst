@@ -339,12 +339,12 @@
         <div class="logo"><img src="buddha-transparent.png" alt="Buddha"></div>
         <h1>CST Reader</h1>
         <p class="subtitle">A Pāli Text Reader for the Chaṭṭha Saṅgāyana Tipiṭaka</p>
-        <p class="version">Version 5.0.0-beta.9 &bull; October 2026</p>
+        <p class="version">Version 5.0.0-beta.9 &bull; November 2026</p>
     </div>
 
     <div class="beta-notice">
-        <strong>Upgrading from Beta 5, 6 or 7? Nothing to do.</strong>
-        <p>Install over the top. Your settings, layout, open books and downloaded dictionaries carry across.</p>
+        <strong>Upgrading from Beta 5, 6, 7 or 8? Nothing to do.</strong>
+        <p>Install over the top. Your settings, layout, open books and downloaded dictionaries carry across. On first launch the search index is rebuilt once, which takes a few minutes.</p>
         <p style="margin-top: 8px;"><strong>Coming from Beta 4 or earlier:</strong> delete your CST Reader data directory first &mdash; the search index changed in Beta 5 and an older one will not be read correctly.</p>
         <p style="margin-top: 8px;"><strong>macOS:</strong> <code>~/Library/Application Support/CSTReader/</code> &nbsp;&bull;&nbsp; <strong>Windows:</strong> <code>%APPDATA%\CSTReader\</code></p>
     </div>
@@ -354,24 +354,20 @@
         <p>Thank you for testing CST Reader! Your feedback will help shape the final release.</p>
 
         <h3 style="margin-top: 24px; margin-bottom: 16px;">Focus Areas</h3>
-        <p>Beta 5 reached feature parity with CST4. Beta 8 lets the AI Assistant hold a conversation and keep it, and brings word roots into the Digital Pāḷi Dictionary. These are the newest areas &mdash; feedback on them is especially valuable:</p>
+        <p>Beta 9 brings Sanskrit letters to every script, and adds Odia. These are the newest areas &mdash; feedback on them is especially valuable:</p>
 
         <div class="focus-item">
-            <strong>AI Assistant conversations &mdash; new in Beta 8</strong>
+            <strong>Sanskrit letters &mdash; new in Beta 9</strong>
             <ul>
-                <li>Ask a follow-up &mdash; &ldquo;what did you mean by the third word?&rdquo; &mdash; and the answer takes the earlier ones into account</li>
-                <li>Quit and relaunch: your last conversation is where you left it</li>
-                <li>The <strong>+</strong> button starts a new conversation without losing the old one; the list beside it switches, renames and deletes them</li>
-                <li><strong>Compact</strong> summarises the earlier turns of a long conversation for the model and keeps the last four as they were; it also happens automatically as a conversation nears the model's limit (Settings &rsaquo; AI)</li>
+                <li>ś, ṣ, ṛ, ai, au and visarga (ḥ) display in every script, and search finds them</li>
+                <li>A word-final consonant (a visible halant) now shows in Myanmar and Khmer</li>
             </ul>
-            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">This is the least-tested part of the release. Anything that looks wrong is worth reporting.</p>
         </div>
 
         <div class="focus-item">
-            <strong>Dictionary roots &mdash; new in Beta 8</strong>
+            <strong>Odia &mdash; new in Beta 9</strong>
             <ul>
-                <li>A Digital Pāḷi Dictionary entry now shows the word's root, linked</li>
-                <li>Look a root up directly: <code>&radic;var</code> finds &radic;var 1 and &radic;var 2, with their meanings and the words built on them</li>
+                <li>The fifteenth script: choose it from the script dropdown, and type in it in Search</li>
             </ul>
         </div>
 
@@ -451,9 +447,7 @@
         <ul>
             <li>The texts are presented in Pāli only &mdash; CST Reader does not include translations. The built-in dictionaries give the meaning of individual words.</li>
             <li>Menus and dialogs are English only. CST4 offers 24 interface languages; that work is still ahead.</li>
-            <li>macOS: idle CPU is higher than it should be, from a framework-level timer amplified by the text view. Beta 6 reduces how often that timer fires; the underlying issue is not ours to fix and is not yet closed</li>
-            <li>The AI Assistant can read a selection of roughly 1,100 characters in Devanāgarī, Myanmar and other non-Latin scripts, or about 2,900 in Latin. Beyond that the answer covers the surrounding passage instead, and says so</li>
-        </ul>
+            <li>macOS: idle CPU is higher than it should be, from a framework-level timer amplified by the text view. Beta 6 reduces how often that timer fires; the underlying issue is not ours to fix and is not yet closed</li>        </ul>
     </div>
 
     <div class="collapsible">
@@ -467,7 +461,7 @@
 
     <div class="update-note">
         <p>This welcome page updates automatically with new releases.</p>
-        <p>CST Reader 5.0.0-beta.9 • October 2026</p>
+        <p>CST Reader 5.0.0-beta.9 • November 2026</p>
     </div>
 </body>
 </html>
