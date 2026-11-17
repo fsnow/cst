@@ -2,13 +2,15 @@
 
 This document describes the complete process for releasing a new version of CST Reader.
 
-**Last Updated:** October 7, 2026
+**Last Updated:** November 16, 2026
 **Current Version:** 5.0.0-beta.9 (in development; Beta 8 released 2026-10-07)
 
-> **Clean-start status for Beta 9: none needed from Beta 5–8, so far** [observed 2026-10-07, at the
-> opening of the cycle]. Nothing in `src/CST.Lucene`, `src/CST.Lexicon`, or the indexing and search
-> services has changed since `v5.0.0-beta.8`, so the search index and its tokenizer are as Beta 5 left
-> them. **Beta 4 and earlier still need a wipe** (the Beta 5 index-offset change, #53). Re-derive this at the start of each cycle rather than carrying the line forward: a
+> **Clean-start status for Beta 9: none needed from Beta 5–8, but the index rebuilds once** [observed
+> 2026-11-16]. IPE version 2 (#1049) renumbered the encoding the index is built in. That needs no wipe:
+> `IndexIpeStamp` sees an index built with another IPE version, then deletes and rebuilds it on first launch,
+> and the state file's 1.0 → 2 migration rewrites stored search terms. The release notes and welcome page
+> say the first launch rebuilds the index. **Beta 4 and earlier still need a wipe** (the Beta 5
+> index-offset change, #53). Re-derive this at the start of each cycle rather than carrying the line forward: a
 > tokenizer or index-format change is what flips it to a mandatory clean start, because no migration can
 > absorb that one.
 >
