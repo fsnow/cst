@@ -2,7 +2,7 @@
 
 CST Reader is a cross-platform application for reading and searching the Pāli Tipiṭaka. CST Reader 5 is a ground-up rewrite of the Windows-only CST4, built on .NET 10 and Avalonia UI.
 
-**Status: 5.0.0-beta.8 (October 2026).** CST 5 matches or exceeds CST4 in features, apart from interface localization (see [Known Gaps](#known-gaps)). It adds an AI Assistant you can ask about the text you are reading, with your choice of AI provider; Beta 8 keeps your conversations with it, and Digital Pāḷi Dictionary entries now show the word's root.
+**Status: 5.0.0-beta.9 (November 2026).** CST 5 matches or exceeds CST4 in features, apart from interface localization (see [Known Gaps](#known-gaps)). It adds an AI Assistant you can ask about the text you are reading, with your choice of AI provider. Beta 9 displays Sanskrit letters in every script and adds Odia.
 
 CST Reader presents the Tipiṭaka **in Pāli**, rendered in 15 scripts. It does not include translations of the texts; the built-in dictionaries give the meaning of individual words. If you connect an AI model, the optional [AI Assistant](#ai) can translate a passage you select — a translation written by that model on request, not one supplied with the app.
 
@@ -62,7 +62,6 @@ No AI feature is available until it is turned on in **Settings ▸ AI**.
 
 - **The interface is English only.** CST4 offers 24 interface languages; that work is still ahead and needs both a localization system and the translations themselves.
 - **Text zoom can leak between scripts.** Zooming one book can re-render a book in another script at the wrong size; setting the zoom again on that book corrects it ([#959](https://github.com/fsnow/cst/issues/959)).
-- **Very long selections and the AI Assistant.** A selection longer than roughly 1,100 characters in a non-Latin script (about 2,900 in Latin) is more than can be passed to the AI Assistant; the answer then covers the surrounding passage instead, and says so ([#827](https://github.com/fsnow/cst/issues/827)).
 - **Elevated idle CPU on macOS**, from Avalonia's macOS event loop amplified by CEF rather than specific to CST Reader; Beta 6 reduced it, but it is not yet fixed ([#523](https://github.com/fsnow/cst/issues/523)).
 
 ## Text Data
