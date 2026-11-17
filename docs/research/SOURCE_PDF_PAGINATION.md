@@ -82,6 +82,11 @@ Two categories were excluded deliberately:
   pages, so `s0504m` and `s0505m` carry 99 entries of 219.
 - **A printed page number can be wrong.** In the same scan, print 275 is labelled "279". Map by content,
   not by the number on the page.
+- **A scan can put two printed pages on one PDF page.** [fsnow, 2026-11-17: "vin08t.nrf.xml PDF has 2
+  pages wide scan. we haven't handled that case yet and won't for this release"] `PdfPageFor` assumes one
+  printed page per PDF page, so `vin08t` (`Vinayalankara Tika Part - 1.pdf`) and `vin12t` (`Pacityadiyojanapali-1-2.pdf`, the
+  same kind of scan, fsnow 2026-11-17) stay at the placeholder start page 1.
+  Supporting it needs a pages-per-PDF-page factor on `Source`, which nothing has yet.
 
 ---
 
