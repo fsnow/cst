@@ -135,7 +135,7 @@
          behind a Windows condition so the macOS/Linux builds still COMPILE the Windows path - the API throws
          PlatformNotSupportedException off Windows, and every call site here is OS-gated. A conditional
          reference would let a change break the Windows build from a Mac without anyone noticing. -->
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.15" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />

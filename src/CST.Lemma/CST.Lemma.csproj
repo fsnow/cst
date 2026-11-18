@@ -15,9 +15,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
     <!-- Pin patched native SQLite (3.0.3) to clear the 2.1.11 advisory GHSA-2m69-gcr7-jv3q that
-         Microsoft.Data.Sqlite 10.0.9 pulls transitively. Verified runtime-compatible via the tests. -->
+         Microsoft.Data.Sqlite 10.0.15 still pulls transitively (as 2.1.13). Verified runtime-compatible via the tests. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
   </ItemGroup>
 
