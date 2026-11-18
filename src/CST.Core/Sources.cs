@@ -231,7 +231,7 @@ public class Sources
 	private const string Tik_Vin_KankhaPurana_1957 = "Kaṅkhāvitaraṇī purāṇa-abhinava-ṭīkā.pdf";
 	private const string Tik_Vin_Vinayavinicchaya_1957 = "Vinayavinicchayo-uttaravinicchayo.pdf";
 	private const string Tik_Vin_VinayavinicchayaTika1_1957 = "Vinayavinicchaya Tika Part 1.pdf";
-	private const string Tik_Vin_VinayavinicchayaTika2_1957 = "Vinayavinicchaya Tika Part 2.pdf"; // vin11t vol. 2, unmapped until #546
+	private const string Tik_Vin_VinayavinicchayaTika2_1957 = "Vinayavinicchaya Tika Part 2.pdf"; // vin11t vol. 2, unmapped until #546. Starts at PDF page 9; print 500-501 are placeholder pages, so no MissingPages.
 	private const string Tik_Vin_Pacityadiyojana_1957 = "Pacityadiyojanapali-1-2.pdf";
 	private const string Tik_Vin_Khuddasikkha_1957 = "Khuddasikkhā-mūlasikkhā.pdf";
 	private const string Tik_Abh_Abhidhammavatara_1957 = "Abhidhammavatara etc..pdf";
@@ -680,17 +680,17 @@ public class Sources
 		addSource("e0813n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/14. Bālāvatāra gaṇṭhipadatthavinicchayasāra.pdf");
 
 		// Nīti. e1002 (Nītimañjarī), e1005 (Lokanīti), e1006 (Suttantanīti) have no PDF.
-		addSource("e1001n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/6. Kavidappaṇanīti.pdf");
-		addSource("e1003n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/5. Dhammanīti.pdf");
-		addSource("e1004n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/4. Mahārahanīti.pdf");
-		addSource("e1007n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/3. Sūrassatinīti.pdf");
-		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti.pdf");
-		addSource("e1009n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/8. Naradakkhadīpanī.pdf");
-		addSource("e1010n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/9. Caturārakkhadīpanī and Kāyapaccavekkhana.pdf");
+		addSource("e1001n.nrf.xml", SourceType.BurmeseAnya, 31, $"{BurmeseAnyaNiti}/6. Kavidappaṇanīti.pdf");
+		addSource("e1003n.nrf.xml", SourceType.BurmeseAnya, 3, $"{BurmeseAnyaNiti}/5. Dhammanīti.pdf");
+		addSource("e1004n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaNiti}/4. Mahārahanīti.pdf");
+		addSource("e1007n.nrf.xml", SourceType.BurmeseAnya, 10, $"{BurmeseAnyaNiti}/3. Sūrassatinīti.pdf");
+		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 5, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti.pdf");
+		addSource("e1009n.nrf.xml", SourceType.BurmeseAnya, 14, $"{BurmeseAnyaNiti}/8. Naradakkhadīpanī.pdf");
+		addSource("e1010n.nrf.xml", SourceType.BurmeseAnya, 27, $"{BurmeseAnyaNiti}/9. Caturārakkhadīpanī and Kāyapaccavekkhana.pdf");
 
 		// Pakiṇṇaka. e1102 (Sīmavisodhanī) has no PDF.
-		addSource("e1101n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaPakinnaka}/1. Rasavāhinī.pdf");
-		addSource("e1103n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaPakinnaka}/3. Vessantaragīti.pdf");
+		addSource("e1101n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaPakinnaka}/1. Rasavāhinī.pdf");
+		addSource("e1103n.nrf.xml", SourceType.BurmeseAnya, 10, $"{BurmeseAnyaPakinnaka}/3. Vessantaragīti.pdf");
 
 		// Sīhaḷa. e1203 (Dāṭhāvaṃsa) + e1205 (Dhātuvaṃsa) share one combined PDF. The other 11 texts have no PDF.
 		// These four carry no Myanmar page markers, only ed="O", so they are mapped by their O pages. (#1100)

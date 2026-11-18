@@ -87,6 +87,10 @@ Two categories were excluded deliberately:
   printed page per PDF page, so `vin08t` (`Vinayalankara Tika Part - 1.pdf`) and `vin12t` (`Pacityadiyojanapali-1-2.pdf`, the
   same kind of scan, fsnow 2026-11-17) stay at the placeholder start page 1.
   Supporting it needs a pages-per-PDF-page factor on `Source`, which nothing has yet.
+- **A missing page can be replaced by a placeholder.** [observed, tester's start-page sheet, 2026-11-18]
+  The 1957 Vinayavinicchaya Tika Part 2 (`vin11t` vol. 2) lacks print pages 500–501, and two placeholder
+  pages fill the gap. The page count stays aligned, so unlike the Netti case these need no `MissingPages`
+  entry. Volume 2 starts at PDF page 9; it is mapped once #546 lands.
 
 ---
 

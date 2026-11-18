@@ -375,18 +375,103 @@ Path: `01 - Burmese-CST/Anya/1. Visuddhimagga/`
 
 ---
 
-## Unmapped Anya Folders
+## Anya Groups 2–9
 
-The following Anya folders have not yet been mapped to XML files:
+Mapped in #418. Twenty-five Anya books have no source PDF and are not listed. Sīhaḷa books carry no Myanmar page markers and are mapped by their O pages (#1100).
 
-- 2. Saṅgāyana-puccha vissajjanā
-- 3. Leḍī sayāḍo gantha-saṅgaho
-- 4. Buddha-vandanā gantha-saṅgaho
-- 5. Vaṃsa-gantha-saṅgaho
-- 6. Byākaraṇa gantha-saṅgaho
-- 7. Nīti-gantha-saṅgaho
-- 8. Pakiṇṇaka-gantha-saṅgaho
-- 9. Sihaḷa-gantha-saṅgaho
+### 2. Saṅgāyana-puccha vissajjanā
+
+Path: `01 - Burmese-CST/Anya/2. Saṅgāyana-puccha vissajjanā/`
+
+| XML File | PDF File | startPage | Description |
+|----------|----------|-----------|-------------|
+| e0901n.nrf.xml | 1. Dīghanikāya (Pu-Vi).pdf | 18 |  |
+| e0902n.nrf.xml | 2. Majjhimanikāya (Pu-Vi)_Vol 1.pdf | 12 | Vol 1 only (#76) |
+| e0903n.nrf.xml | 3. Saṃyuttanikāya (Pu-Vi)_Vol 1.pdf | 15 | Vol 1 only (#76) |
+| e0904n.nrf.xml | 4. Aṅguttaranikāya (Pu-Vi)_Vol 1.pdf | 20 | Vol 1 only (#76) |
+| e0905n.nrf.xml | 5. Vinayapiṭaka (Pu-Vi)_Vol 1.pdf | 15 | Vol 1 only (#76) |
+| e0906n.nrf.xml | 6. Abhidhammapiṭaka (Pu-Vi).pdf | 8 |  |
+
+### 3. Leḍī sayāḍo gantha-saṅgaho
+
+Path: `01 - Burmese-CST/Anya/3. Leḍī sayāḍo gantha-saṅgaho/`
+
+| XML File | PDF File | startPage | Description |
+|----------|----------|-----------|-------------|
+| e0201n.nrf.xml | 1. Niruttidīpanī.pdf | 112 |  |
+| e0401n.nrf.xml | 3. Anudīpanīpāṭha.pdf | 8 |  |
+| e0501n.nrf.xml | 4. Paṭṭhānuddesa dīpanīpāṭha_printed.pdf | 176 |  |
+
+### 4. Buddha-vandanā gantha-saṅgaho
+
+Path: `01 - Burmese-CST/Anya/4. Buddha-vandanā gantha-saṅgaho/`
+
+| XML File | PDF File | startPage | Description |
+|----------|----------|-----------|-------------|
+| e0601n.nrf.xml | 1. Namakkāraṭīkā.pdf | 14 |  |
+| e0602n.nrf.xml | 2. Mahāpaṇāmapāṭha.pdf | 4 |  |
+
+### 5. Vaṃsa-gantha-saṅgaho
+
+Path: `01 - Burmese-CST/Anya/5. Vaṃsa-gantha-saṅgaho/`
+
+| XML File | PDF File | startPage | Description |
+|----------|----------|-----------|-------------|
+| e0702n.nrf.xml | 3. Sāsanavaṃsappadīpikā.pdf | 16 |  |
+| e0703n.nrf.xml | 2. Mahāvaṃsa (Vol-1).pdf | 7 | Vol 1 only (#76) |
+
+### 6. Byākaraṇa gantha-saṅgaho
+
+Path: `01 - Burmese-CST/Anya/6. Byākaraṇa gantha-saṅgaho/`
+
+| XML File | PDF File | startPage | Description |
+|----------|----------|-----------|-------------|
+| e0801n.nrf.xml | 2. Moggallānabyākaraṇaṃ.pdf | 17 |  |
+| e0802n.nrf.xml | 1. Kaccāyanabyākaraṇaṃ_1990.pdf | 17 |  |
+| e0803n.nrf.xml | 3. Saddanītippakaraṇaṃ (padamālā).pdf | 5 |  |
+| e0804n.nrf.xml | 4. Saddanītippakaraṇaṃ (dhātumālā).pdf | 15 |  |
+| e0805n.nrf.xml | 6. Padarūpasiddhi.pdf | 36 |  |
+| e0806n.nrf.xml | 7. Moggallānapañcikā.pdf | 4 |  |
+| e0807n.nrf.xml | 8. Payogasiddhipāṭha.pdf | 17 |  |
+| e0808n.nrf.xml | 9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf | 249 | Shared PDF with e0809n, e0811n |
+| e0809n.nrf.xml | 9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf | 9 | Shared PDF with e0808n, e0811n |
+| e0810n.nrf.xml | 11. Abhidhānappadīpikāṭīkā.pdf | 21 |  |
+| e0811n.nrf.xml | 9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf | 213 | Shared PDF with e0808n, e0809n; no PDF button appears (#842) |
+| e0813n.nrf.xml | 14. Bālāvatāra gaṇṭhipadatthavinicchayasāra.pdf | 1 | Placeholder: Part 1 text opens the Part 2 PDF (#841) |
+
+### 7. Nīti-gantha-saṅgaho
+
+Path: `01 - Burmese-CST/Anya/7. Nīti-gantha-saṅgaho/`
+
+| XML File | PDF File | startPage | Description |
+|----------|----------|-----------|-------------|
+| e1001n.nrf.xml | 6. Kavidappaṇanīti.pdf | 31 |  |
+| e1003n.nrf.xml | 5. Dhammanīti.pdf | 3 |  |
+| e1004n.nrf.xml | 4. Mahārahanīti.pdf | 7 |  |
+| e1007n.nrf.xml | 3. Sūrassatinīti.pdf | 10 |  |
+| e1008n.nrf.xml | 10. Cāṇakyanīti.pdf | 5 |  |
+| e1009n.nrf.xml | 8. Naradakkhadīpanī.pdf | 14 |  |
+| e1010n.nrf.xml | 9. Caturārakkhadīpanī and Kāyapaccavekkhana.pdf | 27 | Page numbers may drift from this scan further in (tester report, 2026-11) |
+
+### 8. Pakiṇṇaka-gantha-saṅgaho
+
+Path: `01 - Burmese-CST/Anya/8. Pakiṇṇaka-gantha-saṅgaho/`
+
+| XML File | PDF File | startPage | Description |
+|----------|----------|-----------|-------------|
+| e1101n.nrf.xml | 1. Rasavāhinī.pdf | 15 |  |
+| e1103n.nrf.xml | 3. Vessantaragīti.pdf | 10 |  |
+
+### 9. Sihaḷa-gantha-saṅgaho
+
+Path: `01 - Burmese-CST/Anya/9. Sihaḷa-gantha-saṅgaho/`
+
+| XML File | PDF File | startPage | Description |
+|----------|----------|-----------|-------------|
+| e1201n.nrf.xml | 1. Moggallāna vuttivivaraṇapañcikā (with Moggallānabyākaraṇaṃ).pdf | 48 | O pages (#1100) |
+| e1203n.nrf.xml | 3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf | 15 | Shared PDF with e1205n; O pages (#1100) |
+| e1205n.nrf.xml | 3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf | 145 | Shared PDF with e1203n; O pages (#1100) |
+| e1209n.nrf.xml | 9. Telakaṭāhagāthā Pali Burmese English.pdf | 20 | O pages (#1100) |
 
 ---
 
