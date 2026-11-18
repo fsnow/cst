@@ -261,7 +261,7 @@ Path: `01 - Burmese-CST/1957 edition/4 - Atthakatha/`
 
 | XML File | PDF File | startPage |
 |----------|----------|-----------|
-| s0501a.att.xml | Khuddakapāṭha-aṭṭhakathā.pdf | 4 |
+| s0501a.att.xml | Khuddakapāṭha-aṭṭhakathā.pdf | 17 |
 | s0502a.att.xml | Dhammapada-aṭṭhakathā-1.pdf | 8 |
 | s0503a.att.xml | Udāna-aṭṭhakathā.pdf | 7 |
 | s0504a.att.xml | Itivuttaka-aṭṭhakathā.pdf | 8 |
