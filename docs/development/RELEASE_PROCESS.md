@@ -21,7 +21,7 @@ This document describes the complete process for releasing a new version of CST 
 
 ## Overview
 
-The release process consists of six main steps, **in this order**:
+The release process consists of seven main steps, **in this order**:
 1. **Create the GitHub release AS A DRAFT**, with release notes — before anything is built
 2. **Build packages and attach each one to the draft as it is produced** — macOS (build + notarize on
    Kestrel or Caracara), Windows (build on a Windows machine)
@@ -29,6 +29,7 @@ The release process consists of six main steps, **in this order**:
 4. **Tag the tested commit**, then **publish** the release (flip draft → published)
 5. **Post-publish: update `welcome-updates.json`** to notify users
 6. **Post-publish: update `README.md`** to the newly released version
+7. **Post-publish: mark the previous release as superseded** in its release notes
 
 ### Why the draft comes first
 
@@ -61,7 +62,7 @@ depend on that order:
   the release page. Push it while the release is still a draft and you have announced a release that
   users cannot download. Same for `README.md`.
 
-So steps 5 and 6 are **post-publish by definition**, not merely last. See "Version strings: two timing
+So steps 5–7 are **post-publish by definition**, not merely last. See "Version strings: two timing
 buckets" below for which files move when.
 
 ### Shipping matrix
@@ -821,6 +822,27 @@ git commit -m "README: update for Beta N"
 git push
 ```
 
+## Step 7: Mark the Previous Release as Superseded
+
+Once the new release is published, add a notice to the top of the **previous** release's notes. Every
+earlier release already has one.
+
+[fsnow, 2026-11-17] The notice is generic: "I would give a generic message about looking for the latest
+rather than linking to the current one." It links to the Releases list, so it never needs updating
+again.
+
+Old releases keep their downloads. Nothing is deleted.
+
+```bash
+PREV=v5.0.0-beta.N   # the release before the one just published
+gh release view "$PREV" --json body --jq .body > prev-notes.md
+{ printf '> [!WARNING]\n> **This version has been superseded.** Please download the latest version from the [Releases page](https://github.com/fsnow/cst/releases).\n\n'
+  cat prev-notes.md; } > prev-notes-new.md
+gh release edit "$PREV" --notes-file prev-notes-new.md
+```
+
+Check first that the notice is not already there, so it isn't added twice.
+
 ---
 
 ## Post-Release Verification
@@ -832,6 +854,7 @@ After completing all steps, verify:
 - [ ] Release is marked as pre-release (for betas)
 - [ ] `welcome-updates.json` (repo ROOT) is committed and pushed — Step 5
 - [ ] `README.md` states the version just published — Step 6
+- [ ] The previous release's notes start with the superseded notice — Step 7
 - [ ] App shows correct version when launched from DMG
 - [ ] Update notification appears for users on older versions (test with old version if possible)
 
@@ -976,6 +999,8 @@ git push origin v5.0.0-beta.X
 
 ## Document History
 
+- **2026-11-17:** Added **Step 7**, which marks the previous release as superseded. Betas 1–8 were marked
+  the same day.
 - **2026-08-02:** Opened the Beta 6 cycle. Split the version strings into **two timing buckets** — those
   bumped at the *start* of a cycle vs. those updated only *after* the release is published — after the
   old single list proved incomplete (`README.md` was missing entirely) and timing-blind. Added `README.md`
