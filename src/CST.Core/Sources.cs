@@ -531,7 +531,7 @@ public class Sources
 		addSource("s0511a.att.xml", SourceType.Burmese1957, 5, $"{Burmese1957Atthakatha}/{Att_KN_Buddhavamsa_1957}");
 		addSource("s0512a.att.xml", SourceType.Burmese1957, 5, $"{Burmese1957Atthakatha}/{Att_KN_Cariyapitaka_1957}");
 		addSource("s0513a1.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_KN_Jataka1_1957}");
-		addSource("s0513a2.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Jataka2_1957}");
+		addSource("s0513a2.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_KN_Jataka2_1957}");
 		addSource("s0513a3.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_KN_Jataka3_1957}");
 		addSource("s0513a4.att.xml", SourceType.Burmese1957, 8, $"{Burmese1957Atthakatha}/{Att_KN_Jataka4_1957}");
 		addSource("s0514a1.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_KN_Jataka5_1957}");
