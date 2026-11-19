@@ -135,7 +135,7 @@ CEF automatically discovers variant helpers (GPU, Plugin, Renderer) based on mai
 
 ## WebViewControl-Avalonia Package Limitations
 
-The `WebViewControl-Avalonia` package (version 3.120.9) used in this project:
+The `WebViewControl-Avalonia` package used in this project (version in `CST.Avalonia.csproj`):
 - Is a wrapper around CefGlue (which wraps CEF)
 - Does **NOT** automatically create required Helper app bundles for macOS
 - Provides `CefGlueBrowserProcess/` as flat directory with helper executable
