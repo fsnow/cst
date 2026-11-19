@@ -63,7 +63,9 @@ Two categories were excluded deliberately:
   and 157 of the Netti book are missing from the PDF. Not blank pages."] Listed in `MissingPages`
   (#1101), so navigation after them is right; the two pages themselves cannot be shown, and a request
   for either lands on print page 158. Pages like these only turn up when someone checks the scan
-  against the print.
+  against the print. The 1957 Jātaka-aṭṭhakathā-7 scan (`s0514a3`) is a second case: it lacks print pages
+  2 and 3, which have XML markers. [fsnow, 2026-11-19: "The s0514a3.att.xml PDF is missing its print
+  pages 2 and 3"] Listed in `MissingPages` with the seeded 150.
 - **The derivation is a correlation, not proof.** An XML gap could be a *dropped marker* rather than a
   blank leaf, in which case we subtract where we shouldn't. That failure looks like a page that was
   right before and is now one *early*.
