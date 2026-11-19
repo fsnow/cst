@@ -129,8 +129,18 @@ all** (RID-mismatched natives are silently dropped) and every book view fails at
 As of Beta 5 the solution targets `net10.0` (.NET 9 reached end of support; see #48). Verify before building:
 
 ```bash
-dotnet --list-sdks   # expect a 10.0.x entry
+dotnet --list-sdks   # expect 10.0.404 or later 10.0.x
+dotnet --version     # from the repo root: the SDK global.json selects
 ```
+
+**`global.json` pins the SDK** (#1126). It names `10.0.404` with `rollForward: latestFeature`, so any installed
+10.0 SDK at 10.0.404 or later is used and an 11.x SDK never is. Without it, the newest SDK on the machine
+builds the release. A machine with no matching SDK fails with a clear message instead of using another
+major version. When a newer 10.0 servicing release ships, install it on every build machine; raise the
+pinned `version` only if an older one must stop being accepted.
+
+The SDK decides which runtime a self-contained build bundles. SDK 10.0.404 bundles runtime 10.0.15. Keep the
+build machines on the same SDK, or the Mac and Windows packages of one release carry different runtimes.
 
 If missing, install via the official `.pkg` from https://dotnet.microsoft.com/download/dotnet/10.0
 (Apple-Silicon installer on Kestrel, Intel installer on Caracara). No workloads are required — the MAUI POC
