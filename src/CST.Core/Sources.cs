@@ -504,7 +504,7 @@ public class Sources
 		addSource("s0203a.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_MN_Uparipannasa_1957}");
 
 		// --- SN Atthakatha ---
-		addSource("s0301a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_SN_Sagathavagga_1957}");
+		addSource("s0301a.att.xml", SourceType.Burmese1957, 24, $"{Burmese1957Atthakatha}/{Att_SN_Sagathavagga_1957}");
 		addSource("s0302a.att.xml", SourceType.Burmese1957, 18, $"{Burmese1957Atthakatha}/{Att_SN_NidanaKhandha_1957}");
 		addSource("s0303a.att.xml", SourceType.Burmese1957, 17, $"{Burmese1957Atthakatha}/{Att_SN_NidanaKhandha_1957}");
 		addSource("s0304a.att.xml", SourceType.Burmese1957, 23, $"{Burmese1957Atthakatha}/{Att_SN_SalayatanaMaha_1957}");
