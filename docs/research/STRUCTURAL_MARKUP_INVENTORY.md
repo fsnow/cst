@@ -1,6 +1,6 @@
 # Structural markup inventory: corpus `<div>` coverage
 
-**Status:** research, part of the book-relationships epic (#422). **Generated:** 2026-10-21 by `structural_markup_inventory.py`, from tipitaka-xml `deva master` at `3879295` and `Books.cs` at `afb9a98`.
+**Status:** research, part of the book-relationships epic (#422). **Generated:** 2026-11-21 by `structural_markup_inventory.py`, from tipitaka-xml `deva master` at `f206c3c0` and `Books.cs` (working copy).
 
 Related: [book-relationships/markup-conventions.md](book-relationships/markup-conventions.md) describes the markup and records the decisions for adding it; [book-relationships/README.md](book-relationships/README.md) is the epic's working doc.
 
@@ -25,7 +25,7 @@ Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical
 
 ## Summary
 
-**78 of 217 books are marked**, 139 unmarked.
+**125 of 217 books are marked**, 92 unmarked.
 
 | Group | Layer | marked | partial | book-only | unmarked | total |
 |---|---|---:|---:|---:|---:|---:|
@@ -42,19 +42,19 @@ Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical
 | AN | aṭṭhakathā | 4 | 0 | 0 | 0 | 4 |
 | AN | ṭīkā | 4 | 0 | 0 | 0 | 4 |
 | KN | mūla | 21 | 0 | 0 | 0 | 21 |
-| KN | aṭṭhakathā | 0 | 0 | 0 | 24 | 24 |
-| KN | ṭīkā | 0 | 0 | 0 | 2 | 2 |
+| KN | aṭṭhakathā | 24 | 0 | 0 | 0 | 24 |
+| KN | ṭīkā | 2 | 0 | 0 | 0 | 2 |
 | Vinaya | mūla | 5 | 0 | 0 | 0 | 5 |
 | Vinaya | aṭṭhakathā | 0 | 0 | 0 | 5 | 5 |
 | Vinaya | ṭīkā | 0 | 0 | 0 | 13 | 13 |
-| Abhidhamma | mūla | 0 | 0 | 0 | 13 | 13 |
-| Abhidhamma | aṭṭhakathā | 0 | 0 | 0 | 3 | 3 |
-| Abhidhamma | ṭīkā | 0 | 0 | 0 | 9 | 9 |
+| Abhidhamma | mūla | 13 | 0 | 0 | 0 | 13 |
+| Abhidhamma | aṭṭhakathā | 3 | 0 | 0 | 0 | 3 |
+| Abhidhamma | ṭīkā | 5 | 0 | 0 | 4 | 9 |
 | añña | | 0 | 0 | 0 | 68 | 68 |
 
 ## Div types present
 
-`book` (78)  `vagga` (36)  `samyutta` (15)  `pannasaka` (15)  `peyyala` (11)  `sutta` (9)  `chapter` (8)  `nipata` (5)  `kanda` (2)  `khandaka` (2)  `intro` (2)  `vimana` (1)  `subbook` (1) (number of books with that type)
+`book` (125)  `vagga` (47)  `chapter` (20)  `nipata` (16)  `samyutta` (15)  `pannasaka` (15)  `peyyala` (11)  `sutta` (9)  `matika` (9)  `vara` (9)  `niddesa` (8)  `method` (8)  `patthana` (8)  `intro` (8)  `kanda` (6)  `yamaka` (6)  `tika` (5)  `section` (4)  `naya` (4)  `pannatti` (4)  `katha` (4)  `paccaya` (4)  `vibhanga` (3)  `bhajaniya` (3)  `vimana` (2)  `khandaka` (2)  `gocchaka` (2)  `subbook` (1)  `uddesa` (1) (number of books with that type)
 
 ## Mismatches with `ChapterListTypes`
 
@@ -62,17 +62,31 @@ Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical
 
 *Marked books that declare a type they lack.* The book has sections; the extra type has none to list.
 
-- `s0404a.att.xml`: declares `book,pannasaka,vagga,peyyala`, lacks `peyyala`
-- `s0403t.tik.xml`: declares `book,pannasaka,vagga,peyyala`, lacks `peyyala`
-- `s0404t.tik.xml`: declares `book,pannasaka,vagga,peyyala`, lacks `peyyala`
+- none
 
 *Unmarked books with a placeholder list.* The book has no divs yet, but `ChapterListTypes` already names the types its markup is expected to have, so its chapter list will appear once it is marked.
 
-- `abh01m.mul.xml`: `book,chapter`
-
-**Present but not listed:** the XML has sections of a type its `ChapterListTypes` leaves out, so the chapter list skips them.
-
 - none
+
+**Present but not listed:** the XML has sections of a type its `ChapterListTypes` leaves out, so the chapter list skips them. Listing a type is not always wanted: [fsnow, 2026-10-22] "the chapter list is a reasonable size, somewhere between 5 and 50 items in most cases", and "we may exclude divisions in the chapter list types while still including them in the markup". The Abhidhamma entries below are those deliberate exclusions (the Vibhaṅga's bhājanīyas, the Kathāvatthu's kathās, the Paṭṭhāna's methods; see [markup-conventions.md](book-relationships/markup-conventions.md)).
+
+- `abh01m.mul.xml`: `matika`
+- `abh02m.mul.xml`: `bhajaniya,niddesa,vara`
+- `abh03m1.mul.xml`: `niddesa`
+- `abh03m3.mul.xml`: `katha`
+- `abh03m7.mul.xml`: `method,paccaya`
+- `abh03m8.mul.xml`: `method`
+- `abh03m9.mul.xml`: `method`
+- `abh03m10.mul.xml`: `method`
+- `abh03m11.mul.xml`: `method`
+- `abh01a.att.xml`: `matika`
+- `abh02a.att.xml`: `bhajaniya,niddesa,vara`
+- `abh03a.att.xml`: `katha,method,paccaya,patthana`
+- `abh01t.tik.xml`: `matika`
+- `abh02t.tik.xml`: `bhajaniya,niddesa,vara`
+- `abh03t.tik.xml`: `katha,method,paccaya,patthana`
+- `abh04t.nrf.xml`: `matika`
+- `abh05t.nrf.xml`: `katha,method,paccaya,patthana`
 
 ## Priorities
 
@@ -131,11 +145,11 @@ Not every unmarked book is meant to be marked. The epic's goal 6 (#422, 2026-07-
 | AN | aṭṭhakathā | `s0401a.att.xml` | marked | vagga×20 book×1 intro×1 | book,intro,vagga |
 | AN | aṭṭhakathā | `s0402a.att.xml` | marked | vagga×60 pannasaka×11 peyyala×4 book×3 | book,pannasaka,vagga,peyyala |
 | AN | aṭṭhakathā | `s0403a.att.xml` | marked | vagga×46 pannasaka×8 book×3 peyyala×1 | book,pannasaka,vagga,peyyala |
-| AN | aṭṭhakathā | `s0404a.att.xml` | marked | vagga×33 pannasaka×8 book×4 | book,pannasaka,vagga,peyyala |
+| AN | aṭṭhakathā | `s0404a.att.xml` | marked | vagga×33 pannasaka×8 book×4 | book,pannasaka,vagga |
 | AN | ṭīkā | `s0401t.tik.xml` | marked | vagga×19 book×1 intro×1 | book,intro,vagga |
 | AN | ṭīkā | `s0402t.tik.xml` | marked | vagga×58 pannasaka×11 book×3 peyyala×3 | book,pannasaka,vagga,peyyala |
-| AN | ṭīkā | `s0403t.tik.xml` | marked | vagga×42 pannasaka×8 book×3 | book,pannasaka,vagga,peyyala |
-| AN | ṭīkā | `s0404t.tik.xml` | marked | vagga×28 pannasaka×7 book×4 | book,pannasaka,vagga,peyyala |
+| AN | ṭīkā | `s0403t.tik.xml` | marked | vagga×42 pannasaka×8 book×3 | book,pannasaka,vagga |
+| AN | ṭīkā | `s0404t.tik.xml` | marked | vagga×28 pannasaka×7 book×4 | book,pannasaka,vagga |
 | KN | mūla | `s0501m.mul.xml` | marked | chapter×9 book×1 | book,chapter |
 | KN | mūla | `s0502m.mul.xml` | marked | vagga×26 book×1 | book,vagga |
 | KN | mūla | `s0503m.mul.xml` | marked | vagga×8 book×1 | book,vagga |
@@ -157,32 +171,32 @@ Not every unmarked book is meant to be marked. The epic's goal 6 (#422, 2026-07-
 | KN | mūla | `s0519m.mul.xml` | marked | chapter×6 book×1 | book,chapter |
 | KN | mūla | `s0518m.nrf.xml` | marked | chapter×5 book×1 | book,chapter |
 | KN | mūla | `s0520m.nrf.xml` | marked | chapter×8 book×1 | book,chapter |
-| KN | aṭṭhakathā | `s0501a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0502a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0503a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0504a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0505a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0506a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0507a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0508a1.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0508a2.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0509a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0510a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0511a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0512a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0513a1.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0513a2.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0513a3.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0513a4.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0514a1.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0514a2.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0514a3.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0515a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0516a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0517a.att.xml` | unmarked | — | — |
-| KN | aṭṭhakathā | `s0519a.att.xml` | unmarked | — | — |
-| KN | ṭīkā | `s0519t.tik.xml` | unmarked | — | — |
-| KN | ṭīkā | `s0501t.nrf.xml` | unmarked | — | — |
+| KN | aṭṭhakathā | `s0501a.att.xml` | marked | chapter×10 book×1 | book,chapter |
+| KN | aṭṭhakathā | `s0502a.att.xml` | marked | vagga×27 book×1 | book,vagga |
+| KN | aṭṭhakathā | `s0503a.att.xml` | marked | vagga×9 book×1 | book,vagga |
+| KN | aṭṭhakathā | `s0504a.att.xml` | marked | nipata×5 book×1 | book,nipata |
+| KN | aṭṭhakathā | `s0505a.att.xml` | marked | vagga×6 book×1 | book,vagga |
+| KN | aṭṭhakathā | `s0506a.att.xml` | marked | vimana×3 book×1 | book,vimana |
+| KN | aṭṭhakathā | `s0507a.att.xml` | marked | vagga×5 book×1 | book,vagga |
+| KN | aṭṭhakathā | `s0508a1.att.xml` | marked | nipata×4 book×1 | book,nipata |
+| KN | aṭṭhakathā | `s0508a2.att.xml` | marked | nipata×18 book×1 | book,nipata |
+| KN | aṭṭhakathā | `s0509a.att.xml` | marked | nipata×16 book×1 | book,nipata |
+| KN | aṭṭhakathā | `s0510a.att.xml` | marked | vagga×43 book×1 | book,vagga |
+| KN | aṭṭhakathā | `s0511a.att.xml` | marked | chapter×29 book×1 | book,chapter |
+| KN | aṭṭhakathā | `s0512a.att.xml` | marked | vagga×4 book×1 | book,vagga |
+| KN | aṭṭhakathā | `s0513a1.att.xml` | marked | nipata×2 book×1 | book,nipata |
+| KN | aṭṭhakathā | `s0513a2.att.xml` | marked | nipata×2 book×1 | book,nipata |
+| KN | aṭṭhakathā | `s0513a3.att.xml` | marked | nipata×6 book×1 | book,nipata |
+| KN | aṭṭhakathā | `s0513a4.att.xml` | marked | nipata×7 book×1 | book,nipata |
+| KN | aṭṭhakathā | `s0514a1.att.xml` | marked | nipata×5 book×1 | nipata |
+| KN | aṭṭhakathā | `s0514a2.att.xml` | marked | book×1 nipata×1 | book,nipata |
+| KN | aṭṭhakathā | `s0514a3.att.xml` | marked | book×1 nipata×1 | book,nipata |
+| KN | aṭṭhakathā | `s0515a.att.xml` | marked | chapter×17 book×1 | book,chapter |
+| KN | aṭṭhakathā | `s0516a.att.xml` | marked | chapter×2 book×1 | book,chapter |
+| KN | aṭṭhakathā | `s0517a.att.xml` | marked | vagga×4 book×1 | book,vagga |
+| KN | aṭṭhakathā | `s0519a.att.xml` | marked | chapter×7 book×1 | book,chapter |
+| KN | ṭīkā | `s0519t.tik.xml` | marked | chapter×7 book×1 | book,chapter |
+| KN | ṭīkā | `s0501t.nrf.xml` | marked | chapter×7 book×1 | book,chapter |
 | Vinaya | mūla | `vin01m.mul.xml` | marked | kanda×5 book×1 | book,kanda |
 | Vinaya | mūla | `vin02m1.mul.xml` | marked | kanda×11 book×1 subbook×1 | book,subbook,kanda |
 | Vinaya | mūla | `vin02m2.mul.xml` | marked | khandaka×10 book×1 | book,khandaka |
@@ -206,27 +220,27 @@ Not every unmarked book is meant to be marked. The epic's goal 6 (#422, 2026-07-
 | Vinaya | ṭīkā | `vin11t.nrf.xml` | unmarked | — | — |
 | Vinaya | ṭīkā | `vin12t.nrf.xml` | unmarked | — | — |
 | Vinaya | ṭīkā | `vin13t.nrf.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh01m.mul.xml` | unmarked | — | book,chapter |
-| Abhidhamma | mūla | `abh02m.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m1.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m2.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m3.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m4.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m5.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m6.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m7.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m8.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m9.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m10.mul.xml` | unmarked | — | — |
-| Abhidhamma | mūla | `abh03m11.mul.xml` | unmarked | — | — |
-| Abhidhamma | aṭṭhakathā | `abh01a.att.xml` | unmarked | — | — |
-| Abhidhamma | aṭṭhakathā | `abh02a.att.xml` | unmarked | — | — |
-| Abhidhamma | aṭṭhakathā | `abh03a.att.xml` | unmarked | — | — |
-| Abhidhamma | ṭīkā | `abh01t.tik.xml` | unmarked | — | — |
-| Abhidhamma | ṭīkā | `abh02t.tik.xml` | unmarked | — | — |
-| Abhidhamma | ṭīkā | `abh03t.tik.xml` | unmarked | — | — |
-| Abhidhamma | ṭīkā | `abh04t.nrf.xml` | unmarked | — | — |
-| Abhidhamma | ṭīkā | `abh05t.nrf.xml` | unmarked | — | — |
+| Abhidhamma | mūla | `abh01m.mul.xml` | marked | section×19 kanda×4 book×1 matika×1 | book,kanda,section |
+| Abhidhamma | mūla | `abh02m.mul.xml` | marked | bhajaniya×42 vibhanga×18 niddesa×12 vara×10 book×1 | book,vibhanga |
+| Abhidhamma | mūla | `abh03m1.mul.xml` | marked | naya×14 book×1 matika×1 niddesa×1 | book,matika,naya |
+| Abhidhamma | mūla | `abh03m2.mul.xml` | marked | uddesa×10 pannatti×10 book×1 matika×1 niddesa×1 | book,matika,uddesa,niddesa,pannatti |
+| Abhidhamma | mūla | `abh03m3.mul.xml` | marked | katha×218 vagga×23 book×1 | book,vagga |
+| Abhidhamma | mūla | `abh03m4.mul.xml` | marked | vara×14 yamaka×5 book×1 | book,yamaka,vara |
+| Abhidhamma | mūla | `abh03m5.mul.xml` | marked | vara×7 yamaka×3 book×1 | book,yamaka,vara |
+| Abhidhamma | mūla | `abh03m6.mul.xml` | marked | vara×6 yamaka×2 book×1 | book,yamaka,vara |
+| Abhidhamma | mūla | `abh03m7.mul.xml` | marked | tika×5 chapter×3 book×1 method×1 patthana×1 paccaya×1 | book,patthana,tika,chapter |
+| Abhidhamma | mūla | `abh03m8.mul.xml` | marked | tika×17 book×1 method×1 patthana×1 | book,patthana,tika |
+| Abhidhamma | mūla | `abh03m9.mul.xml` | marked | gocchaka×10 book×1 method×1 patthana×1 | book,patthana,gocchaka |
+| Abhidhamma | mūla | `abh03m10.mul.xml` | marked | chapter×20 patthana×3 gocchaka×2 book×1 method×1 | book,patthana,gocchaka,chapter |
+| Abhidhamma | mūla | `abh03m11.mul.xml` | marked | patthana×20 method×4 book×1 | book,patthana |
+| Abhidhamma | aṭṭhakathā | `abh01a.att.xml` | marked | section×19 kanda×4 book×1 intro×1 matika×1 | book,intro,kanda,section |
+| Abhidhamma | aṭṭhakathā | `abh02a.att.xml` | marked | bhajaniya×42 vibhanga×18 niddesa×12 vara×6 book×1 | book,vibhanga |
+| Abhidhamma | aṭṭhakathā | `abh03a.att.xml` | marked | katha×212 vagga×23 vara×20 naya×14 yamaka×10 pannatti×9 patthana×6 book×5 intro×5 tika×5 method×4 chapter×3 matika×2 niddesa×2 paccaya×1 | book,intro,matika,naya,niddesa,pannatti,vagga,yamaka,vara,tika,chapter |
+| Abhidhamma | ṭīkā | `abh01t.tik.xml` | marked | section×19 kanda×4 book×1 intro×1 matika×1 | book,intro,kanda,section |
+| Abhidhamma | ṭīkā | `abh02t.tik.xml` | marked | bhajaniya×72 vibhanga×36 niddesa×22 vara×10 book×2 | book,vibhanga |
+| Abhidhamma | ṭīkā | `abh03t.tik.xml` | marked | katha×147 vagga×23 vara×21 naya×14 yamaka×10 pannatti×8 tika×6 book×5 intro×4 chapter×3 matika×2 niddesa×2 method×1 patthana×1 paccaya×1 | book,intro,matika,naya,niddesa,pannatti,vagga,yamaka,vara,tika,chapter |
+| Abhidhamma | ṭīkā | `abh04t.nrf.xml` | marked | section×18 kanda×4 book×1 intro×1 matika×1 | book,intro,kanda,section |
+| Abhidhamma | ṭīkā | `abh05t.nrf.xml` | marked | katha×140 vagga×23 vara×21 naya×14 yamaka×10 pannatti×8 tika×6 book×5 intro×4 chapter×3 matika×2 niddesa×2 method×1 patthana×1 paccaya×1 | book,intro,matika,naya,niddesa,pannatti,vagga,yamaka,vara,tika,chapter |
 | Abhidhamma | ṭīkā | `abh06t.nrf.xml` | unmarked | — | — |
 | Abhidhamma | ṭīkā | `abh07t.nrf.xml` | unmarked | — | — |
 | Abhidhamma | ṭīkā | `abh08t.nrf.xml` | unmarked | — | — |

@@ -137,7 +137,11 @@ def main():
              "names the types its markup is expected to have, so its chapter list will appear once it is marked.\n")
     o.extend([f"- `{r['b']['file']}`: `{r['b']['chapter_list_types']}`" for r in placeholder] or ["- none"])
     o.append("\n**Present but not listed:** the XML has sections of a type its `ChapterListTypes` leaves out, so "
-             "the chapter list skips them.\n")
+             "the chapter list skips them. Listing a type is not always wanted: [fsnow, 2026-10-22] \"the chapter "
+             "list is a reasonable size, somewhere between 5 and 50 items in most cases\", and \"we may exclude "
+             "divisions in the chapter list types while still including them in the markup\". The Abhidhamma "
+             "entries below are those deliberate exclusions (the Vibhaṅga's bhājanīyas, the Kathāvatthu's kathās, "
+             "the Paṭṭhāna's methods; see [markup-conventions.md](book-relationships/markup-conventions.md)).\n")
     o.extend([f"- `{r['b']['file']}`: `{','.join(r['unlisted'])}`" for r in unl] or ["- none"])
     o.append("")
 
