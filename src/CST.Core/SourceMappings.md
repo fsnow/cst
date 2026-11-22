@@ -277,7 +277,7 @@ Path: `01 - Burmese-CST/1957 edition/4 - Atthakatha/`
 | s0513a1.att.xml | Jātaka-aṭṭhakathā-1.pdf | 10 |
 | s0513a2.att.xml | Jātaka-aṭṭhakathā-2.pdf | 10 |
 | s0513a3.att.xml | Jātaka-aṭṭhakathā-3.pdf | 10 |
-| s0513a4.att.xml | Jātaka-aṭṭhakathā-4.pdf | 8 |
+| s0513a4.att.xml | Jātaka-aṭṭhakathā-4.pdf | 7 |
 | s0514a1.att.xml | Jātaka-aṭṭhakathā-5.pdf | 6 |
 | s0514a2.att.xml | Jātaka-aṭṭhakathā-6.pdf | 4 |
 | s0514a3.att.xml | Jātaka-aṭṭhakathā-7.pdf | 4 |

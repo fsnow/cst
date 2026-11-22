@@ -81,7 +81,9 @@ Two categories were excluded deliberately:
   `Source.ExtraPagesAfter` is the counterpart of `MissingPages`: one entry per extra PDF page, naming the
   print page it follows, so `{ 95, 95 }` there. Nothing in the XML predicts these; they are found in QA.
   The 1957 KN combined scan has a long one: after print 219 it starts over at print 120, for 99 extra
-  pages, so `s0504m` and `s0505m` carry 99 entries of 219.
+  pages, so `s0504m` and `s0505m` carry 99 entries of 219. The 1957 Jātaka-aṭṭhakathā-4 scan (`s0513a4`)
+  runs 130, 131, 130, 131, 132 [fsnow, 2026-11-22: "in that PDF, pages 130 and 131 occur twice", in that
+  order], so `{ 131, 131 }`.
 - **A printed page number can be wrong.** In the same scan, print 275 is labelled "279". Map by content,
   not by the number on the page.
 - **A scan can put two printed pages on one PDF page.** [fsnow, 2026-11-17: "vin08t.nrf.xml PDF has 2
