@@ -19,7 +19,7 @@ namespace CST.Navigation
         /// <param name="books">The book catalog (e.g. <see cref="Books.Inst"/>).</param>
         /// <param name="catalog">
         /// Optional anchor catalog. When null, the resolver still normalizes references to anchors but cannot
-        /// detect <see cref="NavigationStatus.ReferenceOutOfRange"/> or disambiguate Multi-book paragraphs.
+        /// detect <see cref="NavigationStatus.ReferenceOutOfRange"/> or disambiguate a repeated paragraph number.
         /// </param>
         public NavigationResolver(Books books, IAnchorCatalog? catalog = null)
         {
@@ -65,76 +65,64 @@ namespace CST.Navigation
             if (p.Number < 1)
                 return NavigationResult.InvalidReference($"Paragraph number must be positive (got {p.Number}).");
 
-            bool isMulti = book.BookType == BookType.Multi;
-            string? bookCode = p.BookCode;
+            // The qualifier is the id of any div enclosing the paragraph: a Multi volume's sub-book code
+            // ("an5"), or a section ("kn1_2"). A printed paragraph number repeats within a book wherever the
+            // print restarts its numbering per section, so in a non-Multi book a section is exactly what
+            // disambiguates it. [fsnow, 2026-11-21] accepted "emit the deepest, accept any level that's
+            // unique": any enclosing div qualifies, and the anchor emitted is the deepest form. (#447)
+            string? qualifier = string.IsNullOrWhiteSpace(p.BookCode) ? null : p.BookCode;
 
-            // A book code addresses a sub-book of a Multi volume, so it cannot address anything here. Silently
-            // ignoring it produced a wrong-but-plausible navigation (the caller believed it had disambiguated);
-            // say so instead. (#314)
-            //
-            // Two things the wording must NOT claim. A non-Multi book CAN carry a book-div id (s0101m.mul has
-            // "dn1", and the XSL does emit para5_dn1), so "that code doesn't exist" would be false. And
-            // paragraph numbers are NOT unique here either — they repeat in 95 non-Multi books, because the
-            // printed numbering restarts per section. The honest reason to refuse is narrower: a book code is
-            // not the thing that would disambiguate them. Where a number does repeat, the repeats sit WITHIN a
-            // single book div, so (number, bookCode) is exactly as ambiguous as the bare number and the anchor
-            // resolves to the first occurrence. Qualifying by the deepest enclosing div would fix ~97% of that;
-            // tracked in #447. (fable LOW-6, corrected)
-            if (!isMulti && bookCode is not null)
-                return NavigationResult.InvalidReference(
-                    $"'{book.FileName}' is not a multi-book volume, so a book code cannot address a paragraph " +
-                    $"in it; omit '{bookCode}'. (Paragraph numbers are not necessarily unique in this book " +
-                    "either, but a book code is not what would disambiguate them — see #447.)");
-
-            if (isMulti)
+            if (anchors is null)
             {
-                if (bookCode is null)
-                {
-                    if (anchors is null)
-                        return NavigationResult.InvalidReference(
-                            $"'{book.FileName}' is a multi-book volume; a book code is required to place " +
-                            $"paragraph {p.Number} (anchor catalog unavailable to disambiguate).");
-
-                    var codes = anchors.BookCodesFor(p.Number);
-                    // No CODES is not the same as no PARAGRAPH: a Multi book may carry uncoded paragraphs, and
-                    // reporting those as out-of-range was a false negative. Fall through uncoded. (#314)
-                    if (codes.Count == 0)
-                        return anchors.HasParagraph(p.Number)
-                            ? Resolved(book, $"para{p.Number}", $"paragraph {p.Number}", req, validated: true)
-                            : NavigationResult.OutOfRange($"No paragraph {p.Number} in '{book.FileName}'.");
-                    if (codes.Count > 1)
-                        return NavigationResult.Ambiguous(
-                            codes.Select(c => new NavigationCandidate(
-                                $"para{p.Number}_{c}", $"paragraph {p.Number} in sub-book '{c}'")).ToList(),
-                            $"Paragraph {p.Number} appears in {codes.Count} sub-books of '{book.FileName}'; " +
-                            "specify a book code.");
-                    bookCode = codes[0];
-                }
-                else if (anchors is not null)
-                {
-                    // Case-insensitive, matching the book lookup above: "AN5" and "an5" are the same sub-book,
-                    // and a case mismatch used to read as "no such paragraph". (#314)
-                    var match = anchors.BookCodesFor(p.Number)
-                        .FirstOrDefault(c => string.Equals(c, bookCode, StringComparison.OrdinalIgnoreCase));
-                    if (match is null)
-                        return NavigationResult.OutOfRange(
-                            $"No paragraph {p.Number} in sub-book '{bookCode}' of '{book.FileName}'.");
-                    bookCode = match;   // normalize to the catalog's casing so the anchor matches the document
-                }
-            }
-            else if (anchors is not null && !anchors.HasParagraph(p.Number))
-            {
-                return NavigationResult.OutOfRange($"No paragraph {p.Number} in '{book.FileName}'.");
+                // Without a catalog nothing can be checked, so the anchor is built from what was given and
+                // marked unvalidated. A Multi volume still needs its sub-book named: its paragraph 1 exists
+                // once per sub-book, and guessing one is the failure #314 removed.
+                if (qualifier is null && book.BookType == BookType.Multi)
+                    return NavigationResult.InvalidReference(
+                        $"'{book.FileName}' is a multi-book volume; a book code is required to place " +
+                        $"paragraph {p.Number} (anchor catalog unavailable to disambiguate).");
+                return qualifier is null
+                    ? Resolved(book, $"para{p.Number}", $"paragraph {p.Number}", req, validated: false)
+                    : Resolved(book, $"para{p.Number}_{qualifier}", $"paragraph {p.Number} ({qualifier})", req,
+                        validated: false);
             }
 
-            string anchor = $"para{p.Number}";
-            string normalized = $"paragraph {p.Number}";
-            if (isMulti && bookCode is not null)
-            {
-                anchor += $"_{bookCode}";
-                normalized += $" ({bookCode})";
-            }
-            return Resolved(book, anchor, normalized, req, validated: anchors is not null);
+            var matches = anchors.Paragraphs
+                .Where(a => a.Number == p.Number && (qualifier is null || a.EnclosedBy(qualifier)))
+                .ToList();
+
+            if (matches.Count == 0)
+                return NavigationResult.OutOfRange(qualifier is null
+                    ? $"No paragraph {p.Number} in '{book.FileName}'."
+                    : $"No paragraph {p.Number} in '{qualifier}' of '{book.FileName}'.");
+
+            // One candidate per distinct anchor. Two paragraphs can share a number AND a section (a duplicated
+            // printed number, as in #1087); no anchor tells those apart, so they collapse to one, and the
+            // reader lands on the first of them.
+            var candidates = matches
+                .GroupBy(Anchor)
+                .Select(g => (Anchor: g.Key, Match: g.First(), Count: g.Count()))
+                .ToList();
+
+            if (candidates.Count > 1)
+                return NavigationResult.Ambiguous(
+                    candidates.Select(c => new NavigationCandidate(c.Anchor, Describe(p.Number, c.Match))).ToList(),
+                    $"Paragraph {p.Number} appears {candidates.Count} times in '{book.FileName}'" +
+                    (qualifier is null ? "" : $" within '{qualifier}'") +
+                    "; name the section it is in.");
+
+            var only = candidates[0];
+            string normalized = Describe(p.Number, only.Match);
+            if (only.Count > 1) normalized += $" (the first of {only.Count} with this number there)";
+            return Resolved(book, only.Anchor, normalized, req, validated: true);
+
+            // The deepest form where the paragraph has a section, so what a caller stores depends only on where
+            // the paragraph sits. A paragraph outside every div with an id keeps the bare form.
+            static string Anchor(ParagraphAnchor a) =>
+                a.SectionId is { } section ? $"para{a.Number}_{section}" : $"para{a.Number}";
+
+            static string Describe(int number, ParagraphAnchor a) =>
+                a.SectionId is { } section ? $"paragraph {number} ({section})" : $"paragraph {number}";
         }
 
         private NavigationResult ResolvePage(

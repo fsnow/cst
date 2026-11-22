@@ -195,27 +195,42 @@ p {
 <xsl:apply-templates/>
 </xsl:template>
 
-<xsl:template match='p[@rend="bodytext"]'>
-<p class="bodytext">
-  <!-- if the n attribute is set, create an HTML anchor for the paragraph in the form para### -->
+<!-- A numbered paragraph's anchors. A printed paragraph number is not unique within a book: the numbering
+     restarts per section in about half the corpus (#447). So besides the bare form, the paragraph gets one
+     anchor per enclosing div that has an id, outermost first:
+       para{n}                    the bare number; the first match wins where it repeats
+       para{n}_{book div id}      e.g. para5_an4; tells the sub-books of a Multi volume apart
+       para{n}_{section id}       e.g. para5_kn1_2, and para5_kn1_2_1 inside that; one per level
+     The deepest is the one the reader stores, because it depends only on where the paragraph sits. The levels
+     above it are there so that a stored or cited anchor keeps working when a finer div is added later, and so
+     that every qualifier the resolver accepts names a real anchor. [fsnow, 2026-11-22: "1. a."]
+     Outermost first matters: the page script breaks ties between anchors at one position by document order,
+     and the last one is what it saves. -->
+<xsl:template name="para-anchors">
   <xsl:if test="@n">
+    <xsl:variable name="n" select="@n"/>
     <a>
       <xsl:attribute name="name">
         <xsl:text>para</xsl:text>
-        <xsl:value-of select="@n"/>
+        <xsl:value-of select="$n"/>
       </xsl:attribute>
     </a>
-    <xsl:if test='ancestor::div[@type="book"]/@id'>
+    <xsl:for-each select="ancestor::div[@id]">
       <a>
         <xsl:attribute name="name">
           <xsl:text>para</xsl:text>
-          <xsl:value-of select="@n"/>
+          <xsl:value-of select="$n"/>
           <xsl:text>_</xsl:text>
-          <xsl:value-of select='ancestor::div[@type="book"]/@id'/>
+          <xsl:value-of select="@id"/>
         </xsl:attribute>
       </a>
-    </xsl:if>
+    </xsl:for-each>
   </xsl:if>
+</xsl:template>
+
+<xsl:template match='p[@rend="bodytext"]'>
+<p class="bodytext">
+  <xsl:call-template name="para-anchors"/>
 <xsl:apply-templates/>
 </p>
 </xsl:template>
@@ -233,25 +248,7 @@ p {
 <xsl:template match='p[@rend="hangnum"]'>
 <div class="hanggrid">
 <p class="hangnum">
-  <!-- if the n attribute is set, create an HTML anchor for the paragraph in the form para### -->
-  <xsl:if test="@n">
-    <a>
-      <xsl:attribute name="name">
-        <xsl:text>para</xsl:text>
-        <xsl:value-of select="@n"/>
-      </xsl:attribute>
-    </a>
-    <xsl:if test='ancestor::div[@type="book"]/@id'>
-      <a>
-        <xsl:attribute name="name">
-          <xsl:text>para</xsl:text>
-          <xsl:value-of select="@n"/>
-          <xsl:text>_</xsl:text>
-          <xsl:value-of select='ancestor::div[@type="book"]/@id'/>
-        </xsl:attribute>
-      </a>
-    </xsl:if>
-  </xsl:if>
+  <xsl:call-template name="para-anchors"/>
 <xsl:apply-templates/>
 </p>
 <xsl:apply-templates select="following-sibling::*[1][self::p][not(@rend='hangnum')]" mode="hang"/>
@@ -270,24 +267,7 @@ p {
       <xsl:otherwise><xsl:value-of select="@rend"/></xsl:otherwise>
     </xsl:choose>
   </xsl:attribute>
-  <xsl:if test="@n">
-    <a>
-      <xsl:attribute name="name">
-        <xsl:text>para</xsl:text>
-        <xsl:value-of select="@n"/>
-      </xsl:attribute>
-    </a>
-    <xsl:if test='ancestor::div[@type="book"]/@id'>
-      <a>
-        <xsl:attribute name="name">
-          <xsl:text>para</xsl:text>
-          <xsl:value-of select="@n"/>
-          <xsl:text>_</xsl:text>
-          <xsl:value-of select='ancestor::div[@type="book"]/@id'/>
-        </xsl:attribute>
-      </a>
-    </xsl:if>
-  </xsl:if>
+  <xsl:call-template name="para-anchors"/>
 <xsl:apply-templates/>
 </p>
 </xsl:template>
@@ -300,6 +280,7 @@ p {
 
 <xsl:template match='p[@rend="indent"]'>
 <p class="indent">
+  <xsl:call-template name="para-anchors"/>
 <xsl:apply-templates/>
 </p>
 </xsl:template>
@@ -326,25 +307,7 @@ p {
 
 <xsl:template match='p[@rend="centre"]|trailer[@rend="centre"]'>
 <p class="centered">
-  <!-- if the n attribute is set, create an HTML anchor for the paragraph in the form pr### -->
-  <xsl:if test="@n">
-    <a>
-      <xsl:attribute name="name">
-        <xsl:text>para</xsl:text>
-        <xsl:value-of select="@n"/>
-      </xsl:attribute>
-    </a>
-    <xsl:if test='ancestor::div[@type="book"]/@id'>
-      <a>
-        <xsl:attribute name="name">
-          <xsl:text>para</xsl:text>
-          <xsl:value-of select="@n"/>
-          <xsl:text>_</xsl:text>
-          <xsl:value-of select='ancestor::div[@type="book"]/@id'/>
-        </xsl:attribute>
-      </a>
-    </xsl:if>
-  </xsl:if>
+  <xsl:call-template name="para-anchors"/>
 <xsl:apply-templates/>
 </p>
 </xsl:template>
@@ -391,6 +354,7 @@ p {
 
 <xsl:template match='p[@rend="gatha1"]'>
 <p class="gatha1">
+  <xsl:call-template name="para-anchors"/>
 <xsl:apply-templates/>
 </p>
 </xsl:template>

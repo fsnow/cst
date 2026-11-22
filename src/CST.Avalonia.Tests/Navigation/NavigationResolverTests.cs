@@ -252,19 +252,89 @@ namespace CST.Avalonia.Tests.Navigation
             Assert.False(r.Target!.Validated);   // arbitrary strings cannot be checked against a typed catalog
         }
 
+        // --- sections (#447) ---------------------------------------------------
+        // A printed paragraph number repeats within a book wherever the print restarts its numbering per section.
+        // [fsnow, 2026-11-21] accepted "emit the deepest, accept any level that's unique". This replaces the
+        // #314 refusal of a code on a non-Multi book: a section id is exactly what disambiguates one.
+
+        private static ParagraphAnchor Para(int n, params string[] divIds) => new(n, divIds[0], divIds);
+
         [Fact]
-        public void A_book_code_on_a_non_multi_book_is_refused_not_ignored()
+        public void A_repeated_number_in_a_non_multi_book_is_ambiguous_with_one_candidate_per_section()
         {
-            // Silently dropping it navigated somewhere plausible while the caller believed it had disambiguated.
             var b = NonMultiBook();
-            var r = Resolver().Resolve(new NavigationRequest(
-                b.FileName, new NavigationReference.Paragraph(5, "an5")));
-            Assert.Equal(NavigationStatus.InvalidReference, r.Status);
-            Assert.Contains("not a multi-book volume", r.Message);
-            // The message must NOT claim paragraph numbers are unique in a non-Multi book — they repeat in 95
-            // of them, because the printed numbering restarts per section. The refusal stands (a book code is
-            // not what would disambiguate), but the reason given has to be true. (#447)
-            Assert.DoesNotContain("unique within it", r.Message);
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { Para(1, "kn1", "kn1_1"), Para(1, "kn1", "kn1_2") });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(1)));
+            Assert.Equal(NavigationStatus.AmbiguousReference, r.Status);
+            Assert.Equal(new[] { "para1_kn1_1", "para1_kn1_2" }, r.Candidates!.Select(c => c.Anchor).ToArray());
+        }
+
+        [Fact]
+        public void A_section_qualifier_picks_out_the_paragraph_and_emits_the_deepest_form()
+        {
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { Para(1, "kn1", "kn1_1"), Para(1, "kn1", "kn1_2") });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(1, "KN1_2")));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.Equal("para1_kn1_2", r.Target!.Anchor);   // the catalog's casing, not the caller's
+            Assert.True(r.Target.Validated);
+        }
+
+        [Fact]
+        public void A_shallower_qualifier_is_accepted_where_it_is_unique_but_the_anchor_is_still_the_deepest()
+        {
+            // abh03m4: abh6_1 is enough to pick out paragraph 1, and its deepest div is abh6_1_1.
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[]
+            {
+                Para(1, "abh6", "abh6_1", "abh6_1_1"), Para(1, "abh6", "abh6_2", "abh6_2_1"),
+            });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(1, "abh6_1")));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.Equal("para1_abh6_1_1", r.Target!.Anchor);
+        }
+
+        [Fact]
+        public void A_bare_number_that_is_unique_resolves_to_its_deepest_form()
+        {
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { Para(7, "kn1", "kn1_1"), Para(1, "kn1", "kn1_2") });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(7)));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.Equal("para7_kn1_1", r.Target!.Anchor);
+        }
+
+        [Fact]
+        public void A_qualifier_that_encloses_no_such_paragraph_is_out_of_range()
+        {
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { Para(1, "kn1", "kn1_1") });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(1, "kn1_9")));
+            Assert.Equal(NavigationStatus.ReferenceOutOfRange, r.Status);
+            Assert.Contains("kn1_9", r.Message);
+        }
+
+        [Fact]
+        public void A_number_repeated_within_one_section_resolves_to_the_first_and_says_so()
+        {
+            // A duplicated printed number (cf. #1087): no anchor tells the two apart, so offering two identical
+            // candidates would be no help. The reader lands on the first; the description admits it.
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { Para(274, "kn5", "kn5_3"), Para(274, "kn5", "kn5_3") });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(274)));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.Equal("para274_kn5_3", r.Target!.Anchor);
+            Assert.Contains("first of 2", r.Target.NormalizedReference);
+        }
+
+        [Fact]
+        public void A_qualifier_without_a_catalog_is_passed_through_unvalidated()
+        {
+            var b = NonMultiBook();
+            var r = Resolver().Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(5, "kn1_2")));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.Equal("para5_kn1_2", r.Target!.Anchor);
+            Assert.False(r.Target.Validated);
         }
 
         [Fact]

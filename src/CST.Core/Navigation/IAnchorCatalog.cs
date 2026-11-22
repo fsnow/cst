@@ -54,7 +54,9 @@ namespace CST.Navigation
         /// <summary>True if any paragraph with this number exists (in any sub-book).</summary>
         public bool HasParagraph(int number) => Paragraphs.Any(p => p.Number == number);
 
-        /// <summary>The distinct sub-book codes that contain the given paragraph number.</summary>
+        /// <summary>The distinct sub-book codes that contain the given paragraph number. For a non-Multi book this
+        /// lists its one book div, so it does not tell repeated numbers apart; see
+        /// <see cref="ParagraphAnchor.SectionId"/>. (#447)</summary>
         public IReadOnlyList<string> BookCodesFor(int number) =>
             Paragraphs.Where(p => p.Number == number && p.BookCode != null)
                       .Select(p => p.BookCode!)
@@ -78,8 +80,23 @@ namespace CST.Navigation
             ChapterIds.Any(id => string.Equals(id, chapterId, System.StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>A paragraph anchor: its number and, in a Multi book, the sub-book code (else null).</summary>
-    public sealed record ParagraphAnchor(int Number, string? BookCode);
+    /// <summary>
+    /// A paragraph anchor: its number, its book div's id (the sub-book code in a Multi book), and the ids of every
+    /// div enclosing it, outermost first. <paramref name="DivIds"/> may be left null by a catalog that only knows
+    /// the book code; the book code then stands as the only enclosing div. (#447)
+    /// </summary>
+    public sealed record ParagraphAnchor(int Number, string? BookCode, IReadOnlyList<string>? DivIds = null)
+    {
+        private IReadOnlyList<string> Enclosing =>
+            DivIds ?? (BookCode is null ? System.Array.Empty<string>() : new[] { BookCode });
+
+        /// <summary>The innermost enclosing div's id, or null when no div with an id encloses it.</summary>
+        public string? SectionId => Enclosing.Count > 0 ? Enclosing[^1] : null;
+
+        /// <summary>True if a div with this id (case-insensitive) encloses the paragraph.</summary>
+        public bool EnclosedBy(string divId) =>
+            Enclosing.Any(id => string.Equals(id, divId, System.StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>A page-break anchor: edition, volume, and page number.</summary>
     public sealed record PageAnchor(PageEdition Edition, int Volume, int Number);
