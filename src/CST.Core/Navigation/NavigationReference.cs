@@ -17,9 +17,10 @@ namespace CST.Navigation
         public sealed record WholeBook() : NavigationReference;
 
         /// <summary>
-        /// A paragraph by number. <paramref name="BookCode"/> selects the sub-book inside a
-        /// <see cref="BookType.Multi"/> volume (e.g. "an5"); leave it null to let the resolver disambiguate
-        /// from the anchor catalog.
+        /// A paragraph by number. <paramref name="BookCode"/> is the id of any div enclosing it: the sub-book
+        /// of a <see cref="BookType.Multi"/> volume (e.g. "an5"), or a section (e.g. "kn1_2"), which is what
+        /// tells apart a number the print repeats per section. Leave it null to let the resolver disambiguate
+        /// from the anchor catalog. (#447)
         /// </summary>
         public sealed record Paragraph(int Number, string? BookCode = null) : NavigationReference;
 

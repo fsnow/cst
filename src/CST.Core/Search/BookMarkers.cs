@@ -19,7 +19,11 @@ namespace CST.Search
 
         // Ascending-by-position lists. A paragraph spans First..Last inclusive; the two are equal for the
         // ordinary single-numbered case, which is 97% of the corpus. (#446)
-        private readonly List<(int Pos, int First, int Last, string? BookCode)> _paras = new();
+        //
+        // DivIds is the id of every enclosing <div> that has one, outermost first, so the last entry is the
+        // section the paragraph is in. A printed paragraph number repeats within a book wherever the print
+        // restarts its numbering per section, and the section is what tells the repeats apart. (#447)
+        private readonly List<(int Pos, int First, int Last, string? BookCode, string[] DivIds)> _paras = new();
         // Raw is the VERBATIM @n ("1.0023"). The HTML anchor is ed + that exact string and the reader looks it
         // up case/character-exactly, so the raw spelling — not the parsed ints — is what can be navigated to.
         private readonly Dictionary<PageEdition, List<(int Pos, int Volume, int Number, string Raw)>> _pages = new();
@@ -83,7 +87,7 @@ namespace CST.Search
                     case "p":
                         if (!closing && attrs.TryGetValue("n", out var nStr)
                             && TryParseParagraphSpan(nStr, out int first, out int last))
-                            m._paras.Add((tag.Index, first, last, CurrentBook(divStack)));
+                            m._paras.Add((tag.Index, first, last, CurrentBook(divStack), DivIds(divStack)));
                         break;
                 }
             }
@@ -138,15 +142,37 @@ namespace CST.Search
         }
 
         /// <summary>
-        /// The character position of a numbered paragraph (optionally within a Multi sub-book), or -1.
+        /// The character position of a numbered paragraph, or -1. <paramref name="qualifier"/> is the id of any
+        /// div enclosing it: a Multi volume's sub-book code ("an5"), or a section ("kn1_2"). Where several
+        /// paragraphs match, this answers with the first; <see cref="FindParagraph"/> lists them all.
         ///
         /// <para>Matches a number ANYWHERE in a paragraph's span, not just its label. Paragraph 20 of
         /// <c>vin02t.tik.xml</c> is inside the block labelled <c>16-26</c>; before #446 this returned -1 for
         /// every such N, so addressing into the 3,618 ranged paragraphs failed outright rather than landing
         /// slightly off.</para>
         /// </summary>
-        public int PositionOfParagraph(int number, string? bookCode = null)
+        public int PositionOfParagraph(int number, string? qualifier = null)
         {
+            var matches = FindParagraph(number, qualifier);
+            return matches.Count == 0 ? -1 : matches[0].Position;
+        }
+
+        /// <summary>
+        /// Every paragraph that a number, optionally qualified by an enclosing div's id, could mean, in document
+        /// order. One match is a unique reference; more than one is an ambiguous one, and the caller should
+        /// offer the candidates rather than take the first. (#447)
+        ///
+        /// <para><b>Any enclosing div qualifies, not only the innermost.</b> The anchor the reader stores is
+        /// <c>para{n}_{deepest div}</c>, because that depends only on where the paragraph sits. A caller citing
+        /// a paragraph may name a shallower div, or none, wherever that is enough to pick out one paragraph:
+        /// [fsnow, 2026-11-21] accepted "emit the deepest, accept any level that's unique". The qualifier is
+        /// matched case-insensitively; <see cref="ParagraphMatch.SectionId"/> carries the document's own
+        /// casing, which is what an anchor must use.</para>
+        /// </summary>
+        public IReadOnlyList<ParagraphMatch> FindParagraph(int number, string? qualifier = null)
+        {
+            var exact = new List<ParagraphMatch>();
+            var ranged = new List<ParagraphMatch>();
             // AN EXACTLY-NUMBERED PARAGRAPH WINS OVER A RANGE THAT MERELY COVERS THE NUMBER, and the two do
             // collide: in 36 corpus files a ranged paragraph spans numbers that also exist in their own
             // right — abh03a.att.xml has 1,445 such overlaps, where "7-10" precedes standalone 7, 8, 9 and
@@ -154,14 +180,20 @@ namespace CST.Search
             // worse answer than the -1 this used to return, because it is confidently wrong rather than
             // absent. The range is the fallback, for numbers that exist ONLY inside one. (#446)
             foreach (var p in _paras)
-                if (p.First == number && p.Last == number && (bookCode == null || p.BookCode == bookCode))
-                    return p.Pos;
+            {
+                if (number < p.First || number > p.Last || !Qualifies(p.DivIds, qualifier)) continue;
+                var match = new ParagraphMatch(p.Pos, p.BookCode, p.DivIds.Length > 0 ? p.DivIds[^1] : null);
+                (p.First == number && p.Last == number ? exact : ranged).Add(match);
+            }
+            return exact.Count > 0 ? exact : ranged;
+        }
 
-            foreach (var p in _paras)
-                if (number >= p.First && number <= p.Last && (bookCode == null || p.BookCode == bookCode))
-                    return p.Pos;
-
-            return -1;
+        private static bool Qualifies(string[] divIds, string? qualifier)
+        {
+            if (qualifier is null) return true;
+            foreach (var id in divIds)
+                if (string.Equals(id, qualifier, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
 
         /// <summary>The paragraph number (and Multi-book sub-code) and per-edition pages in effect at <paramref name="pos"/>.</summary>
@@ -397,6 +429,13 @@ namespace CST.Search
             return lo;
         }
 
+        private static string[] DivIds(List<(bool IsBook, string? Id, int Start)> stack)
+        {
+            var ids = new List<string>(stack.Count);
+            foreach (var d in stack) if (d.Id != null) ids.Add(d.Id);
+            return ids.ToArray();
+        }
+
         private static string? CurrentBook(List<(bool IsBook, string? Id, int Start)> stack)
         {
             foreach (var d in stack) if (d.IsBook && d.Id != null) return d.Id;  // outermost book div
@@ -436,4 +475,11 @@ namespace CST.Search
             return int.TryParse(n, out number);
         }
     }
+
+    /// <summary>
+    /// One paragraph a number could mean. <see cref="SectionId"/> is its innermost enclosing div's id (null when
+    /// no div with an id encloses it), so <c>para{n}_{SectionId}</c> is the anchor that addresses exactly this
+    /// paragraph. <see cref="BookCode"/> is the outermost book div's id, as before. (#447)
+    /// </summary>
+    public sealed record ParagraphMatch(int Position, string? BookCode, string? SectionId);
 }

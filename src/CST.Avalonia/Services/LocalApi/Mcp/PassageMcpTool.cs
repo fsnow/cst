@@ -39,7 +39,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             string bookId,
             [Description("Paragraph number to start reading at. Omit to use cursor, or to start at the book's beginning.")]
             int? paragraph = null,
-            [Description("Sub-book code for a Multi-type volume (e.g. 'an5'); usually omit.")]
+            [Description("The id of a div enclosing the paragraph: a Multi volume's sub-book code (e.g. 'an5'), or "
+                + "a section id (e.g. 'kn1_2'), which picks out a paragraph number the print repeats per section. "
+                + "Without it, a repeated number reads from its FIRST occurrence.")]
             string? bookCode = null,
             [Description("A page cursor from a prior result; when set, overrides paragraph and reads that exact spot.")]
             int? cursor = null,

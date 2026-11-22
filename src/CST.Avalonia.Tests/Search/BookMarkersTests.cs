@@ -274,5 +274,97 @@ namespace CST.Avalonia.Tests.Search
             Assert.Equal(PageEdition.Vri, across.First().Edition);      // NOT the same as RefsAt's first
             Assert.Contains(across, p => p.Edition == PageEdition.Myanmar && p.Number == 1);
         }
+
+        // ---- Sections: a paragraph number qualified by an enclosing div (#447) -----------------------
+
+        // Khuddakapāṭha-shaped: the printed numbering restarts in each chapter.
+        private const string Sectioned =
+            "<div type=\"book\" id=\"kn1\">" +
+            "<div type=\"chapter\" id=\"kn1_1\"><p n=\"1\">a</p><p n=\"2\">b</p></div>" +
+            "<div type=\"chapter\" id=\"kn1_2\"><p n=\"1\">c</p>" +
+            "<div type=\"vagga\" id=\"kn1_2_1\"><p n=\"2\">d</p></div></div>" +
+            "</div>";
+
+        [Fact]
+        public void A_repeated_number_lists_every_paragraph_it_could_mean_with_its_section()
+        {
+            var matches = BookMarkers.Build(Sectioned).FindParagraph(1);
+
+            Assert.Equal(new[] { "kn1_1", "kn1_2" }, matches.Select(m => m.SectionId).ToArray());
+            Assert.All(matches, m => Assert.Equal("kn1", m.BookCode));
+        }
+
+        [Fact]
+        public void A_section_qualifier_picks_out_one_paragraph()
+        {
+            var xml = Sectioned;
+            var markers = BookMarkers.Build(xml);
+
+            var matches = markers.FindParagraph(1, "kn1_2");
+
+            Assert.Single(matches);
+            Assert.Equal(xml.IndexOf("<p n=\"1\">c", System.StringComparison.Ordinal), matches[0].Position);
+            Assert.Equal(matches[0].Position, markers.PositionOfParagraph(1, "kn1_2"));
+        }
+
+        [Fact]
+        public void Any_enclosing_div_qualifies_not_only_the_innermost()
+        {
+            var markers = BookMarkers.Build(Sectioned);
+
+            // kn1_2 encloses paragraph 2 in kn1_2_1, and is enough to pick it out.
+            var matches = markers.FindParagraph(2, "kn1_2");
+
+            Assert.Single(matches);
+            Assert.Equal("kn1_2_1", matches[0].SectionId);   // the section is still the innermost div
+        }
+
+        [Fact]
+        public void The_qualifier_matches_case_insensitively_and_the_section_keeps_the_documents_casing()
+        {
+            var matches = BookMarkers.Build(Sectioned).FindParagraph(1, "KN1_1");
+
+            Assert.Equal("kn1_1", Assert.Single(matches).SectionId);
+        }
+
+        [Fact]
+        public void A_qualifier_that_encloses_no_such_paragraph_finds_nothing()
+        {
+            var markers = BookMarkers.Build(Sectioned);
+
+            Assert.Empty(markers.FindParagraph(2, "kn1_9"));
+            Assert.Equal(-1, markers.PositionOfParagraph(2, "kn1_9"));
+        }
+
+        [Fact]
+        public void A_bare_number_still_answers_with_the_first_paragraph()
+        {
+            // Unchanged on purpose: the AI assistant passes the reader's bare paragraph number, and refusing a
+            // repeated one would break it until the reader reports its section (#447 step 2, #596).
+            var xml = Sectioned;
+
+            Assert.Equal(xml.IndexOf("<p n=\"1\">a", System.StringComparison.Ordinal),
+                BookMarkers.Build(xml).PositionOfParagraph(1));
+        }
+
+        [Fact]
+        public void A_sub_book_code_still_qualifies_in_a_multi_book()
+        {
+            var xml =
+                "<div type=\"book\" id=\"an5\"><p n=\"1\">a</p></div>" +
+                "<div type=\"book\" id=\"an6\"><p n=\"1\">c</p></div>";
+
+            Assert.Equal(xml.IndexOf("<p n=\"1\">c", System.StringComparison.Ordinal),
+                BookMarkers.Build(xml).PositionOfParagraph(1, "an6"));
+        }
+
+        [Fact]
+        public void A_paragraph_outside_every_div_has_no_section()
+        {
+            var match = Assert.Single(BookMarkers.Build("<p n=\"3\">x</p>").FindParagraph(3));
+
+            Assert.Null(match.SectionId);
+            Assert.Null(match.BookCode);
+        }
     }
 }
