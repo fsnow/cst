@@ -105,7 +105,7 @@ namespace CST.Avalonia.Tests.Models
                     Assert.Equal(s.MissingPages.Distinct().Count(), s.MissingPages.Length);
                 }
             }
-            Assert.Equal(23, seen);
+            Assert.Equal(15, seen);
         }
 
         [Fact]
@@ -138,6 +138,17 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
+        public void S0513a4_1957_RepeatsPrint230To231()
+        {
+            // Read by eye: PDF 236-237 are print 230-231, PDF 238-239 the same leaf again, PDF 240 is 232.
+            var s = Sources.Inst.GetSource("s0513a4.att.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 231, 231 }, s.ExtraPagesAfter);
+            Assert.Equal(128, s.PdfPageFor(122));
+            Assert.Equal(237, s.PdfPageFor(231));
+            Assert.Equal(240, s.PdfPageFor(232));
+        }
+
+        [Fact]
         public void S0504m_1957_LandsOnThePagesTheScanActuallyHas()
         {
             // Checked by hand: print 219 is PDF 241, the repeat begins with print 120 at PDF 242,
@@ -159,17 +170,27 @@ namespace CST.Avalonia.Tests.Models
             // A missing page belongs to the PDF, not the book. Where several books share one scan and
             // one continuous page sequence, a gap found in the book that CONTAINS it shifts every
             // sibling that follows it — but the gap is only visible in that one book's XML, so the
-            // seeding pass missed the siblings. (Apadāna-2 page 186, found in QA.)
+            // seeding pass missed the siblings. In the 1957 Apadāna-2 scan, s0510m2 lacks print 186, 214
+            // and 215; its siblings' PageStart (13, against 16) absorbs all three, so every book in the
+            // PDF lands on the same PDF page for the same print page.
+            var apa = Sources.Inst.GetSource("s0510m2.mul.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 186, 214, 215 }, apa.MissingPages);
             foreach (var book in new[] { "s0511m.mul.xml", "s0512m.mul.xml" })
             {
-                var s = Sources.Inst.GetSource(book, Sources.SourceType.Burmese2010);
+                var s = Sources.Inst.GetSource(book, Sources.SourceType.Burmese1957);
                 Assert.NotNull(s);
-                Assert.Equal(new[] { 186 }, s!.MissingPages);
+                Assert.Empty(s!.MissingPages);
+                Assert.Equal(apa.PdfPageFor(300), s.PdfPageFor(300));
             }
+
+            // The 2010 scan has print 186: PDF 255-261 hold print 237-243 (read by eye), which leaves no
+            // page lost before them, so none of the three 2010 books lists it.
+            foreach (var book in new[] { "s0510m2.mul.xml", "s0511m.mul.xml", "s0512m.mul.xml" })
+                Assert.Empty(Sources.Inst.GetSource(book, Sources.SourceType.Burmese2010)!.MissingPages);
 
             // s0404a continues s0403a's sequence in the same PDF, so it carries that book's blanks too.
             var an = Sources.Inst.GetSource("s0404a.att.xml", Sources.SourceType.Burmese1957);
-            Assert.Equal(new[] { 86, 144, 256, 286, 342 }, an!.MissingPages);
+            Assert.Equal(new[] { 86, 144, 192, 256, 286, 342 }, an!.MissingPages);
 
             // The counter-case: s0404t's PageStart (18, against s0403t's 19) ALREADY absorbs the blank
             // at 148. Adding it would double-count and land a page early. Pinned so it stays empty.
