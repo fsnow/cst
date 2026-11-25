@@ -540,7 +540,7 @@ public class Sources
 		addSource("s0515a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Mahaniddesa_1957}", new[] { 366, 367, 368, 369 });
 		addSource("s0516a.att.xml", SourceType.Burmese1957, 5, $"{Burmese1957Atthakatha}/{Att_KN_CulaniddesaNetti_1957}");
 		addSource("s0517a.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_KN_Patisambhida1_1957}");
-		addSource("s0519a.att.xml", SourceType.Burmese1957, 181, $"{Burmese1957Atthakatha}/{Att_KN_CulaniddesaNetti_1957}");
+		addSource("s0519a.att.xml", SourceType.Burmese1957, 181, $"{Burmese1957Atthakatha}/{Att_KN_CulaniddesaNetti_1957}", new[] { 236, 237 });
 
 		// --- Abhidhamma Atthakatha ---
 		addSource("abh01a.att.xml", SourceType.Burmese1957, 14, $"{Burmese1957Atthakatha}/{Att_Abh_Dhammasangani_1957}");

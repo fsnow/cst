@@ -138,6 +138,17 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
+        public void S0519a_1957_ScanLacksPrint236To237()
+        {
+            // The Netti-aṭṭhakathā numbers from 1 at PDF 181; PDF 415 is print 235 and PDF 416 is print 238.
+            var s = Sources.Inst.GetSource("s0519a.att.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 236, 237 }, s.MissingPages);
+            Assert.Equal(236, s.PdfPageFor(56));
+            Assert.Equal(415, s.PdfPageFor(235));
+            Assert.Equal(416, s.PdfPageFor(238));
+        }
+
+        [Fact]
         public void Vin02a2_1957_IsInThePacityadiVolume()
         {
             // The Mahāvagga-aṭṭhakathā follows the Pācittiya-aṭṭhakathā in one volume and one page run:
