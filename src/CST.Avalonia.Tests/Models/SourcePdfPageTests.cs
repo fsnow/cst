@@ -138,6 +138,19 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
+        public void Vin02a2_1957_IsInThePacityadiVolume()
+        {
+            // The Mahāvagga-aṭṭhakathā follows the Pācittiya-aṭṭhakathā in one volume and one page run:
+            // PDF 241 is print 231 (end of vin02a1), PDF 242 the Mahāvagga title page (233), PDF 243 is 234.
+            var a1 = Sources.Inst.GetSource("vin02a1.att.xml", Sources.SourceType.Burmese1957)!;
+            var a2 = Sources.Inst.GetSource("vin02a2.att.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(a1.Path, a2.Path);
+            Assert.Equal(242, a2.PdfPageFor(233));
+            Assert.Equal(243, a2.PdfPageFor(234));
+            Assert.Equal(446, a2.PdfPageFor(437));
+        }
+
+        [Fact]
         public void S0513a4_1957_RepeatsPrint230To231()
         {
             // Read by eye: PDF 236-237 are print 230-231, PDF 238-239 the same leaf again, PDF 240 is 232.

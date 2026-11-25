@@ -489,7 +489,7 @@ public class Sources
 		// --- Vinaya Atthakatha ---
 		addSource("vin01a.att.xml", SourceType.Burmese1957, 15, $"{Burmese1957Atthakatha}/{Att_Vin_Parajika1_1957}", extraPagesAfter: new[] { 135, 135 });
 		addSource("vin02a1.att.xml", SourceType.Burmese1957, 11, $"{Burmese1957Atthakatha}/{Att_Vin_Pacittiyadi_1957}");
-		addSource("vin02a2.att.xml", SourceType.Burmese1957, 12, $"{Burmese1957Atthakatha}/{Att_Vin_Culavagga_1957}", new[] { 266, 284 });
+		addSource("vin02a2.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_Vin_Pacittiyadi_1957}"); // the Mahāvagga-aṭṭhakathā continues vin02a1 in the Pācityādi volume: its title page (print 233) is PDF 242
 		addSource("vin02a3.att.xml", SourceType.Burmese1957, 12, $"{Burmese1957Atthakatha}/{Att_Vin_Culavagga_1957}");
 		addSource("vin02a4.att.xml", SourceType.Burmese1957, 12, $"{Burmese1957Atthakatha}/{Att_Vin_Culavagga_1957}");
 
