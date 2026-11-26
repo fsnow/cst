@@ -620,7 +620,7 @@ public class Sources
 		addSource("vin10t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Vinayavinicchaya_1957}");
 		addSource("vin11t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_VinayavinicchayaTika1_1957}");
 		addSource("vin12t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Pacityadiyojana_1957}", new[] { 408, 546 });
-		addSource("vin13t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Khuddasikkha_1957}", new[] { 46, 59, 236, 443 }, extraPagesAfter: new[] { 427, 427 },
+		addSource("vin13t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Khuddasikkha_1957}", new[] { 46, 58, 236, 442 }, extraPagesAfter: new[] { 427, 427 },
 			pageOverrides: new() { [47] = 61, [48] = 60 }); // scan binds print 48 before 47
 
 		// =============================================

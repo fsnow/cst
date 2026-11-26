@@ -149,6 +149,20 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
+        public void Vin13t_1957_DropsTheBlankBeforeEachUnnumberedTitlePage()
+        {
+            // Print 58 and 442 are blank and not scanned; the title pages after them (59 at PDF 71,
+            // 443 at PDF 455) carry no folio but are there.
+            var s = Sources.Inst.GetSource("vin13t.nrf.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(70, s.PdfPageFor(57));
+            Assert.Equal(71, s.PdfPageFor(59));
+            Assert.Equal(72, s.PdfPageFor(60));
+            Assert.Equal(454, s.PdfPageFor(441));
+            Assert.Equal(455, s.PdfPageFor(443));
+            Assert.Equal(456, s.PdfPageFor(444));
+        }
+
+        [Fact]
         public void S0519a_1957_ScanLacksPrint236To237()
         {
             // The Netti-aṭṭhakathā numbers from 1 at PDF 181; PDF 415 is print 235 and PDF 416 is print 238.
