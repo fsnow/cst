@@ -620,7 +620,8 @@ public class Sources
 		addSource("vin10t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Vinayavinicchaya_1957}");
 		addSource("vin11t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_VinayavinicchayaTika1_1957}");
 		addSource("vin12t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Pacityadiyojana_1957}", new[] { 408, 546 });
-		addSource("vin13t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Khuddasikkha_1957}", new[] { 46, 59, 236, 443 }, extraPagesAfter: new[] { 427, 427 });
+		addSource("vin13t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Khuddasikkha_1957}", new[] { 46, 59, 236, 443 }, extraPagesAfter: new[] { 427, 427 },
+			pageOverrides: new() { [47] = 61, [48] = 60 }); // scan binds print 48 before 47
 
 		// =============================================
 		// Anya (Other Texts) Mappings
@@ -707,14 +708,15 @@ public class Sources
 	}
 
 	private void addSource(string filename, SourceType sourceType, int pageStart, string path,
-		int[]? missingPages = null, PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null)
+		int[]? missingPages = null, PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null,
+		Dictionary<int, int>? pageOverrides = null)
 	{
 		if (!sourcesMap.TryGetValue(filename, out var d))
 		{
 			d = new Dictionary<SourceType, Source>();
 			sourcesMap[filename] = d;
 		}
-		d[sourceType] = new Source(sourceType, pageStart, path, missingPages, pageEdition, extraPagesAfter);
+		d[sourceType] = new Source(sourceType, pageStart, path, missingPages, pageEdition, extraPagesAfter, pageOverrides);
 	}
 
 	public Source? GetSource(string filename, SourceType sourceType)
@@ -767,8 +769,10 @@ public class Sources
 	public class Source
 	{
 		public Source(SourceType sourceType, int pageStart, string path, int[]? missingPages = null,
-			PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null)
+			PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null,
+			IReadOnlyDictionary<int, int>? pageOverrides = null)
 		{
+			PageOverrides = pageOverrides ?? new Dictionary<int, int>();
 			ExtraPagesAfter = extraPagesAfter ?? Array.Empty<int>();
 			PageEdition = pageEdition;
 			SourceType = sourceType;
@@ -820,11 +824,21 @@ public class Sources
 		public int[] ExtraPagesAfter { get; set; }
 
 		/// <summary>
+		/// Print page → PDF page, for pages the scan holds out of order, which no count of missing and
+		/// extra pages can place. It wins over the computed page and moves only the pages it names. The
+		/// 1957 vin13t scan runs 44, 45, 48, 47, 49 (46 absent), so its entry is { 47 → 61, 48 → 60 }.
+		/// If the PDF itself is ever reordered, remove the entry with it.
+		/// </summary>
+		public IReadOnlyDictionary<int, int> PageOverrides { get; }
+
+		/// <summary>
 		/// PDF page for a printed page number, accounting for pages absent from the scan and pages
 		/// the scan holds twice.
 		/// </summary>
 		public int PdfPageFor(int printPage)
 		{
+			if (PageOverrides.TryGetValue(printPage, out int overridden))
+				return overridden;
 			int skipped = 0;
 			foreach (int p in MissingPages)
 			{

@@ -138,6 +138,17 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
+        public void Vin13t_1957_SwappedPagesOpenWhereTheyAre()
+        {
+            // The scan runs 44, 45, 48, 47, 49 at PDF 58-62 (print 46 absent).
+            var s = Sources.Inst.GetSource("vin13t.nrf.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(59, s.PdfPageFor(45));
+            Assert.Equal(61, s.PdfPageFor(47));
+            Assert.Equal(60, s.PdfPageFor(48));
+            Assert.Equal(62, s.PdfPageFor(49));
+        }
+
+        [Fact]
         public void S0519a_1957_ScanLacksPrint236To237()
         {
             // The Netti-aṭṭhakathā numbers from 1 at PDF 181; PDF 415 is print 235 and PDF 416 is print 238.

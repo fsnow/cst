@@ -185,7 +185,7 @@ namespace CST.Avalonia.ViewModels
                 PdfLocalPath = localPath;
 
                 // _targetPage is already the calculated PDF page number
-                // (BookDisplayViewModel already did: source.PageStart + (myanmarPage - 1))
+                // (BookDisplayViewModel already did: source.PdfPageFor(printPage))
                 int pdfPage = _targetPage;
                 if (pdfPage < 1) pdfPage = 1;
 
