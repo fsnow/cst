@@ -1,6 +1,6 @@
 # Structural markup inventory: corpus `<div>` coverage
 
-**Status:** research, part of the book-relationships epic (#422). **Generated:** 2026-11-21 by `structural_markup_inventory.py`, from tipitaka-xml `deva master` at `f206c3c0` and `Books.cs` (working copy).
+**Status:** research, part of the book-relationships epic (#422). **Generated:** 2026-11-25 by `structural_markup_inventory.py`, from tipitaka-xml `deva master` at `ad6dd4f0` and `Books.cs` (working copy).
 
 Related: [book-relationships/markup-conventions.md](book-relationships/markup-conventions.md) describes the markup and records the decisions for adding it; [book-relationships/README.md](book-relationships/README.md) is the epic's working doc.
 
@@ -25,7 +25,7 @@ Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical
 
 ## Summary
 
-**125 of 217 books are marked**, 92 unmarked.
+**133 of 217 books are marked**, 84 unmarked.
 
 | Group | Layer | marked | partial | book-only | unmarked | total |
 |---|---|---:|---:|---:|---:|---:|
@@ -45,8 +45,8 @@ Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical
 | KN | aṭṭhakathā | 24 | 0 | 0 | 0 | 24 |
 | KN | ṭīkā | 2 | 0 | 0 | 0 | 2 |
 | Vinaya | mūla | 5 | 0 | 0 | 0 | 5 |
-| Vinaya | aṭṭhakathā | 0 | 0 | 0 | 5 | 5 |
-| Vinaya | ṭīkā | 0 | 0 | 0 | 13 | 13 |
+| Vinaya | aṭṭhakathā | 5 | 0 | 0 | 0 | 5 |
+| Vinaya | ṭīkā | 3 | 0 | 0 | 10 | 13 |
 | Abhidhamma | mūla | 13 | 0 | 0 | 0 | 13 |
 | Abhidhamma | aṭṭhakathā | 3 | 0 | 0 | 0 | 3 |
 | Abhidhamma | ṭīkā | 5 | 0 | 0 | 4 | 9 |
@@ -54,7 +54,7 @@ Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical
 
 ## Div types present
 
-`book` (125)  `vagga` (47)  `chapter` (20)  `nipata` (16)  `samyutta` (15)  `pannasaka` (15)  `peyyala` (11)  `sutta` (9)  `matika` (9)  `vara` (9)  `niddesa` (8)  `method` (8)  `patthana` (8)  `intro` (8)  `kanda` (6)  `yamaka` (6)  `tika` (5)  `section` (4)  `naya` (4)  `pannatti` (4)  `katha` (4)  `paccaya` (4)  `vibhanga` (3)  `bhajaniya` (3)  `vimana` (2)  `khandaka` (2)  `gocchaka` (2)  `subbook` (1)  `uddesa` (1) (number of books with that type)
+`book` (133)  `vagga` (47)  `chapter` (24)  `nipata` (16)  `samyutta` (15)  `pannasaka` (15)  `peyyala` (11)  `kanda` (11)  `sutta` (9)  `matika` (9)  `vara` (9)  `niddesa` (8)  `method` (8)  `patthana` (8)  `intro` (8)  `khandaka` (7)  `yamaka` (6)  `subbook` (5)  `tika` (5)  `section` (4)  `naya` (4)  `pannatti` (4)  `katha` (4)  `paccaya` (4)  `vibhanga` (3)  `bhajaniya` (3)  `vimana` (2)  `gocchaka` (2)  `uddesa` (1) (number of books with that type)
 
 ## Mismatches with `ChapterListTypes`
 
@@ -79,9 +79,17 @@ Books are grouped by `Matn` in `Books.cs`, never by file extension: 21 canonical
 - `abh03m9.mul.xml`: `method`
 - `abh03m10.mul.xml`: `method`
 - `abh03m11.mul.xml`: `method`
+- `vin01a.att.xml`: `kanda`
+- `vin02a1.att.xml`: `kanda,subbook`
+- `vin02a2.att.xml`: `khandaka`
+- `vin02a3.att.xml`: `khandaka`
+- `vin02a4.att.xml`: `chapter`
 - `abh01a.att.xml`: `matika`
 - `abh02a.att.xml`: `bhajaniya,niddesa,vara`
 - `abh03a.att.xml`: `katha,method,paccaya,patthana`
+- `vin02t.tik.xml`: `chapter,kanda,khandaka,subbook`
+- `vin06t.nrf.xml`: `chapter,kanda,khandaka,subbook`
+- `vin07t.nrf.xml`: `chapter,kanda,khandaka,subbook`
 - `abh01t.tik.xml`: `matika`
 - `abh02t.tik.xml`: `bhajaniya,niddesa,vara`
 - `abh03t.tik.xml`: `katha,method,paccaya,patthana`
@@ -202,18 +210,18 @@ Not every unmarked book is meant to be marked. The epic's goal 6 (#422, 2026-07-
 | Vinaya | mūla | `vin02m2.mul.xml` | marked | khandaka×10 book×1 | book,khandaka |
 | Vinaya | mūla | `vin02m3.mul.xml` | marked | khandaka×12 book×1 | book,khandaka |
 | Vinaya | mūla | `vin02m4.mul.xml` | marked | chapter×18 book×1 | book,chapter |
-| Vinaya | aṭṭhakathā | `vin01a.att.xml` | unmarked | — | — |
-| Vinaya | aṭṭhakathā | `vin02a1.att.xml` | unmarked | — | — |
-| Vinaya | aṭṭhakathā | `vin02a2.att.xml` | unmarked | — | — |
-| Vinaya | aṭṭhakathā | `vin02a3.att.xml` | unmarked | — | — |
-| Vinaya | aṭṭhakathā | `vin02a4.att.xml` | unmarked | — | — |
+| Vinaya | aṭṭhakathā | `vin01a.att.xml` | marked | kanda×6 book×1 | — |
+| Vinaya | aṭṭhakathā | `vin02a1.att.xml` | marked | kanda×9 book×1 subbook×1 | — |
+| Vinaya | aṭṭhakathā | `vin02a2.att.xml` | marked | khandaka×10 book×1 | — |
+| Vinaya | aṭṭhakathā | `vin02a3.att.xml` | marked | khandaka×12 book×1 | — |
+| Vinaya | aṭṭhakathā | `vin02a4.att.xml` | marked | chapter×18 book×1 | — |
 | Vinaya | ṭīkā | `vin01t1.tik.xml` | unmarked | — | — |
 | Vinaya | ṭīkā | `vin01t2.tik.xml` | unmarked | — | — |
-| Vinaya | ṭīkā | `vin02t.tik.xml` | unmarked | — | — |
+| Vinaya | ṭīkā | `vin02t.tik.xml` | marked | khandaka×22 chapter×16 kanda×8 book×4 subbook×1 | — |
 | Vinaya | ṭīkā | `vin04t.nrf.xml` | unmarked | — | — |
 | Vinaya | ṭīkā | `vin05t.nrf.xml` | unmarked | — | — |
-| Vinaya | ṭīkā | `vin06t.nrf.xml` | unmarked | — | — |
-| Vinaya | ṭīkā | `vin07t.nrf.xml` | unmarked | — | — |
+| Vinaya | ṭīkā | `vin06t.nrf.xml` | marked | khandaka×22 chapter×18 kanda×14 book×5 subbook×1 | — |
+| Vinaya | ṭīkā | `vin07t.nrf.xml` | marked | khandaka×22 chapter×17 kanda×14 book×5 subbook×1 | — |
 | Vinaya | ṭīkā | `vin08t.nrf.xml` | unmarked | — | — |
 | Vinaya | ṭīkā | `vin09t.nrf.xml` | unmarked | — | — |
 | Vinaya | ṭīkā | `vin10t.nrf.xml` | unmarked | — | — |
