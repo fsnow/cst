@@ -61,6 +61,9 @@ namespace CST.Avalonia.Tests.Models
         [InlineData("e0906n.nrf.xml", 28, 35)]
         [InlineData("e0201n.nrf.xml", 110, 221)]
         [InlineData("e0401n.nrf.xml", 86, 93)]
+        [InlineData("e0401n.nrf.xml", 114, 121)]  // placeholder: the scan lacks 114-115
+        [InlineData("e0401n.nrf.xml", 116, 123)]
+        [InlineData("e0401n.nrf.xml", 324, 331)]  // the last text page
         [InlineData("e0602n.nrf.xml", 176, 179)]
         [InlineData("e0702n.nrf.xml", 162, 177)]
         [InlineData("e0703n.nrf.xml", 216, 222)]
@@ -104,6 +107,18 @@ namespace CST.Avalonia.Tests.Models
             }
             Assert.Equal(62, s.ForVersion("8dpTHx/4GZ/UuovEyXg7OWOvrvk=").PdfPageFor(48));
             Assert.Equal(62, s.ForVersion(null).PdfPageFor(48));
+        }
+
+        [Fact]
+        public void E0401n_OriginalScanLacksPrint114To115()
+        {
+            // Read by eye (2026-11-27): PDF 122 is print 113 and PDF 123 is print 116; PDF 331 is 324, the
+            // last text page. Print 324 had mapped past the end of the PDF.
+            var s = Sources.Inst.GetSource("e0401n.nrf.xml", Sources.SourceType.BurmeseAnya)!;
+            var original = s.ForVersion("Hry8vsD4gboGIVKllmSqRgJ11RY=");
+            Assert.Equal(122, original.PdfPageFor(113));
+            Assert.Equal(123, original.PdfPageFor(116));
+            Assert.Equal(331, original.PdfPageFor(324));
         }
 
         [Fact]
