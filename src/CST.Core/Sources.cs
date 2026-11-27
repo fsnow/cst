@@ -713,9 +713,9 @@ public class Sources
 		// in print order, and drops pages scanned twice. Its mapping goes under its own hash and is the latest;
 		// addSourceVersions lists the original and every earlier SharePoint version with the same pages, which
 		// keep the addSource mapping above. Books on a repaired PDF whose mapping is unchanged have no entries.
-		// Not every repeat was dropped: e0804n (one copy of 269) and e1007n (11 and 103) keep theirs, as
-		// ExtraPagesAfter in their latest mappings. A later version that drops them changes those books' pages,
-		// so it needs an addVersion of its own: without one it would get these mappings, and open pages late.
+		// Not every repeat was dropped: e1007n keeps its re-shot pages (after 11 and 103), as ExtraPagesAfter in
+		// its latest mapping. A later version that drops them changes that book's pages, so it needs an
+		// addVersion of its own: without one it would get this mapping, and open pages late.
 		// Likewise the truncated SharePoint uploads (1957 Jātaka-aṭṭhakathā-6 v1-v2, 2010 Khuddaka v1-v2) are
 		// listed with the originals: offline, the app still serves a cached copy that is not intact. (#1136 review)
 		// 1957 edition/1 - Mula - Vinaya/Cūḷavaggapāḷi.pdf
@@ -904,7 +904,7 @@ public class Sources
 		addVersion("e0813n.nrf.xml", SourceType.BurmeseAnya, new[] { "rxRN4wHckH93esplANU/OzBwSRc=" }, 33, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/6. Byākaraṇa gantha-saṅgaho/4. Saddanītippakaraṇaṃ (dhātumālā).pdf
 		addSourceVersions("e0804n.nrf.xml", SourceType.BurmeseAnya, "zI/GF7EHnBfbh6SfcvqvJptCPX8=");
-		addVersion("e0804n.nrf.xml", SourceType.BurmeseAnya, new[] { "qjHIV9oFyJVgELu52AQWNaSdm50=" }, 8, missingPages: null, extraPagesAfter: new[] { 269 }, pageOverrides: null);
+		addVersion("e0804n.nrf.xml", SourceType.BurmeseAnya, new[] { "bXLU2EihugNPUJUiGrCsLY6Ggbs=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/7. Nīti-gantha-saṅgaho/3. Sūrassatinīti.pdf
 		addSourceVersions("e1007n.nrf.xml", SourceType.BurmeseAnya, "LyVwC68Wq3AeHnx2dIliFNh8NUc=");
 		addVersion("e1007n.nrf.xml", SourceType.BurmeseAnya, new[] { "1pX1kvcjKRVcGSk08QzK3u6I9x4=" }, 9, missingPages: null, extraPagesAfter: new[] { 11, 11, 11, 103, 103 }, pageOverrides: null);
