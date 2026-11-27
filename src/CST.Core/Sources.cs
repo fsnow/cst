@@ -719,6 +719,38 @@ public class Sources
 		d[sourceType] = new Source(sourceType, pageStart, path, missingPages, pageEdition, extraPagesAfter, pageOverrides);
 	}
 
+	/// <summary>
+	/// The versions of a book's PDF that its <see cref="addSource"/> mapping fits, by SharePoint
+	/// <c>quickXorHash</c>. Needed only once the book also has an <see cref="addVersion"/> entry: a file whose
+	/// version is not listed gets the latest mapping, so every version the addSource mapping was measured
+	/// against (and any older copy with the same pages) must be listed here, or a reader with that copy
+	/// cached would get the newer mapping. The app logs each PDF's hash when it opens one ("PDF version …").
+	/// Call after the book's addSource. (#1136)
+	/// </summary>
+	private void addSourceVersions(string filename, SourceType sourceType, params string[] quickXorHashes)
+	{
+		var main = GetSource(filename, sourceType)
+			?? throw new InvalidOperationException($"addSourceVersions for {filename} {sourceType} before its addSource");
+		main.AddVersion(quickXorHashes, main, latest: false);
+	}
+
+	/// <summary>
+	/// A later version of a book's PDF whose pages differ from the earlier versions', with its own mapping,
+	/// by SharePoint <c>quickXorHash</c>. The last one listed for a book is its latest mapping, which any
+	/// version with no mapping of its own gets: [fsnow, 2026-11-26] "If there is a newer file we don't
+	/// have a mapping for, we will use the latest." Call after the book's addSource and addSourceVersions,
+	/// oldest version first. (#1136)
+	/// </summary>
+	private void addVersion(string filename, SourceType sourceType, string[] quickXorHashes, int pageStart,
+		int[]? missingPages = null, int[]? extraPagesAfter = null, Dictionary<int, int>? pageOverrides = null)
+	{
+		var main = GetSource(filename, sourceType)
+			?? throw new InvalidOperationException($"addVersion for {filename} {sourceType} before its addSource");
+		main.AddVersion(quickXorHashes,
+			new Source(sourceType, pageStart, main.Path, missingPages, main.PageEdition, extraPagesAfter, pageOverrides),
+			latest: true);
+	}
+
 	public Source? GetSource(string filename, SourceType sourceType)
 	{
 		if (sourcesMap.TryGetValue(filename, out var d) && d.TryGetValue(sourceType, out var source))
@@ -783,7 +815,7 @@ public class Sources
 
 		/// <summary>
 		/// Relative path within SharePoint's _Source folder.
-		/// Use with ISharePointService.DownloadPdfAsync().
+		/// Use with ISharePointService.GetPdfAsync().
 		/// </summary>
 		public string Path { get; set; }
 
@@ -827,13 +859,43 @@ public class Sources
 		/// Print page → PDF page, for pages the scan holds out of order, which no count of missing and
 		/// extra pages can place. It wins over the computed page and moves only the pages it names. The
 		/// 1957 vin13t scan runs 44, 45, 48, 47, 49 (46 absent), so its entry is { 47 → 61, 48 → 60 }.
-		/// If the PDF itself is ever reordered, remove the entry with it.
+		/// If the PDF itself is reordered, the reordered version gets an addVersion entry without this one,
+		/// and the scan it replaced keeps this one (#1136).
 		/// </summary>
 		public IReadOnlyDictionary<int, int> PageOverrides { get; }
 
+		private readonly Dictionary<string, Source> versions = new();
+		private Source? latest;
+
+		/// <summary>
+		/// The mapping for each listed version of this PDF, by SharePoint <c>quickXorHash</c>: this one for the
+		/// versions in <c>addSourceVersions</c>, and each <c>addVersion</c> entry's own. (#1136)
+		/// </summary>
+		public IReadOnlyDictionary<string, Source> Versions => versions;
+
+		/// <summary>The mapping a version with none of its own gets: the last addVersion entry, or this one.</summary>
+		public Source Latest => latest ?? this;
+
+		internal void AddVersion(IEnumerable<string> quickXorHashes, Source mapping, bool latest)
+		{
+			foreach (var hash in quickXorHashes)
+				if (!versions.TryAdd(hash, mapping))
+					throw new InvalidOperationException($"Two mappings for version {hash} of {Path}");
+			if (latest)
+				this.latest = mapping;
+		}
+
+		/// <summary>
+		/// The mapping for the version of the PDF with this hash: its own, if it is listed, otherwise the
+		/// latest. A null hash (the version could not be read) also gets the latest.
+		/// </summary>
+		public Source ForVersion(string? quickXorHash) =>
+			quickXorHash != null && versions.TryGetValue(quickXorHash, out var v) ? v : Latest;
+
 		/// <summary>
 		/// PDF page for a printed page number, accounting for pages absent from the scan and pages
-		/// the scan holds twice.
+		/// the scan holds twice. This is the mapping of the PDF version this Source describes; for the
+		/// version on disk, call <see cref="ForVersion"/> first.
 		/// </summary>
 		public int PdfPageFor(int printPage)
 		{
