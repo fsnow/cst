@@ -252,6 +252,14 @@ These announce the release to users. Pushing them early points people at somethi
 Update both **immediately after flipping the release from draft to published** — not days later. A
 README still advertising the previous beta is the most visible form of release drift.
 
+**One-time, after 5.0.0-beta.10 is published: upload the repaired source PDFs.** The 50 repaired PDFs
+replace the originals on SharePoint under the same names. Beta 10 has the mappings for both versions
+(#1136, #1150), but beta 9 and earlier have only the originals'. So the upload waits for beta 10. [fsnow,
+2026-11-27: chose "After beta 10 ships"] [observed, adversarial review] Uploaded earlier, a beta 9 first
+download would open about 4,082 pages across 24 books wrong. The upload is done by hand, outside the app.
+Afterwards, check each file's SharePoint `quickXorHash` against `repaired_quickxor` in cst-sources
+`data/pdf-repair-hashes.tsv`.
+
 ### Not version strings — do not bulk-replace
 
 These contain the version text but must be left alone; a blind find-and-replace corrupts them:
