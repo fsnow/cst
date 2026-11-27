@@ -37,7 +37,9 @@ namespace CST.Avalonia.Tests.Models
         [InlineData("vin13t.nrf.xml", 59, 73)]
         [InlineData("vin13t.nrf.xml", 443, 457)]
         [InlineData("abh05t.nrf.xml", 35, 322)]
-        [InlineData("vin05t.nrf.xml", 213, 228)]
+        [InlineData("vin05t.nrf.xml", 111, 116)]   // the last page before the dropped second copy of 102-111
+        [InlineData("vin05t.nrf.xml", 112, 117)]   // the first page after it
+        [InlineData("vin05t.nrf.xml", 213, 218)]
         [InlineData("vin09t.nrf.xml", 418, 436)]   // after placeholders for 416-417, which the scan lacks
         [InlineData("vin09t.nrf.xml", 451, 469)]
         public void Repaired1957Pdf_OpensThePrintPage(string book, int print, int pdf) =>
@@ -120,6 +122,20 @@ namespace CST.Avalonia.Tests.Models
             Assert.Equal(122, original.PdfPageFor(113));
             Assert.Equal(123, original.PdfPageFor(116));
             Assert.Equal(331, original.PdfPageFor(324));
+        }
+
+        [Fact]
+        public void Vin05t_Print203IsTheScansLastPage()
+        {
+            // Read by eye (2026-11-27): the original scan's last page, PDF 484, after the back cover, is print
+            // 203, continuing print 202 (PDF 217). The repaired copy puts it in print order, at PDF 208.
+            var s = Sources.Inst.GetSource("vin05t.nrf.xml", Sources.SourceType.Burmese1957)!;
+            var original = s.ForVersion("Sr8VouZuPBV0MTqzkNMuduM3iQk=");
+            Assert.Equal(217, original.PdfPageFor(202));
+            Assert.Equal(484, original.PdfPageFor(203));
+            Assert.Equal(219, original.PdfPageFor(205));
+            Assert.Equal(208, s.Latest.PdfPageFor(203));
+            Assert.Equal(210, s.Latest.PdfPageFor(205));
         }
 
         [Fact]
