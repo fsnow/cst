@@ -612,7 +612,10 @@ public class Sources
 		addSource("s0104t.nrf.xml", SourceType.Burmese1957, 5, $"{Burmese1957Tika}/{Tik_DN_SilakkhandhaAbhinava1_1957}");
 		addSource("s0105t.nrf.xml", SourceType.Burmese1957, 8, $"{Burmese1957Tika}/{Tik_DN_SilakkhandhaAbhinava2_1957}");
 		addSource("vin04t.nrf.xml", SourceType.Burmese1957, 30, $"{Burmese1957Tika}/{Tik_Vin_Dvematika_1957}");
-		addSource("vin05t.nrf.xml", SourceType.Burmese1957, 6, $"{Burmese1957Tika}/{Tik_Vin_Vinayasangaha_1957}", new[] { 203, 204, 206, 210, 212 }, extraPagesAfter: new[] { 111, 111, 111, 111, 111, 111, 111, 111, 111, 111, 202, 205, 209, 211 });
+		// Print 203 is not missing: the scan has it as its last page (PDF 484), after the back cover. It stays in
+		// the missing list, which keeps the pages after it in place, and the override opens it.
+		addSource("vin05t.nrf.xml", SourceType.Burmese1957, 6, $"{Burmese1957Tika}/{Tik_Vin_Vinayasangaha_1957}", new[] { 203, 204, 206, 210, 212 }, extraPagesAfter: new[] { 111, 111, 111, 111, 111, 111, 111, 111, 111, 111, 202, 205, 209, 211 },
+			pageOverrides: new() { [203] = 484 });
 		addSource("vin06t.nrf.xml", SourceType.Burmese1957, 23, $"{Burmese1957Tika}/{Tik_Vin_Vajirabuddhi_1957}", new[] { 390, 506 });
 		addSource("vin07t.nrf.xml", SourceType.Burmese1957, 9, $"{Burmese1957Tika}/{Tik_Vin_Vimativinodani1_1957}");
 		addSource("vin08t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Vinayalankara1_1957}");
@@ -710,12 +713,11 @@ public class Sources
 		// in print order, and drops pages scanned twice. Its mapping goes under its own hash and is the latest;
 		// addSourceVersions lists the original and every earlier SharePoint version with the same pages, which
 		// keep the addSource mapping above. Books on a repaired PDF whose mapping is unchanged have no entries.
-		// Not every repeat was dropped: vin05t (10 after 111), e0804n (one copy of 269) and e1007n (11 and 103)
-		// keep theirs, as ExtraPagesAfter in their latest mappings. A later version that drops them changes those
-		// books' pages, so it needs an addVersion of its own: without one it would get these mappings, and open
-		// pages late. Likewise the
-		// truncated SharePoint uploads (1957 Jātaka-aṭṭhakathā-6 v1-v2, 2010 Khuddaka v1-v2) are listed with the
-		// originals: offline, the app still serves a cached copy that is not intact. (#1136 review)
+		// Not every repeat was dropped: e0804n (one copy of 269) and e1007n (11 and 103) keep theirs, as
+		// ExtraPagesAfter in their latest mappings. A later version that drops them changes those books' pages,
+		// so it needs an addVersion of its own: without one it would get these mappings, and open pages late.
+		// Likewise the truncated SharePoint uploads (1957 Jātaka-aṭṭhakathā-6 v1-v2, 2010 Khuddaka v1-v2) are
+		// listed with the originals: offline, the app still serves a cached copy that is not intact. (#1136 review)
 		// 1957 edition/1 - Mula - Vinaya/Cūḷavaggapāḷi.pdf
 		addSourceVersions("vin02m3.mul.xml", SourceType.Burmese1957, "Wsa4s3SaRHbMo8LdD1OqQO3trbw=");
 		addVersion("vin02m3.mul.xml", SourceType.Burmese1957, new[] { "T0oYCRsot789+NYr+2B6nTmBqz8=" }, 11, missingPages: null, extraPagesAfter: null, pageOverrides: null);
@@ -839,7 +841,7 @@ public class Sources
 		addVersion("vin06t.nrf.xml", SourceType.Burmese1957, new[] { "NxB4zq+Bem/5jHiy+r+wzpvBc7I=" }, 23, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// 1957 edition/5 - Tika_/Vinayasaṅgahaṭṭhakathā.pdf
 		addSourceVersions("vin05t.nrf.xml", SourceType.Burmese1957, "Sr8VouZuPBV0MTqzkNMuduM3iQk=");
-		addVersion("vin05t.nrf.xml", SourceType.Burmese1957, new[] { "jL6BdyJ2r9SQmhYSqAY2I2NPPDM=" }, 6, missingPages: null, extraPagesAfter: new[] { 111, 111, 111, 111, 111, 111, 111, 111, 111, 111 }, pageOverrides: null);
+		addVersion("vin05t.nrf.xml", SourceType.Burmese1957, new[] { "neVqfeCsNbVEZ74xyRS+iaeyQB0=" }, 6, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// 1957 edition/5 - Tika_/Kaṅkhāvitaraṇī purāṇa-abhinava-ṭīkā.pdf
 		addSourceVersions("vin09t.nrf.xml", SourceType.Burmese1957, "Vc6wpHw0qBAwVDGvqsQB+U7dy4E=");
 		addVersion("vin09t.nrf.xml", SourceType.Burmese1957, new[] { "bw5rmQnByMUxjO8bO+lz2LGYckM=" }, 19, missingPages: null, extraPagesAfter: null, pageOverrides: null);
