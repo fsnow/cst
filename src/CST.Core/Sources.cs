@@ -616,7 +616,7 @@ public class Sources
 		addSource("vin06t.nrf.xml", SourceType.Burmese1957, 23, $"{Burmese1957Tika}/{Tik_Vin_Vajirabuddhi_1957}", new[] { 390, 506 });
 		addSource("vin07t.nrf.xml", SourceType.Burmese1957, 9, $"{Burmese1957Tika}/{Tik_Vin_Vimativinodani1_1957}");
 		addSource("vin08t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Vinayalankara1_1957}");
-		addSource("vin09t.nrf.xml", SourceType.Burmese1957, 19, $"{Burmese1957Tika}/{Tik_Vin_KankhaPurana_1957}", new[] { 118, 450 });
+		addSource("vin09t.nrf.xml", SourceType.Burmese1957, 19, $"{Burmese1957Tika}/{Tik_Vin_KankhaPurana_1957}", new[] { 118, 416, 417, 450 });
 		addSource("vin10t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Vinayavinicchaya_1957}");
 		addSource("vin11t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_VinayavinicchayaTika1_1957}");
 		addSource("vin12t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Pacityadiyojana_1957}", new[] { 408, 546 });

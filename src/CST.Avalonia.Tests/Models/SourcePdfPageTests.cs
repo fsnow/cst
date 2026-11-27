@@ -163,6 +163,17 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
+        public void Vin09t_1957_ScanLacksPrint416To417()
+        {
+            // PDF 432 is print 415 and PDF 433 is print 418; 118 and 450 are missing too.
+            var s = Sources.Inst.GetSource("vin09t.nrf.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 118, 416, 417, 450 }, s.MissingPages);
+            Assert.Equal(432, s.PdfPageFor(415));
+            Assert.Equal(433, s.PdfPageFor(418));
+            Assert.Equal(465, s.PdfPageFor(451));
+        }
+
+        [Fact]
         public void S0519a_1957_ScanLacksPrint236To237()
         {
             // The Netti-aṭṭhakathā numbers from 1 at PDF 181; PDF 415 is print 235 and PDF 416 is print 238.
