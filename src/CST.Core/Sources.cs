@@ -710,10 +710,10 @@ public class Sources
 		// in print order, and drops pages scanned twice. Its mapping goes under its own hash and is the latest;
 		// addSourceVersions lists the original and every earlier SharePoint version with the same pages, which
 		// keep the addSource mapping above. Books on a repaired PDF whose mapping is unchanged have no entries.
-		// Not every repeat was dropped: the repaired 1957 KN file keeps its 99-page repeat (s0504m, s0505m), and
-		// vin05t (10 after 111), e0804n (one copy of 269) and e1007n (11 and 103) keep theirs, as ExtraPagesAfter
-		// in their latest mappings. A later version that drops them changes those books' pages, so it needs an
-		// addVersion of its own: without one it would get these mappings, and open pages late. Likewise the
+		// Not every repeat was dropped: vin05t (10 after 111), e0804n (one copy of 269) and e1007n (11 and 103)
+		// keep theirs, as ExtraPagesAfter in their latest mappings. A later version that drops them changes those
+		// books' pages, so it needs an addVersion of its own: without one it would get these mappings, and open
+		// pages late. Likewise the
 		// truncated SharePoint uploads (1957 Jātaka-aṭṭhakathā-6 v1-v2, 2010 Khuddaka v1-v2) are listed with the
 		// originals: offline, the app still serves a cached copy that is not intact. (#1136 review)
 		// 1957 edition/1 - Mula - Vinaya/Cūḷavaggapāḷi.pdf
@@ -734,13 +734,13 @@ public class Sources
 		// 1957 edition/2 - Mula - Sutta/Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf: placeholders for
 		// the blank print 12 and 194 (between texts) and 276-278 make one page run, so all five books start at 25.
 		addSourceVersions("s0502m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
-		addVersion("s0502m.mul.xml", SourceType.Burmese1957, new[] { "JMSo6n9tdZMenFisSeoiGcFkuXU=" }, 25, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		addVersion("s0502m.mul.xml", SourceType.Burmese1957, new[] { "Dlm9hZQ61Yc56xLsWtGTx2uFZbo=" }, 25, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		addSourceVersions("s0503m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
-		addVersion("s0503m.mul.xml", SourceType.Burmese1957, new[] { "JMSo6n9tdZMenFisSeoiGcFkuXU=" }, 25, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		addVersion("s0503m.mul.xml", SourceType.Burmese1957, new[] { "Dlm9hZQ61Yc56xLsWtGTx2uFZbo=" }, 25, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		addSourceVersions("s0504m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
-		addVersion("s0504m.mul.xml", SourceType.Burmese1957, new[] { "JMSo6n9tdZMenFisSeoiGcFkuXU=" }, 25, missingPages: null, extraPagesAfter: KN_KhuddakaSuttanipata_1957_Extra, pageOverrides: null);
+		addVersion("s0504m.mul.xml", SourceType.Burmese1957, new[] { "Dlm9hZQ61Yc56xLsWtGTx2uFZbo=" }, 25, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		addSourceVersions("s0505m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
-		addVersion("s0505m.mul.xml", SourceType.Burmese1957, new[] { "JMSo6n9tdZMenFisSeoiGcFkuXU=" }, 25, missingPages: null, extraPagesAfter: KN_KhuddakaSuttanipata_1957_Extra, pageOverrides: null);
+		addVersion("s0505m.mul.xml", SourceType.Burmese1957, new[] { "Dlm9hZQ61Yc56xLsWtGTx2uFZbo=" }, 25, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// 1957 edition/2 - Mula - Sutta/Mahāniddesapāḷi.pdf
 		addSourceVersions("s0515m.mul.xml", SourceType.Burmese1957, "4pD0FRbn9EA1vSVlqjBx9PchV7o=");
 		addVersion("s0515m.mul.xml", SourceType.Burmese1957, new[] { "Hb3n6EXa8p04JCwpShEnPeCcyIY=" }, 5, missingPages: null, extraPagesAfter: null, pageOverrides: null);

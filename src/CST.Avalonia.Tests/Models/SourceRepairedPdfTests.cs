@@ -22,8 +22,9 @@ namespace CST.Avalonia.Tests.Models
         [InlineData("s0510m2.mul.xml", 216, 231)]
         [InlineData("s0502m.mul.xml", 13, 37)]    // Dhammapada opening, after the placeholder for the blank 12
         [InlineData("s0504m.mul.xml", 195, 219)]  // Itivuttaka opening, after the placeholder for the blank 194
-        [InlineData("s0505m.mul.xml", 279, 402)]   // Suttanipāta opening, after placeholders for 276-278
-        [InlineData("s0504m.mul.xml", 220, 343)]   // the 99-page repeat is kept
+        [InlineData("s0505m.mul.xml", 279, 303)]   // Suttanipāta opening, after placeholders for 276-278
+        [InlineData("s0504m.mul.xml", 219, 243)]   // the last page before the dropped 99-page repeat
+        [InlineData("s0504m.mul.xml", 220, 244)]   // the first page after it
         [InlineData("s0515m.mul.xml", 216, 220)]
         [InlineData("s0519m.mul.xml", 158, 164)]
         [InlineData("s0301m.mul.xml", 156, 193)]
