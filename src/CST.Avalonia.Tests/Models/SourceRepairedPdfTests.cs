@@ -60,7 +60,7 @@ namespace CST.Avalonia.Tests.Models
 
         [Theory]
         // Read by eye in the repaired Añña copies (2026-11-26): the real page after each placeholder
-        // or dropped repeat. e0804n keeps one copy of its repeated 269; e1007n keeps its re-shots.
+        // or dropped repeat. e1007n keeps its re-shots.
         [InlineData("e0906n.nrf.xml", 28, 35)]
         [InlineData("e0201n.nrf.xml", 110, 221)]
         [InlineData("e0401n.nrf.xml", 86, 93)]
@@ -71,8 +71,10 @@ namespace CST.Avalonia.Tests.Models
         [InlineData("e0702n.nrf.xml", 162, 177)]
         [InlineData("e0703n.nrf.xml", 216, 222)]
         [InlineData("e0703n.nrf.xml", 254, 260)]
-        [InlineData("e0804n.nrf.xml", 353, 361)]
-        [InlineData("e0804n.nrf.xml", 375, 383)]
+        [InlineData("e0804n.nrf.xml", 269, 276)]
+        [InlineData("e0804n.nrf.xml", 270, 277)]   // after the dropped second copy of 269
+        [InlineData("e0804n.nrf.xml", 353, 360)]
+        [InlineData("e0804n.nrf.xml", 375, 382)]
         [InlineData("e0813n.nrf.xml", 117, 149)]
         [InlineData("e1007n.nrf.xml", 27, 38)]
         public void RepairedAnyaPdf_OpensThePrintPage(string book, int print, int pdf) =>
