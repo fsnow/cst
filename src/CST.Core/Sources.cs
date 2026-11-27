@@ -321,7 +321,7 @@ public class Sources
 		addSource("vin01m.mul.xml", SourceType.Burmese1957, 23, $"{Burmese1957Vinaya}/{Vin_Parajika_1957}");
 		addSource("vin02m1.mul.xml", SourceType.Burmese1957, 15, $"{Burmese1957Vinaya}/{Vin_Pacittiya_1957}");
 		addSource("vin02m2.mul.xml", SourceType.Burmese1957, 15, $"{Burmese1957Vinaya}/{Vin_Mahavagga_1957}");
-		addSource("vin02m3.mul.xml", SourceType.Burmese1957, 11, $"{Burmese1957Vinaya}/{Vin_Culavagga_1957}");
+		addSource("vin02m3.mul.xml", SourceType.Burmese1957, 11, $"{Burmese1957Vinaya}/{Vin_Culavagga_1957}", new[] { 282, 283 });
 		addSource("vin02m4.mul.xml", SourceType.Burmese1957, 15, $"{Burmese1957Vinaya}/{Vin_Parivara_1957}");
 
 		// --- Sutta Pitaka - Dīgha Nikāya ---
@@ -330,12 +330,12 @@ public class Sources
 		addSource("s0103m.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Sutta}/{DN_Pathikavagga_1957}");
 
 		// --- Sutta Pitaka - Majjhima Nikāya ---
-		addSource("s0201m.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{MN_Mulapannasa_1957}", new[] { 379 });
+		addSource("s0201m.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{MN_Mulapannasa_1957}");
 		addSource("s0202m.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Sutta}/{MN_Majjhimapannasa_1957}");
 		addSource("s0203m.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Sutta}/{MN_Uparipannasa_1957}");
 
 		// --- Sutta Pitaka - Saṃyutta Nikāya ---
-		addSource("s0301m.mul.xml", SourceType.Burmese1957, 38, $"{Burmese1957Sutta}/{SN_SagathaNidana_1957}");
+		addSource("s0301m.mul.xml", SourceType.Burmese1957, 38, $"{Burmese1957Sutta}/{SN_SagathaNidana_1957}", extraPagesAfter: new[] { 155, 155 });
 		addSource("s0302m.mul.xml", SourceType.Burmese1957, 40, $"{Burmese1957Sutta}/{SN_SagathaNidana_1957}");
 		addSource("s0303m.mul.xml", SourceType.Burmese1957, 19, $"{Burmese1957Sutta}/{SN_KhandhaSalayatana_1957}");
 		addSource("s0304m.mul.xml", SourceType.Burmese1957, 19, $"{Burmese1957Sutta}/{SN_KhandhaSalayatana_1957}");
@@ -373,12 +373,12 @@ public class Sources
 		addSource("s0508m.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{KN_VimanavattuTherigatha_1957}");
 		addSource("s0509m.mul.xml", SourceType.Burmese1957, 15, $"{Burmese1957Sutta}/{KN_VimanavattuTherigatha_1957}");
 		addSource("s0510m1.mul.xml", SourceType.Burmese1957, 20, $"{Burmese1957Sutta}/{KN_Apadana1_1957}");
-		addSource("s0510m2.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{KN_Apadana2Buddhavamsa_1957}", new[] { 186 });
+		addSource("s0510m2.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{KN_Apadana2Buddhavamsa_1957}", new[] { 186, 214, 215 });
 		addSource("s0511m.mul.xml", SourceType.Burmese1957, 13, $"{Burmese1957Sutta}/{KN_Apadana2Buddhavamsa_1957}");
 		addSource("s0512m.mul.xml", SourceType.Burmese1957, 13, $"{Burmese1957Sutta}/{KN_Apadana2Buddhavamsa_1957}");
-		addSource("s0513m.mul.xml", SourceType.Burmese1957, 27, $"{Burmese1957Sutta}/{KN_Jataka1_1957}");
+		addSource("s0513m.mul.xml", SourceType.Burmese1957, 27, $"{Burmese1957Sutta}/{KN_Jataka1_1957}", new[] { 80, 81, 264, 265, 270, 271 });
 		addSource("s0514m.mul.xml", SourceType.Burmese1957, 5, $"{Burmese1957Sutta}/{KN_Jataka2_1957}");
-		addSource("s0515m.mul.xml", SourceType.Burmese1957, 5, $"{Burmese1957Sutta}/{KN_Mahaniddesa_1957}");
+		addSource("s0515m.mul.xml", SourceType.Burmese1957, 5, $"{Burmese1957Sutta}/{KN_Mahaniddesa_1957}", extraPagesAfter: new[] { 215, 215 });
 		addSource("s0516m.mul.xml", SourceType.Burmese1957, 6, $"{Burmese1957Sutta}/{KN_Culaniddesa_1957}");
 		addSource("s0517m.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Sutta}/{KN_Patisambhidamagga_1957}");
 		addSource("s0519m.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Sutta}/{KN_NettiPetakopadesa_1957}", new[] { 156, 157 });
@@ -392,13 +392,13 @@ public class Sources
 		addSource("abh03m1.mul.xml", SourceType.Burmese1957, 8, $"{Burmese1957Abhidhamma}/{Abh_DhatukathaPuggalapannatti_1957}");
 		addSource("abh03m2.mul.xml", SourceType.Burmese1957, 8, $"{Burmese1957Abhidhamma}/{Abh_DhatukathaPuggalapannatti_1957}");
 		addSource("abh03m3.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Abhidhamma}/{Abh_Kathavatthu_1957}");
-		addSource("abh03m4.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Abhidhamma}/{Abh_Yamaka1_1957}", new[] { 16 });
+		addSource("abh03m4.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Abhidhamma}/{Abh_Yamaka1_1957}", new[] { 16 }, extraPagesAfter: new[] { 19, 19 });
 		addSource("abh03m5.mul.xml", SourceType.Burmese1957, 12, $"{Burmese1957Abhidhamma}/{Abh_Yamaka2_1957}");
 		addSource("abh03m6.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Abhidhamma}/{Abh_Yamaka3_1957}");
 		addSource("abh03m7.mul.xml", SourceType.Burmese1957, 30, $"{Burmese1957Abhidhamma}/{Abh_Patthana1_1957}");
 		addSource("abh03m8.mul.xml", SourceType.Burmese1957, 28, $"{Burmese1957Abhidhamma}/{Abh_Patthana2_1957}", extraPagesAfter: new[] { 95, 95 }); // scan repeats print pages 94-95
-		addSource("abh03m9.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Abhidhamma}/{Abh_Patthana3_1957}");
-		addSource("abh03m10.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Abhidhamma}/{Abh_Patthana4_1957}", new[] { 466 });
+		addSource("abh03m9.mul.xml", SourceType.Burmese1957, 7, $"{Burmese1957Abhidhamma}/{Abh_Patthana3_1957}", new[] { 506, 507 });
+		addSource("abh03m10.mul.xml", SourceType.Burmese1957, 10, $"{Burmese1957Abhidhamma}/{Abh_Patthana4_1957}", new[] { 280, 281, 466 });
 		addSource("abh03m11.mul.xml", SourceType.Burmese1957, 6, $"{Burmese1957Abhidhamma}/{Abh_Patthana5_1957}", new[] { 62, 122, 158, 196, 214, 306, 326, 348, 376, 402, 424 });
 
 		// =============================================
@@ -420,7 +420,7 @@ public class Sources
 		// --- Sutta Pitaka - Majjhima Nikāya ---
 		addSource("s0201m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{MN_Mulapannasa_2010}", new[] { 379 });
 		addSource("s0202m.mul.xml", SourceType.Burmese2010, 11, $"{Burmese2010Mula}/{MN_Majjhimapannasa_2010}");
-		addSource("s0203m.mul.xml", SourceType.Burmese2010, 11, $"{Burmese2010Mula}/{MN_Uparipannasa_2010}");
+		addSource("s0203m.mul.xml", SourceType.Burmese2010, 11, $"{Burmese2010Mula}/{MN_Uparipannasa_2010}", new[] { 202, 203 });
 
 		// --- Sutta Pitaka - Saṃyutta Nikāya ---
 		addSource("s0301m.mul.xml", SourceType.Burmese2010, 43, $"{Burmese2010Mula}/{SN_SagathaNidana_2010}");
@@ -446,16 +446,16 @@ public class Sources
 		addSource("s0501m.mul.xml", SourceType.Burmese2010, 29, $"{Burmese2010Mula}/{KN_KhuddakaSuttanipata_2010}");
 		addSource("s0502m.mul.xml", SourceType.Burmese2010, 29, $"{Burmese2010Mula}/{KN_KhuddakaSuttanipata_2010}");
 		addSource("s0503m.mul.xml", SourceType.Burmese2010, 29, $"{Burmese2010Mula}/{KN_KhuddakaSuttanipata_2010}");
-		addSource("s0504m.mul.xml", SourceType.Burmese2010, 29, $"{Burmese2010Mula}/{KN_KhuddakaSuttanipata_2010}");
+		addSource("s0504m.mul.xml", SourceType.Burmese2010, 29, $"{Burmese2010Mula}/{KN_KhuddakaSuttanipata_2010}", new[] { 244, 245 });
 		addSource("s0505m.mul.xml", SourceType.Burmese2010, 27, $"{Burmese2010Mula}/{KN_KhuddakaSuttanipata_2010}");
-		addSource("s0506m.mul.xml", SourceType.Burmese2010, 21, $"{Burmese2010Mula}/{KN_VimanavattuTherigatha_2010}");
+		addSource("s0506m.mul.xml", SourceType.Burmese2010, 21, $"{Burmese2010Mula}/{KN_VimanavattuTherigatha_2010}", new[] { 120, 121 });
 		addSource("s0507m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_VimanavattuTherigatha_2010}");
 		addSource("s0508m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_VimanavattuTherigatha_2010}");
 		addSource("s0509m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_VimanavattuTherigatha_2010}");
 		addSource("s0510m1.mul.xml", SourceType.Burmese2010, 25, $"{Burmese2010Mula}/{KN_Apadana1_2010}");
-		addSource("s0510m2.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}", new[] { 186 });
-		addSource("s0511m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}", new[] { 186 });
-		addSource("s0512m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}", new[] { 186 });
+		addSource("s0510m2.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}");
+		addSource("s0511m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}");
+		addSource("s0512m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}");
 		addSource("s0513m.mul.xml", SourceType.Burmese2010, 31, $"{Burmese2010Mula}/{KN_Jataka1_2010}");
 		addSource("s0514m.mul.xml", SourceType.Burmese2010, 9, $"{Burmese2010Mula}/{KN_Jataka2_2010}");
 		addSource("s0515m.mul.xml", SourceType.Burmese2010, 9, $"{Burmese2010Mula}/{KN_Mahaniddesa_2010}");
@@ -466,20 +466,20 @@ public class Sources
 		addSource("s0520m.nrf.xml", SourceType.Burmese2010, 11, $"{Burmese2010Mula}/{KN_NettiPetakopadesa_2010}");
 
 		// --- Abhidhamma Pitaka ---
-		addSource("abh01m.mul.xml", SourceType.Burmese2010, 23, $"{Burmese2010Mula}/{Abh_Dhammasangani_2010}");
+		addSource("abh01m.mul.xml", SourceType.Burmese2010, 23, $"{Burmese2010Mula}/{Abh_Dhammasangani_2010}", new[] { 138, 139 });
 		addSource("abh02m.mul.xml", SourceType.Burmese2010, 15, $"{Burmese2010Mula}/{Abh_Vibhanga_2010}");
 		// abh03m1 = Dhatukatha, abh03m2 = Puggalapannatti (both in combined PDF)
 		addSource("abh03m1.mul.xml", SourceType.Burmese2010, 11, $"{Burmese2010Mula}/{Abh_DhatukathaPuggalapannatti_2010}");
 		addSource("abh03m2.mul.xml", SourceType.Burmese2010, 11, $"{Burmese2010Mula}/{Abh_DhatukathaPuggalapannatti_2010}");
 		addSource("abh03m3.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{Abh_Kathavatthu_2010}");
-		addSource("abh03m4.mul.xml", SourceType.Burmese2010, 15, $"{Burmese2010Mula}/{Abh_Yamaka1_2010}", new[] { 16 });
+		addSource("abh03m4.mul.xml", SourceType.Burmese2010, 15, $"{Burmese2010Mula}/{Abh_Yamaka1_2010}");
 		addSource("abh03m5.mul.xml", SourceType.Burmese2010, 15, $"{Burmese2010Mula}/{Abh_Yamaka2_2010}");
 		addSource("abh03m6.mul.xml", SourceType.Burmese2010, 13, $"{Burmese2010Mula}/{Abh_Yamaka3_2010}");
-		addSource("abh03m7.mul.xml", SourceType.Burmese2010, 35, $"{Burmese2010Mula}/{Abh_Patthana1_2010}");
-		addSource("abh03m8.mul.xml", SourceType.Burmese2010, 31, $"{Burmese2010Mula}/{Abh_Patthana2_2010}");
+		addSource("abh03m7.mul.xml", SourceType.Burmese2010, 35, $"{Burmese2010Mula}/{Abh_Patthana1_2010}", new[] { 284, 285 });
+		addSource("abh03m8.mul.xml", SourceType.Burmese2010, 31, $"{Burmese2010Mula}/{Abh_Patthana2_2010}", new[] { 376, 377, 378, 379 });
 		addSource("abh03m9.mul.xml", SourceType.Burmese2010, 13, $"{Burmese2010Mula}/{Abh_Patthana3_2010}");
-		addSource("abh03m10.mul.xml", SourceType.Burmese2010, 13, $"{Burmese2010Mula}/{Abh_Patthana4_2010}", new[] { 466 });
-		addSource("abh03m11.mul.xml", SourceType.Burmese2010, 11, $"{Burmese2010Mula}/{Abh_Patthana5_2010}", new[] { 62, 122, 158, 196, 214, 306, 326, 348, 376, 402, 424 });
+		addSource("abh03m10.mul.xml", SourceType.Burmese2010, 13, $"{Burmese2010Mula}/{Abh_Patthana4_2010}");
+		addSource("abh03m11.mul.xml", SourceType.Burmese2010, 11, $"{Burmese2010Mula}/{Abh_Patthana5_2010}", extraPagesAfter: new[] { 112, 112 });
 
 		// =============================================
 		// 1957 Atthakatha (Commentary) Mappings
@@ -487,9 +487,9 @@ public class Sources
 		// Note: Only 1957 has Atthakatha PDFs available
 
 		// --- Vinaya Atthakatha ---
-		addSource("vin01a.att.xml", SourceType.Burmese1957, 15, $"{Burmese1957Atthakatha}/{Att_Vin_Parajika1_1957}");
+		addSource("vin01a.att.xml", SourceType.Burmese1957, 15, $"{Burmese1957Atthakatha}/{Att_Vin_Parajika1_1957}", extraPagesAfter: new[] { 135, 135 });
 		addSource("vin02a1.att.xml", SourceType.Burmese1957, 11, $"{Burmese1957Atthakatha}/{Att_Vin_Pacittiyadi_1957}");
-		addSource("vin02a2.att.xml", SourceType.Burmese1957, 12, $"{Burmese1957Atthakatha}/{Att_Vin_Culavagga_1957}");
+		addSource("vin02a2.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_Vin_Pacittiyadi_1957}"); // the Mahāvagga-aṭṭhakathā continues vin02a1 in the Pācityādi volume: its title page (print 233) is PDF 242
 		addSource("vin02a3.att.xml", SourceType.Burmese1957, 12, $"{Burmese1957Atthakatha}/{Att_Vin_Culavagga_1957}");
 		addSource("vin02a4.att.xml", SourceType.Burmese1957, 12, $"{Burmese1957Atthakatha}/{Att_Vin_Culavagga_1957}");
 
@@ -501,7 +501,7 @@ public class Sources
 		// --- MN Atthakatha ---
 		addSource("s0201a.att.xml", SourceType.Burmese1957, 16, $"{Burmese1957Atthakatha}/{Att_MN_Mulapannasa1_1957}");
 		addSource("s0202a.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_MN_Majjhimapannasa_1957}");
-		addSource("s0203a.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_MN_Uparipannasa_1957}");
+		addSource("s0203a.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_MN_Uparipannasa_1957}", new[] { 64, 65, 142, 143 });
 
 		// --- SN Atthakatha ---
 		addSource("s0301a.att.xml", SourceType.Burmese1957, 24, $"{Burmese1957Atthakatha}/{Att_SN_Sagathavagga_1957}");
@@ -511,36 +511,36 @@ public class Sources
 		addSource("s0305a.att.xml", SourceType.Burmese1957, 23, $"{Burmese1957Atthakatha}/{Att_SN_SalayatanaMaha_1957}");
 
 		// --- AN Atthakatha ---
-		addSource("s0401a.att.xml", SourceType.Burmese1957, 3, $"{Burmese1957Atthakatha}/{Att_AN_Ekakanipata_1957}");
+		addSource("s0401a.att.xml", SourceType.Burmese1957, 16, $"{Burmese1957Atthakatha}/{Att_AN_Ekakanipata_1957}");
 		addSource("s0402a.att.xml", SourceType.Burmese1957, 19, $"{Burmese1957Atthakatha}/{Att_AN_DukaTikaCatukka_1957}", new[] { 68, 248 });
 		addSource("s0403a.att.xml", SourceType.Burmese1957, 27, $"{Burmese1957Atthakatha}/{Att_AN_Pancakanipata_1957}", new[] { 86, 144 });
-		addSource("s0404a.att.xml", SourceType.Burmese1957, 27, $"{Burmese1957Atthakatha}/{Att_AN_Pancakanipata_1957}", new[] { 86, 144, 256, 286, 342 });
+		addSource("s0404a.att.xml", SourceType.Burmese1957, 27, $"{Burmese1957Atthakatha}/{Att_AN_Pancakanipata_1957}", new[] { 86, 144, 192, 256, 286, 342 });
 
 		// --- KN Atthakatha ---
 		addSource("s0501a.att.xml", SourceType.Burmese1957, 17, $"{Burmese1957Atthakatha}/{Att_KN_Khuddakapatha_1957}");
 		addSource("s0502a.att.xml", SourceType.Burmese1957, 8, $"{Burmese1957Atthakatha}/{Att_KN_Dhammapada1_1957}");
 		addSource("s0503a.att.xml", SourceType.Burmese1957, 7, $"{Burmese1957Atthakatha}/{Att_KN_Udana_1957}");
 		addSource("s0504a.att.xml", SourceType.Burmese1957, 8, $"{Burmese1957Atthakatha}/{Att_KN_Itivuttaka_1957}");
-		addSource("s0505a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Suttanipata1_1957}");
+		addSource("s0505a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Suttanipata1_1957}", new[] { 176, 177 });
 		addSource("s0506a.att.xml", SourceType.Burmese1957, 7, $"{Burmese1957Atthakatha}/{Att_KN_Vimanavatthu_1957}");
-		addSource("s0507a.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_KN_Petavatthu_1957}");
+		addSource("s0507a.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_KN_Petavatthu_1957}", extraPagesAfter: new[] { 195 });
 		addSource("s0508a1.att.xml", SourceType.Burmese1957, 11, $"{Burmese1957Atthakatha}/{Att_KN_Theragatha1_1957}");
-		addSource("s0508a2.att.xml", SourceType.Burmese1957, 7, $"{Burmese1957Atthakatha}/{Att_KN_Theragatha2_1957}", new[] { 360 });
+		addSource("s0508a2.att.xml", SourceType.Burmese1957, 7, $"{Burmese1957Atthakatha}/{Att_KN_Theragatha2_1957}");
 		addSource("s0509a.att.xml", SourceType.Burmese1957, 7, $"{Burmese1957Atthakatha}/{Att_KN_Therigatha_1957}");
-		addSource("s0510a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Apadana1_1957}");
+		addSource("s0510a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Apadana1_1957}", new[] { 190, 191 });
 		addSource("s0511a.att.xml", SourceType.Burmese1957, 5, $"{Burmese1957Atthakatha}/{Att_KN_Buddhavamsa_1957}");
-		addSource("s0512a.att.xml", SourceType.Burmese1957, 5, $"{Burmese1957Atthakatha}/{Att_KN_Cariyapitaka_1957}");
+		addSource("s0512a.att.xml", SourceType.Burmese1957, 5, $"{Burmese1957Atthakatha}/{Att_KN_Cariyapitaka_1957}", new[] { 278, 279, 280, 281, 282, 283, 284, 285 });
 		addSource("s0513a1.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_KN_Jataka1_1957}");
 		addSource("s0513a2.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_KN_Jataka2_1957}");
-		addSource("s0513a3.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_KN_Jataka3_1957}");
-		addSource("s0513a4.att.xml", SourceType.Burmese1957, 7, $"{Burmese1957Atthakatha}/{Att_KN_Jataka4_1957}", extraPagesAfter: new[] { 131, 131 }); // scan repeats print pages 130-131
-		addSource("s0514a1.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_KN_Jataka5_1957}");
+		addSource("s0513a3.att.xml", SourceType.Burmese1957, 10, $"{Burmese1957Atthakatha}/{Att_KN_Jataka3_1957}", extraPagesAfter: new[] { 407, 407 });
+		addSource("s0513a4.att.xml", SourceType.Burmese1957, 7, $"{Burmese1957Atthakatha}/{Att_KN_Jataka4_1957}", extraPagesAfter: new[] { 231, 231 });
+		addSource("s0514a1.att.xml", SourceType.Burmese1957, 3, $"{Burmese1957Atthakatha}/{Att_KN_Jataka5_1957}");
 		addSource("s0514a2.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Jataka6_1957}", new[] { 38, 118 });
 		addSource("s0514a3.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Jataka7_1957}", new[] { 2, 3, 150 });
-		addSource("s0515a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Mahaniddesa_1957}");
+		addSource("s0515a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Mahaniddesa_1957}", new[] { 366, 367, 368, 369 });
 		addSource("s0516a.att.xml", SourceType.Burmese1957, 5, $"{Burmese1957Atthakatha}/{Att_KN_CulaniddesaNetti_1957}");
 		addSource("s0517a.att.xml", SourceType.Burmese1957, 6, $"{Burmese1957Atthakatha}/{Att_KN_Patisambhida1_1957}");
-		addSource("s0519a.att.xml", SourceType.Burmese1957, 5, $"{Burmese1957Atthakatha}/{Att_KN_CulaniddesaNetti_1957}");
+		addSource("s0519a.att.xml", SourceType.Burmese1957, 181, $"{Burmese1957Atthakatha}/{Att_KN_CulaniddesaNetti_1957}", new[] { 236, 237 });
 
 		// --- Abhidhamma Atthakatha ---
 		addSource("abh01a.att.xml", SourceType.Burmese1957, 14, $"{Burmese1957Atthakatha}/{Att_Abh_Dhammasangani_1957}");
@@ -601,24 +601,27 @@ public class Sources
 		//  - abh06t holds four texts, each numbered from 1 (pages 1-186, 1-160, 1-100, 1-34); abh09t
 		//    holds the Abhidhammamātikā (1-95) and then the Mohavicchedanī (1-488). Only the first
 		//    text of each can be reached until a source can tell those runs apart.
-		addSource("abh04t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_Dhammasangani_1957}");
-		addSource("abh05t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_Pancappakarana_1957}", new[] { 34, 56, 158 });
+		//  - abh09t's 1957 scan, though, numbers one run, print 1 at PDF 16 through 476 at PDF 491, so
+		//    which of the two texts that run belongs to is not yet checked.
+		addSource("abh04t.nrf.xml", SourceType.Burmese1957, 239, $"{Burmese1957Tika}/{Tik_Abh_Dhammasangani_1957}");
+		addSource("abh05t.nrf.xml", SourceType.Burmese1957, 287, $"{Burmese1957Tika}/{Tik_Abh_Pancappakarana_1957}", new[] { 34, 56, 158 });
 		addSource("abh06t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_Abhidhammavatara_1957}");
 		addSource("abh07t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_AbhidhammatthaSangaha_1957}");
-		addSource("abh08t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_AbhidhammavataraTika1_1957}");
-		addSource("abh09t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Abh_Mohavicchedani_1957}");
+		addSource("abh08t.nrf.xml", SourceType.Burmese1957, 10, $"{Burmese1957Tika}/{Tik_Abh_AbhidhammavataraTika1_1957}");
+		addSource("abh09t.nrf.xml", SourceType.Burmese1957, 16, $"{Burmese1957Tika}/{Tik_Abh_Mohavicchedani_1957}", new[] { 388, 389 }, extraPagesAfter: new[] { 87, 87 });
 		addSource("s0104t.nrf.xml", SourceType.Burmese1957, 5, $"{Burmese1957Tika}/{Tik_DN_SilakkhandhaAbhinava1_1957}");
 		addSource("s0105t.nrf.xml", SourceType.Burmese1957, 8, $"{Burmese1957Tika}/{Tik_DN_SilakkhandhaAbhinava2_1957}");
-		addSource("vin04t.nrf.xml", SourceType.Burmese1957, 30, $"{Burmese1957Tika}/{Tik_Vin_Dvematika_1957}", new[] { 82 });
-		addSource("vin05t.nrf.xml", SourceType.Burmese1957, 6, $"{Burmese1957Tika}/{Tik_Vin_Vinayasangaha_1957}");
+		addSource("vin04t.nrf.xml", SourceType.Burmese1957, 30, $"{Burmese1957Tika}/{Tik_Vin_Dvematika_1957}");
+		addSource("vin05t.nrf.xml", SourceType.Burmese1957, 6, $"{Burmese1957Tika}/{Tik_Vin_Vinayasangaha_1957}", new[] { 203, 204, 206, 210, 212 }, extraPagesAfter: new[] { 111, 111, 111, 111, 111, 111, 111, 111, 111, 111, 202, 205, 209, 211 });
 		addSource("vin06t.nrf.xml", SourceType.Burmese1957, 23, $"{Burmese1957Tika}/{Tik_Vin_Vajirabuddhi_1957}", new[] { 390, 506 });
 		addSource("vin07t.nrf.xml", SourceType.Burmese1957, 9, $"{Burmese1957Tika}/{Tik_Vin_Vimativinodani1_1957}");
 		addSource("vin08t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Vinayalankara1_1957}");
-		addSource("vin09t.nrf.xml", SourceType.Burmese1957, 19, $"{Burmese1957Tika}/{Tik_Vin_KankhaPurana_1957}", new[] { 118, 450 });
+		addSource("vin09t.nrf.xml", SourceType.Burmese1957, 19, $"{Burmese1957Tika}/{Tik_Vin_KankhaPurana_1957}", new[] { 118, 416, 417, 450 });
 		addSource("vin10t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Vinayavinicchaya_1957}");
 		addSource("vin11t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_VinayavinicchayaTika1_1957}");
 		addSource("vin12t.nrf.xml", SourceType.Burmese1957, 1, $"{Burmese1957Tika}/{Tik_Vin_Pacityadiyojana_1957}", new[] { 408, 546 });
-		addSource("vin13t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Khuddasikkha_1957}", new[] { 58, 236, 442 });
+		addSource("vin13t.nrf.xml", SourceType.Burmese1957, 15, $"{Burmese1957Tika}/{Tik_Vin_Khuddasikkha_1957}", new[] { 46, 58, 236, 442 }, extraPagesAfter: new[] { 427, 427 },
+			pageOverrides: new() { [47] = 61, [48] = 60 }); // scan binds print 48 before 47
 
 		// =============================================
 		// Anya (Other Texts) Mappings
@@ -644,32 +647,32 @@ public class Sources
 		// Books whose text has no source PDF in the Anya set are intentionally left unmapped (no button).
 
 		// Saṅgāyana Pucchā-Vissajjanā. Multi-volume texts map to Vol 1 for now (Vol 2 → #76). e0907 has no PDF.
-		addSource("e0901n.nrf.xml", SourceType.BurmeseAnya, 18, $"{BurmeseAnyaSangayana}/1. Dīghanikāya (Pu-Vi).pdf");
+		addSource("e0901n.nrf.xml", SourceType.BurmeseAnya, 18, $"{BurmeseAnyaSangayana}/1. Dīghanikāya (Pu-Vi).pdf", new[] { 134, 230 });
 		addSource("e0902n.nrf.xml", SourceType.BurmeseAnya, 12, $"{BurmeseAnyaSangayana}/2. Majjhimanikāya (Pu-Vi)_Vol 1.pdf");
 		addSource("e0903n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaSangayana}/3. Saṃyuttanikāya (Pu-Vi)_Vol 1.pdf");
 		addSource("e0904n.nrf.xml", SourceType.BurmeseAnya, 20, $"{BurmeseAnyaSangayana}/4. Aṅguttaranikāya (Pu-Vi)_Vol 1.pdf");
 		addSource("e0905n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaSangayana}/5. Vinayapiṭaka (Pu-Vi)_Vol 1.pdf");
-		addSource("e0906n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaSangayana}/6. Abhidhammapiṭaka (Pu-Vi).pdf");
+		addSource("e0906n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaSangayana}/6. Abhidhammapiṭaka (Pu-Vi).pdf", new[] { 26, 27 });
 
 		// Leḍī Sayāḍo. e0301 (Paramatthadīpanī) has no PDF.
-		addSource("e0201n.nrf.xml", SourceType.BurmeseAnya, 112, $"{BurmeseAnyaLedi}/1. Niruttidīpanī.pdf");
-		addSource("e0401n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaLedi}/3. Anudīpanīpāṭha.pdf");
+		addSource("e0201n.nrf.xml", SourceType.BurmeseAnya, 112, $"{BurmeseAnyaLedi}/1. Niruttidīpanī.pdf", extraPagesAfter: new[] { 109, 109 });
+		addSource("e0401n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaLedi}/3. Anudīpanīpāṭha.pdf", extraPagesAfter: new[] { 85, 85 });
 		addSource("e0501n.nrf.xml", SourceType.BurmeseAnya, 176, $"{BurmeseAnyaLedi}/4. Paṭṭhānuddesa dīpanīpāṭha_printed.pdf");
 
 		// Buddha-vandanā. e0603–e0608 have no PDF.
 		addSource("e0601n.nrf.xml", SourceType.BurmeseAnya, 14, $"{BurmeseAnyaBuddhaVandana}/1. Namakkāraṭīkā.pdf");
-		addSource("e0602n.nrf.xml", SourceType.BurmeseAnya, 4, $"{BurmeseAnyaBuddhaVandana}/2. Mahāpaṇāmapāṭha.pdf");
+		addSource("e0602n.nrf.xml", SourceType.BurmeseAnya, 4, $"{BurmeseAnyaBuddhaVandana}/2. Mahāpaṇāmapāṭha.pdf", new[] { 53, 115, 177 });
 
 		// Vaṃsa. e0701 (Cūḷagandhavaṃsa) has no PDF. e0703 (Mahāvaṃsa) is multi-vol → Vol 1.
-		addSource("e0702n.nrf.xml", SourceType.BurmeseAnya, 16, $"{BurmeseAnyaVamsa}/3. Sāsanavaṃsappadīpikā.pdf");
-		addSource("e0703n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaVamsa}/2. Mahāvaṃsa (Vol-1).pdf");
+		addSource("e0702n.nrf.xml", SourceType.BurmeseAnya, 16, $"{BurmeseAnyaVamsa}/3. Sāsanavaṃsappadīpikā.pdf", extraPagesAfter: new[] { 161, 161 });
+		addSource("e0703n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaVamsa}/2. Mahāvaṃsa (Vol-1).pdf", new[] { 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 253 });
 
 		// Byākaraṇa (grammar). e0808/e0809/e0811 share one combined PDF (offsets to distinguish → deferred).
 		// e0812 (Subodhālaṅkāraṭīkā) has no PDF.
 		addSource("e0801n.nrf.xml", SourceType.BurmeseAnya, 17, $"{BurmeseAnyaByakarana}/2. Moggallānabyākaraṇaṃ.pdf");
 		addSource("e0802n.nrf.xml", SourceType.BurmeseAnya, 17, $"{BurmeseAnyaByakarana}/1. Kaccāyanabyākaraṇaṃ_1990.pdf");
 		addSource("e0803n.nrf.xml", SourceType.BurmeseAnya, 5, $"{BurmeseAnyaByakarana}/3. Saddanītippakaraṇaṃ (padamālā).pdf");
-		addSource("e0804n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaByakarana}/4. Saddanītippakaraṇaṃ (dhātumālā).pdf");
+		addSource("e0804n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaByakarana}/4. Saddanītippakaraṇaṃ (dhātumālā).pdf", new[] { 374 }, extraPagesAfter: new[] { 269, 269, 352 });
 		addSource("e0805n.nrf.xml", SourceType.BurmeseAnya, 36, $"{BurmeseAnyaByakarana}/6. Padarūpasiddhi.pdf");
 		addSource("e0806n.nrf.xml", SourceType.BurmeseAnya, 4, $"{BurmeseAnyaByakarana}/7. Moggallānapañcikā.pdf");
 		addSource("e0807n.nrf.xml", SourceType.BurmeseAnya, 17, $"{BurmeseAnyaByakarana}/8. Payogasiddhipāṭha.pdf");
@@ -677,15 +680,15 @@ public class Sources
 		addSource("e0809n.nrf.xml", SourceType.BurmeseAnya, 9, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
 		addSource("e0810n.nrf.xml", SourceType.BurmeseAnya, 21, $"{BurmeseAnyaByakarana}/11. Abhidhānappadīpikāṭīkā.pdf");
 		addSource("e0811n.nrf.xml", SourceType.BurmeseAnya, 213, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
-		addSource("e0813n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/14. Bālāvatāra gaṇṭhipadatthavinicchayasāra.pdf");
+		addSource("e0813n.nrf.xml", SourceType.BurmeseAnya, 33, $"{BurmeseAnyaByakarana}/14. Bālāvatāra gaṇṭhipadatthavinicchayasāra.pdf", new[] { 69 }, extraPagesAfter: new[] { 116, 116 });
 
 		// Nīti. e1002 (Nītimañjarī), e1005 (Lokanīti), e1006 (Suttantanīti) have no PDF.
 		addSource("e1001n.nrf.xml", SourceType.BurmeseAnya, 31, $"{BurmeseAnyaNiti}/6. Kavidappaṇanīti.pdf");
 		addSource("e1003n.nrf.xml", SourceType.BurmeseAnya, 3, $"{BurmeseAnyaNiti}/5. Dhammanīti.pdf");
 		addSource("e1004n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaNiti}/4. Mahārahanīti.pdf");
-		addSource("e1007n.nrf.xml", SourceType.BurmeseAnya, 10, $"{BurmeseAnyaNiti}/3. Sūrassatinīti.pdf");
-		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 5, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti.pdf");
-		addSource("e1009n.nrf.xml", SourceType.BurmeseAnya, 14, $"{BurmeseAnyaNiti}/8. Naradakkhadīpanī.pdf");
+		addSource("e1007n.nrf.xml", SourceType.BurmeseAnya, 9, $"{BurmeseAnyaNiti}/3. Sūrassatinīti.pdf", new[] { 20, 21, 25, 26 }, extraPagesAfter: new[] { 11, 11, 11, 103, 103 });
+		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 5, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti.pdf", extraPagesAfter: new[] { 19, 19, 25, 25, 29, 29, 43, 43, 47, 47 });
+		addSource("e1009n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaNiti}/8. Naradakkhadīpanī.pdf");
 		addSource("e1010n.nrf.xml", SourceType.BurmeseAnya, 27, $"{BurmeseAnyaNiti}/9. Caturārakkhadīpanī and Kāyapaccavekkhana.pdf");
 
 		// Pakiṇṇaka. e1102 (Sīmavisodhanī) has no PDF.
@@ -705,14 +708,15 @@ public class Sources
 	}
 
 	private void addSource(string filename, SourceType sourceType, int pageStart, string path,
-		int[]? missingPages = null, PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null)
+		int[]? missingPages = null, PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null,
+		Dictionary<int, int>? pageOverrides = null)
 	{
 		if (!sourcesMap.TryGetValue(filename, out var d))
 		{
 			d = new Dictionary<SourceType, Source>();
 			sourcesMap[filename] = d;
 		}
-		d[sourceType] = new Source(sourceType, pageStart, path, missingPages, pageEdition, extraPagesAfter);
+		d[sourceType] = new Source(sourceType, pageStart, path, missingPages, pageEdition, extraPagesAfter, pageOverrides);
 	}
 
 	public Source? GetSource(string filename, SourceType sourceType)
@@ -765,8 +769,10 @@ public class Sources
 	public class Source
 	{
 		public Source(SourceType sourceType, int pageStart, string path, int[]? missingPages = null,
-			PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null)
+			PageEdition pageEdition = PageEdition.Myanmar, int[]? extraPagesAfter = null,
+			IReadOnlyDictionary<int, int>? pageOverrides = null)
 		{
+			PageOverrides = pageOverrides ?? new Dictionary<int, int>();
 			ExtraPagesAfter = extraPagesAfter ?? Array.Empty<int>();
 			PageEdition = pageEdition;
 			SourceType = sourceType;
@@ -818,11 +824,21 @@ public class Sources
 		public int[] ExtraPagesAfter { get; set; }
 
 		/// <summary>
+		/// Print page → PDF page, for pages the scan holds out of order, which no count of missing and
+		/// extra pages can place. It wins over the computed page and moves only the pages it names. The
+		/// 1957 vin13t scan runs 44, 45, 48, 47, 49 (46 absent), so its entry is { 47 → 61, 48 → 60 }.
+		/// If the PDF itself is ever reordered, remove the entry with it.
+		/// </summary>
+		public IReadOnlyDictionary<int, int> PageOverrides { get; }
+
+		/// <summary>
 		/// PDF page for a printed page number, accounting for pages absent from the scan and pages
 		/// the scan holds twice.
 		/// </summary>
 		public int PdfPageFor(int printPage)
 		{
+			if (PageOverrides.TryGetValue(printPage, out int overridden))
+				return overridden;
 			int skipped = 0;
 			foreach (int p in MissingPages)
 			{

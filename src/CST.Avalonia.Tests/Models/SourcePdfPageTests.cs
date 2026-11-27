@@ -105,7 +105,7 @@ namespace CST.Avalonia.Tests.Models
                     Assert.Equal(s.MissingPages.Distinct().Count(), s.MissingPages.Length);
                 }
             }
-            Assert.Equal(23, seen);
+            Assert.Equal(15, seen);
         }
 
         [Fact]
@@ -138,6 +138,77 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
+        public void Vin13t_1957_SwappedPagesOpenWhereTheyAre()
+        {
+            // The scan runs 44, 45, 48, 47, 49 at PDF 58-62 (print 46 absent).
+            var s = Sources.Inst.GetSource("vin13t.nrf.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(59, s.PdfPageFor(45));
+            Assert.Equal(61, s.PdfPageFor(47));
+            Assert.Equal(60, s.PdfPageFor(48));
+            Assert.Equal(62, s.PdfPageFor(49));
+        }
+
+        [Fact]
+        public void Vin13t_1957_DropsTheBlankBeforeEachUnnumberedTitlePage()
+        {
+            // Print 58 and 442 are blank and not scanned; the title pages after them (59 at PDF 71,
+            // 443 at PDF 455) carry no folio but are there.
+            var s = Sources.Inst.GetSource("vin13t.nrf.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(70, s.PdfPageFor(57));
+            Assert.Equal(71, s.PdfPageFor(59));
+            Assert.Equal(72, s.PdfPageFor(60));
+            Assert.Equal(454, s.PdfPageFor(441));
+            Assert.Equal(455, s.PdfPageFor(443));
+            Assert.Equal(456, s.PdfPageFor(444));
+        }
+
+        [Fact]
+        public void Vin09t_1957_ScanLacksPrint416To417()
+        {
+            // PDF 432 is print 415 and PDF 433 is print 418; 118 and 450 are missing too.
+            var s = Sources.Inst.GetSource("vin09t.nrf.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 118, 416, 417, 450 }, s.MissingPages);
+            Assert.Equal(432, s.PdfPageFor(415));
+            Assert.Equal(433, s.PdfPageFor(418));
+            Assert.Equal(465, s.PdfPageFor(451));
+        }
+
+        [Fact]
+        public void S0519a_1957_ScanLacksPrint236To237()
+        {
+            // The Netti-aṭṭhakathā numbers from 1 at PDF 181; PDF 415 is print 235 and PDF 416 is print 238.
+            var s = Sources.Inst.GetSource("s0519a.att.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 236, 237 }, s.MissingPages);
+            Assert.Equal(236, s.PdfPageFor(56));
+            Assert.Equal(415, s.PdfPageFor(235));
+            Assert.Equal(416, s.PdfPageFor(238));
+        }
+
+        [Fact]
+        public void Vin02a2_1957_IsInThePacityadiVolume()
+        {
+            // The Mahāvagga-aṭṭhakathā follows the Pācittiya-aṭṭhakathā in one volume and one page run:
+            // PDF 241 is print 231 (end of vin02a1), PDF 242 the Mahāvagga title page (233), PDF 243 is 234.
+            var a1 = Sources.Inst.GetSource("vin02a1.att.xml", Sources.SourceType.Burmese1957)!;
+            var a2 = Sources.Inst.GetSource("vin02a2.att.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(a1.Path, a2.Path);
+            Assert.Equal(242, a2.PdfPageFor(233));
+            Assert.Equal(243, a2.PdfPageFor(234));
+            Assert.Equal(446, a2.PdfPageFor(437));
+        }
+
+        [Fact]
+        public void S0513a4_1957_RepeatsPrint230To231()
+        {
+            // Read by eye: PDF 236-237 are print 230-231, PDF 238-239 the same leaf again, PDF 240 is 232.
+            var s = Sources.Inst.GetSource("s0513a4.att.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 231, 231 }, s.ExtraPagesAfter);
+            Assert.Equal(128, s.PdfPageFor(122));
+            Assert.Equal(237, s.PdfPageFor(231));
+            Assert.Equal(240, s.PdfPageFor(232));
+        }
+
+        [Fact]
         public void S0504m_1957_LandsOnThePagesTheScanActuallyHas()
         {
             // Checked by hand: print 219 is PDF 241, the repeat begins with print 120 at PDF 242,
@@ -159,17 +230,27 @@ namespace CST.Avalonia.Tests.Models
             // A missing page belongs to the PDF, not the book. Where several books share one scan and
             // one continuous page sequence, a gap found in the book that CONTAINS it shifts every
             // sibling that follows it — but the gap is only visible in that one book's XML, so the
-            // seeding pass missed the siblings. (Apadāna-2 page 186, found in QA.)
+            // seeding pass missed the siblings. In the 1957 Apadāna-2 scan, s0510m2 lacks print 186, 214
+            // and 215; its siblings' PageStart (13, against 16) absorbs all three, so every book in the
+            // PDF lands on the same PDF page for the same print page.
+            var apa = Sources.Inst.GetSource("s0510m2.mul.xml", Sources.SourceType.Burmese1957)!;
+            Assert.Equal(new[] { 186, 214, 215 }, apa.MissingPages);
             foreach (var book in new[] { "s0511m.mul.xml", "s0512m.mul.xml" })
             {
-                var s = Sources.Inst.GetSource(book, Sources.SourceType.Burmese2010);
+                var s = Sources.Inst.GetSource(book, Sources.SourceType.Burmese1957);
                 Assert.NotNull(s);
-                Assert.Equal(new[] { 186 }, s!.MissingPages);
+                Assert.Empty(s!.MissingPages);
+                Assert.Equal(apa.PdfPageFor(300), s.PdfPageFor(300));
             }
+
+            // The 2010 scan has print 186: PDF 255-261 hold print 237-243 (read by eye), which leaves no
+            // page lost before them, so none of the three 2010 books lists it.
+            foreach (var book in new[] { "s0510m2.mul.xml", "s0511m.mul.xml", "s0512m.mul.xml" })
+                Assert.Empty(Sources.Inst.GetSource(book, Sources.SourceType.Burmese2010)!.MissingPages);
 
             // s0404a continues s0403a's sequence in the same PDF, so it carries that book's blanks too.
             var an = Sources.Inst.GetSource("s0404a.att.xml", Sources.SourceType.Burmese1957);
-            Assert.Equal(new[] { 86, 144, 256, 286, 342 }, an!.MissingPages);
+            Assert.Equal(new[] { 86, 144, 192, 256, 286, 342 }, an!.MissingPages);
 
             // The counter-case: s0404t's PageStart (18, against s0403t's 19) ALREADY absorbs the blank
             // at 148. Adding it would double-count and land a page early. Pinned so it stays empty.
