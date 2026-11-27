@@ -705,6 +705,197 @@ public class Sources
 		addSource("e1203n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaSihala}/3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf", pageEdition: PageEdition.Other);
 		addSource("e1205n.nrf.xml", SourceType.BurmeseAnya, 145, $"{BurmeseAnyaSihala}/3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf", pageEdition: PageEdition.Other);
 		addSource("e1209n.nrf.xml", SourceType.BurmeseAnya, 20, $"{BurmeseAnyaSihala}/9. Telakaṭāhagāthā Pali Burmese English.pdf", pageEdition: PageEdition.Other);
+
+		// Repaired PDFs (#1136). Each repaired scan has a placeholder page for every print page the scan lacks,
+		// in print order, and drops pages scanned twice. Its mapping goes under its own hash and is the latest;
+		// addSourceVersions lists the original and every earlier SharePoint version with the same pages, which
+		// keep the addSource mapping above. Books on a repaired PDF whose mapping is unchanged have no entries.
+		// 1957 edition/1 - Mula - Vinaya/Cūḷavaggapāḷi.pdf
+		addSourceVersions("vin02m3.mul.xml", SourceType.Burmese1957, "Wsa4s3SaRHbMo8LdD1OqQO3trbw=");
+		addVersion("vin02m3.mul.xml", SourceType.Burmese1957, new[] { "T0oYCRsot789+NYr+2B6nTmBqz8=" }, 11, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Apadānapāḷi–2- Buddhavaṃsa- Cariyāpiṭakapāḷi.pdf
+		addSourceVersions("s0510m2.mul.xml", SourceType.Burmese1957, "E8/CNp8yd4luMMTq+HgV7G2x7zc=");
+		addVersion("s0510m2.mul.xml", SourceType.Burmese1957, new[] { "38dsMrQYiSp9vxAU8/Zu+fPvv7M=" }, 16, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Apadānapāḷi–2- Buddhavaṃsa- Cariyāpiṭakapāḷi.pdf
+		addSourceVersions("s0511m.mul.xml", SourceType.Burmese1957, "E8/CNp8yd4luMMTq+HgV7G2x7zc=");
+		addVersion("s0511m.mul.xml", SourceType.Burmese1957, new[] { "38dsMrQYiSp9vxAU8/Zu+fPvv7M=" }, 16, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Apadānapāḷi–2- Buddhavaṃsa- Cariyāpiṭakapāḷi.pdf
+		addSourceVersions("s0512m.mul.xml", SourceType.Burmese1957, "E8/CNp8yd4luMMTq+HgV7G2x7zc=");
+		addVersion("s0512m.mul.xml", SourceType.Burmese1957, new[] { "38dsMrQYiSp9vxAU8/Zu+fPvv7M=" }, 16, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Jātakapāḷi-1.pdf
+		addSourceVersions("s0513m.mul.xml", SourceType.Burmese1957, "JHu2HztSutryWinBV/EVq75OmAo=");
+		addVersion("s0513m.mul.xml", SourceType.Burmese1957, new[] { "j3fyX2ya3OYAauGwibJ5eXHbhII=" }, 27, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf
+		addSourceVersions("s0504m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
+		addVersion("s0504m.mul.xml", SourceType.Burmese1957, new[] { "AndJt2sAuEVZVYk1al+zCK80NZY=" }, 23, missingPages: null, extraPagesAfter: new[] { 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219 }, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf
+		addSourceVersions("s0505m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
+		addVersion("s0505m.mul.xml", SourceType.Burmese1957, new[] { "AndJt2sAuEVZVYk1al+zCK80NZY=" }, 23, missingPages: null, extraPagesAfter: new[] { 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219 }, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Mahāniddesapāḷi.pdf
+		addSourceVersions("s0515m.mul.xml", SourceType.Burmese1957, "4pD0FRbn9EA1vSVlqjBx9PchV7o=");
+		addVersion("s0515m.mul.xml", SourceType.Burmese1957, new[] { "Hb3n6EXa8p04JCwpShEnPeCcyIY=" }, 5, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Netti-Peṭakopadesapāḷi.pdf
+		addSourceVersions("s0519m.mul.xml", SourceType.Burmese1957, "KDPvQcdMDOfQIYUTt1icAwdNXlY=");
+		addVersion("s0519m.mul.xml", SourceType.Burmese1957, new[] { "VCV4d/o6SeKVc2sGfL85OddUWcY=" }, 7, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Netti-Peṭakopadesapāḷi.pdf
+		addSourceVersions("s0520m.nrf.xml", SourceType.Burmese1957, "KDPvQcdMDOfQIYUTt1icAwdNXlY=");
+		addVersion("s0520m.nrf.xml", SourceType.Burmese1957, new[] { "VCV4d/o6SeKVc2sGfL85OddUWcY=" }, 7, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Sagāthāvagga-Nidānavaggasaṃyuttapāḷi.pdf
+		addSourceVersions("s0301m.mul.xml", SourceType.Burmese1957, "eG7qLjxIdO+MgT7alwe1QfSovek=");
+		addVersion("s0301m.mul.xml", SourceType.Burmese1957, new[] { "cDTg3BkOMaoVSusWg+pcIYaGjKk=" }, 38, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/2 - Mula - Sutta/Sagāthāvagga-Nidānavaggasaṃyuttapāḷi.pdf
+		addSourceVersions("s0302m.mul.xml", SourceType.Burmese1957, "eG7qLjxIdO+MgT7alwe1QfSovek=");
+		addVersion("s0302m.mul.xml", SourceType.Burmese1957, new[] { "cDTg3BkOMaoVSusWg+pcIYaGjKk=" }, 38, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/3 - Mula - Abhidhamma/Paṭṭhānapāḷi-3.pdf
+		addSourceVersions("abh03m9.mul.xml", SourceType.Burmese1957, "utVPF2dh9ZFxOYrJM8AyS3Vi9UU=");
+		addVersion("abh03m9.mul.xml", SourceType.Burmese1957, new[] { "MwXHO98dzkk+Aw/KiODIpGJ6fbg=" }, 7, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/3 - Mula - Abhidhamma/Paṭṭhānapāḷi-4.pdf
+		addSourceVersions("abh03m10.mul.xml", SourceType.Burmese1957, "kJ8ZWZngW+g+jP8gjRs5S7HPCLM=");
+		addVersion("abh03m10.mul.xml", SourceType.Burmese1957, new[] { "k0iZ5/EFRCCJ9M/HeC/LPS1gbiQ=" }, 10, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/3 - Mula - Abhidhamma/Paṭṭhānapāḷi-5.pdf
+		addSourceVersions("abh03m11.mul.xml", SourceType.Burmese1957, "rqSNenXbNbqz1zlXD10lA4rNFDk=");
+		addVersion("abh03m11.mul.xml", SourceType.Burmese1957, new[] { "qBwk3Z4/Cpfc+mEXzCxd+cvEiRc=" }, 6, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/3 - Mula - Abhidhamma/Yamakapāḷi-1.pdf
+		addSourceVersions("abh03m4.mul.xml", SourceType.Burmese1957, "x6uxixkVBew2hmCZNBvt8ol9tx4=");
+		addVersion("abh03m4.mul.xml", SourceType.Burmese1957, new[] { "afRwzTxdz0yz3xH2oqSnHLJSr7c=" }, 10, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Apadāna-aṭṭhakathā-1.pdf
+		addSourceVersions("s0510a.att.xml", SourceType.Burmese1957, "PAuljelsXWxA/z1+R96JraAakts=");
+		addVersion("s0510a.att.xml", SourceType.Burmese1957, new[] { "ZZx53zzIkplk/GxjNqZeMn6nQjw=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Cariyāpiṭaka-aṭṭhakathā.pdf
+		addSourceVersions("s0512a.att.xml", SourceType.Burmese1957, "TaADCf3Axspv5J+kRghFVUxd+UM=");
+		addVersion("s0512a.att.xml", SourceType.Burmese1957, new[] { "QanA4ssdOqr3HMP+sEsvuTB+nu8=" }, 5, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Cūḷaniddesa-aṭṭhakathā Netti-aṭṭhakathā.pdf
+		addSourceVersions("s0519a.att.xml", SourceType.Burmese1957, "QfXediggzuU3ELD4Ais0obmKuI4=", "lrK5egfzxACLCKL02nYs15Yuhjo=", "73CSUoFa5/v7KiRjPpk6f/JP3sw=", "jZe9JGGg9pknNWmw5dFRIFU+oOk=");
+		addVersion("s0519a.att.xml", SourceType.Burmese1957, new[] { "dmzsUciIETb1wQzzaTXnUBuj2A0=" }, 181, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Duka-tika-catukkanipāta-aṭṭhakathā.pdf
+		addSourceVersions("s0402a.att.xml", SourceType.Burmese1957, "vRnMOu5vP+98BTZ+y+SBf87JLZo=");
+		addVersion("s0402a.att.xml", SourceType.Burmese1957, new[] { "xMMwUf3W9JrnuGjw+RCzRKS78I4=" }, 19, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Jātaka-aṭṭhakathā-4.pdf
+		addSourceVersions("s0513a4.att.xml", SourceType.Burmese1957, "iyC2HM/MBWsn0+jiLNbYJfuhIb8=");
+		addVersion("s0513a4.att.xml", SourceType.Burmese1957, new[] { "jyTk3xWgD+FKqIYp5qX9HdbQp3w=" }, 7, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Jātaka-aṭṭhakathā-6.pdf
+		addSourceVersions("s0514a2.att.xml", SourceType.Burmese1957, "SbkkegXimNanqOJeMQjmihMhRFU=");
+		addVersion("s0514a2.att.xml", SourceType.Burmese1957, new[] { "PqM1eF24EmPY8cUqKr/5w4NRVQI=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Jātaka-aṭṭhakathā-7.pdf
+		addSourceVersions("s0514a3.att.xml", SourceType.Burmese1957, "Dzl5/VjvCZffTZUVZJ9+UsabHPw=");
+		addVersion("s0514a3.att.xml", SourceType.Burmese1957, new[] { "LlFJbfvG1c/5YybLPzi2bIgAx0A=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Mahāniddesa-aṭṭhakathā.pdf
+		addSourceVersions("s0515a.att.xml", SourceType.Burmese1957, "gmWho2grRCE10FLiyfn7GXgIXSA=");
+		addVersion("s0515a.att.xml", SourceType.Burmese1957, new[] { "lZpE0kuyG/u4p7dW23S4Peq/qVM=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Pañcakanipātādi-aṭṭhakathā.pdf
+		addSourceVersions("s0403a.att.xml", SourceType.Burmese1957, "cw4yQ1bzr3gNUtFhjcmmSPvzzdU=");
+		addVersion("s0403a.att.xml", SourceType.Burmese1957, new[] { "PwL+ktJWWBmYJ8Jwtz82dzrQLL4=" }, 27, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Pañcakanipātādi-aṭṭhakathā.pdf
+		addSourceVersions("s0404a.att.xml", SourceType.Burmese1957, "cw4yQ1bzr3gNUtFhjcmmSPvzzdU=");
+		addVersion("s0404a.att.xml", SourceType.Burmese1957, new[] { "PwL+ktJWWBmYJ8Jwtz82dzrQLL4=" }, 27, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Pañcappakaraṇa-aṭṭhakathā.pdf
+		addSourceVersions("abh03a.att.xml", SourceType.Burmese1957, "Q/mAX1/7SgrR5lNswrbGIRWkqRo=");
+		addVersion("abh03a.att.xml", SourceType.Burmese1957, new[] { "ybj/ERY5/XsosWBIxPnUsQUZWrY=" }, 13, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Petavatthu-aṭṭhakathā.pdf
+		addSourceVersions("s0507a.att.xml", SourceType.Burmese1957, "6HkMg+k5Xe55tC8zVI6Z/27igXA=");
+		addVersion("s0507a.att.xml", SourceType.Burmese1957, new[] { "Cx2+QUVZ+cRmp9/9jY519t6it6Y=" }, 6, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Pārājikakaṇḍa-aṭṭhakathā-1.pdf
+		addSourceVersions("vin01a.att.xml", SourceType.Burmese1957, "VC5tqb7PX+RW+T2gNKQQ70TZ2UQ=");
+		addVersion("vin01a.att.xml", SourceType.Burmese1957, new[] { "5JtoIlHghSt/L1OdbP6fqYrADWs=" }, 15, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Suttanipāta-aṭṭhakathā - 1.pdf
+		addSourceVersions("s0505a.att.xml", SourceType.Burmese1957, "W8sDu1I3p3VO1RMC1dXJKTcAMvk=");
+		addVersion("s0505a.att.xml", SourceType.Burmese1957, new[] { "4WgK6uJ2SQgTAdCetI24S1x32yo=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/4 - Atthakatha/Uparipaṇṇāsa-aṭṭhakathā.pdf
+		addSourceVersions("s0203a.att.xml", SourceType.Burmese1957, "NjuFiKaBGD7GPOA4O+DCv4UoWhg=");
+		addVersion("s0203a.att.xml", SourceType.Burmese1957, new[] { "XQGXlyc1u3SNkeqto2QKSk2atZA=" }, 6, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Khuddasikkhā-mūlasikkhā.pdf
+		addSourceVersions("vin13t.nrf.xml", SourceType.Burmese1957, "Y/967oP2IctGHKHw51LVUEn8sfk=", "RwBmROq0lVfqIvdRIB8d2RPgdTg=");
+		addVersion("vin13t.nrf.xml", SourceType.Burmese1957, new[] { "8dpTHx/4GZ/UuovEyXg7OWOvrvk=" }, 15, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Mohavicchedanī (abhidhammamātikā).pdf
+		addSourceVersions("abh09t.nrf.xml", SourceType.Burmese1957, "NPsw+bjgFLxruwofd+WZrBaDV5Y=");
+		addVersion("abh09t.nrf.xml", SourceType.Burmese1957, new[] { "hBTMAUlTe7yejYTfZjx38itNhS0=" }, 16, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Pañcakanipātādi-ṭīkā.pdf
+		addSourceVersions("s0403t.tik.xml", SourceType.Burmese1957, "nC2l7DW7xRnzEDsmzHIML5w1aQk=");
+		addVersion("s0403t.tik.xml", SourceType.Burmese1957, new[] { "4r/swzBJkrdwepc+g6FGaDZ6Fsc=" }, 19, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Pañcakanipātādi-ṭīkā.pdf
+		addSourceVersions("s0404t.tik.xml", SourceType.Burmese1957, "nC2l7DW7xRnzEDsmzHIML5w1aQk=");
+		addVersion("s0404t.tik.xml", SourceType.Burmese1957, new[] { "4r/swzBJkrdwepc+g6FGaDZ6Fsc=" }, 19, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Pañcappakaraṇa-mūlaṭīkā-anuṭīkā.pdf
+		addSourceVersions("abh03t.tik.xml", SourceType.Burmese1957, "Z7V7Qap5xZ9lF7DsIPf+3vs3UPE=");
+		addVersion("abh03t.tik.xml", SourceType.Burmese1957, new[] { "xfiHVxwn5aWXd/pHxIkivff14uk=" }, 20, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Pañcappakaraṇa-mūlaṭīkā-anuṭīkā.pdf
+		addSourceVersions("abh05t.nrf.xml", SourceType.Burmese1957, "Z7V7Qap5xZ9lF7DsIPf+3vs3UPE=");
+		addVersion("abh05t.nrf.xml", SourceType.Burmese1957, new[] { "xfiHVxwn5aWXd/pHxIkivff14uk=" }, 288, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Sāratthadīpanī-ṭīkā-3.pdf
+		addSourceVersions("vin02t.tik.xml", SourceType.Burmese1957, "XoIiKjAqkZuEvpWl2q24op2bYgQ=");
+		addVersion("vin02t.tik.xml", SourceType.Burmese1957, new[] { "zBDUuJJsGMZKZTRgqKrwjeMW9DM=" }, 21, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Vajirabuddhi-ṭīkā.pdf
+		addSourceVersions("vin06t.nrf.xml", SourceType.Burmese1957, "jHzsEm2gqtxQGGLOYdmYufKqJcw=");
+		addVersion("vin06t.nrf.xml", SourceType.Burmese1957, new[] { "NxB4zq+Bem/5jHiy+r+wzpvBc7I=" }, 23, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Vinayasaṅgahaṭṭhakathā.pdf
+		addSourceVersions("vin05t.nrf.xml", SourceType.Burmese1957, "Sr8VouZuPBV0MTqzkNMuduM3iQk=");
+		addVersion("vin05t.nrf.xml", SourceType.Burmese1957, new[] { "jL6BdyJ2r9SQmhYSqAY2I2NPPDM=" }, 6, missingPages: null, extraPagesAfter: new[] { 111, 111, 111, 111, 111, 111, 111, 111, 111, 111 }, pageOverrides: null);
+		// 1957 edition/5 - Tika_/Kaṅkhāvitaraṇī purāṇa-abhinava-ṭīkā.pdf
+		addSourceVersions("vin09t.nrf.xml", SourceType.Burmese1957, "Vc6wpHw0qBAwVDGvqsQB+U7dy4E=");
+		addVersion("vin09t.nrf.xml", SourceType.Burmese1957, new[] { "bw5rmQnByMUxjO8bO+lz2LGYckM=" }, 19, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/011-Uparipaṇṇāsapāḷi.pdf
+		addSourceVersions("s0203m.mul.xml", SourceType.Burmese2010, "vyARXtNNTaOQ1IuU10tho7UxsTU=");
+		addVersion("s0203m.mul.xml", SourceType.Burmese2010, new[] { "TXEHVD81puhAyecc5ncb56EH19c=" }, 11, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/019-Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf
+		addSourceVersions("s0504m.mul.xml", SourceType.Burmese2010, "Tmvo85sbxXFyx58jEDFs37LIQOA=", "eQdF45DdbCF9pGZg3BW8lieHErE=", "n2SGHHE7VRYVs3h2sL+9uq5stbA=");
+		addVersion("s0504m.mul.xml", SourceType.Burmese2010, new[] { "MKbkJRWUv/3aXrbjxbMebGWlBME=" }, 29, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/019-Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf
+		addSourceVersions("s0505m.mul.xml", SourceType.Burmese2010, "Tmvo85sbxXFyx58jEDFs37LIQOA=", "eQdF45DdbCF9pGZg3BW8lieHErE=", "n2SGHHE7VRYVs3h2sL+9uq5stbA=");
+		addVersion("s0505m.mul.xml", SourceType.Burmese2010, new[] { "MKbkJRWUv/3aXrbjxbMebGWlBME=" }, 29, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/020-Vimānavatthu-PetavatthuTheragāthā-Therīgāthāpāḷi.pdf
+		addSourceVersions("s0506m.mul.xml", SourceType.Burmese2010, "sRg7hQPopGDGTWUoJbtFte/8w1Q=", "V4T4V+I9Z9pMLbi5ZquS8cGcLYk=", "Ty8y64L5jpjZ3HCiMeXAiW/0J5A=", "56bDM0uInAlmOKNQWQLEKu1KFv8=", "0QWooHkZoT5KTJsjCLSnCo7FYLw=");
+		addVersion("s0506m.mul.xml", SourceType.Burmese2010, new[] { "lDVq1QDHmETt0Rw+B7M6NVo03fw=" }, 21, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/020-Vimānavatthu-PetavatthuTheragāthā-Therīgāthāpāḷi.pdf
+		addSourceVersions("s0507m.mul.xml", SourceType.Burmese2010, "sRg7hQPopGDGTWUoJbtFte/8w1Q=", "V4T4V+I9Z9pMLbi5ZquS8cGcLYk=", "Ty8y64L5jpjZ3HCiMeXAiW/0J5A=", "56bDM0uInAlmOKNQWQLEKu1KFv8=", "0QWooHkZoT5KTJsjCLSnCo7FYLw=");
+		addVersion("s0507m.mul.xml", SourceType.Burmese2010, new[] { "lDVq1QDHmETt0Rw+B7M6NVo03fw=" }, 21, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/020-Vimānavatthu-PetavatthuTheragāthā-Therīgāthāpāḷi.pdf
+		addSourceVersions("s0508m.mul.xml", SourceType.Burmese2010, "sRg7hQPopGDGTWUoJbtFte/8w1Q=", "V4T4V+I9Z9pMLbi5ZquS8cGcLYk=", "Ty8y64L5jpjZ3HCiMeXAiW/0J5A=", "56bDM0uInAlmOKNQWQLEKu1KFv8=", "0QWooHkZoT5KTJsjCLSnCo7FYLw=");
+		addVersion("s0508m.mul.xml", SourceType.Burmese2010, new[] { "lDVq1QDHmETt0Rw+B7M6NVo03fw=" }, 21, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/020-Vimānavatthu-PetavatthuTheragāthā-Therīgāthāpāḷi.pdf
+		addSourceVersions("s0509m.mul.xml", SourceType.Burmese2010, "sRg7hQPopGDGTWUoJbtFte/8w1Q=", "V4T4V+I9Z9pMLbi5ZquS8cGcLYk=", "Ty8y64L5jpjZ3HCiMeXAiW/0J5A=", "56bDM0uInAlmOKNQWQLEKu1KFv8=", "0QWooHkZoT5KTJsjCLSnCo7FYLw=");
+		addVersion("s0509m.mul.xml", SourceType.Burmese2010, new[] { "lDVq1QDHmETt0Rw+B7M6NVo03fw=" }, 21, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/029-Dhammasaṅgaṇīpāḷi.pdf
+		addSourceVersions("abh01m.mul.xml", SourceType.Burmese2010, "HR5T56+grlF+TULiozPOO+VBsEM=");
+		addVersion("abh01m.mul.xml", SourceType.Burmese2010, new[] { "vTzMFbxHvMtnL8VheNhimfohLT4=" }, 23, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/036-Paṭṭhānapāḷi-1.pdf
+		addSourceVersions("abh03m7.mul.xml", SourceType.Burmese2010, "PTSvuIPZ/q/Rk4DPw0xSFQrYT2s=");
+		addVersion("abh03m7.mul.xml", SourceType.Burmese2010, new[] { "WU1qyNKQdpxeZPyQSLH7BqvXZXM=" }, 35, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/037-Paṭṭhānapāḷi-2.pdf
+		addSourceVersions("abh03m8.mul.xml", SourceType.Burmese2010, "3Vq++SgDO6wh73dfqs/P+/bDjdk=");
+		addVersion("abh03m8.mul.xml", SourceType.Burmese2010, new[] { "hTI/J32QB2fIMv+QAdjB652+sOI=" }, 31, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// 2010 edition/Mula/040-Paṭṭhānapāḷi-5.pdf
+		addSourceVersions("abh03m11.mul.xml", SourceType.Burmese2010, "RQ3gNXYmLJQmVPd5o383+L23qII=");
+		addVersion("abh03m11.mul.xml", SourceType.Burmese2010, new[] { "XtDswq3YrGaghc9RlIb+m3w7b/g=" }, 11, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/2. Saṅgāyana-puccha vissajjanā/1. Dīghanikāya (Pu-Vi).pdf
+		addSourceVersions("e0901n.nrf.xml", SourceType.BurmeseAnya, "wi9p98or4JYf47zyrrK+Awm/jx4=");
+		addVersion("e0901n.nrf.xml", SourceType.BurmeseAnya, new[] { "2NZqnblh5LZrSvMQ/do4A+0G5Cc=" }, 18, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/2. Saṅgāyana-puccha vissajjanā/6. Abhidhammapiṭaka (Pu-Vi).pdf
+		addSourceVersions("e0906n.nrf.xml", SourceType.BurmeseAnya, "rNJLm3V771H28FutWP/RPT5DG+k=");
+		addVersion("e0906n.nrf.xml", SourceType.BurmeseAnya, new[] { "EiQgmqyNruX07deNYJFaNP119GY=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/3. Leḍī sayāḍo gantha-saṅgaho/1. Niruttidīpanī.pdf
+		addSourceVersions("e0201n.nrf.xml", SourceType.BurmeseAnya, "0C9xqa9G8qKkIXOUnRTEMGGR+K4=", "iOrxgHX/kcGPf/fmSVxETowmbB4=");
+		addVersion("e0201n.nrf.xml", SourceType.BurmeseAnya, new[] { "p6/u4+7eChnup1mC91gGjmKCzwI=" }, 112, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/3. Leḍī sayāḍo gantha-saṅgaho/3. Anudīpanīpāṭha.pdf
+		addSourceVersions("e0401n.nrf.xml", SourceType.BurmeseAnya, "Hry8vsD4gboGIVKllmSqRgJ11RY=");
+		addVersion("e0401n.nrf.xml", SourceType.BurmeseAnya, new[] { "sPiIerU03mTb7zwgsxHfvhLO6ZA=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/4. Buddha-vandanā gantha-saṅgaho/2. Mahāpaṇāmapāṭha.pdf
+		addSourceVersions("e0602n.nrf.xml", SourceType.BurmeseAnya, "znxWIk825IzVvP9XXXp9mfPmbjs=");
+		addVersion("e0602n.nrf.xml", SourceType.BurmeseAnya, new[] { "zwtFrcpugplrWn1Ajn20MhJ7a+8=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/5. Vaṃsa-gantha-saṅgaho/2. Mahāvaṃsa (Vol-1).pdf
+		addSourceVersions("e0703n.nrf.xml", SourceType.BurmeseAnya, "OB2u2HVIFLEvYPr3bJ/eZSjFZqU=");
+		addVersion("e0703n.nrf.xml", SourceType.BurmeseAnya, new[] { "uBf/vd4TenEO5I00YLCQfZMwxDo=" }, 7, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/5. Vaṃsa-gantha-saṅgaho/3. Sāsanavaṃsappadīpikā.pdf
+		addSourceVersions("e0702n.nrf.xml", SourceType.BurmeseAnya, "m+5v4AG4s4WbEQEpPQ/ggwDpaT8=");
+		addVersion("e0702n.nrf.xml", SourceType.BurmeseAnya, new[] { "J5OdLtWEosbV64Yc2eVwbzQwiLs=" }, 16, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/6. Byākaraṇa gantha-saṅgaho/14. Bālāvatāra gaṇṭhipadatthavinicchayasāra.pdf
+		addSourceVersions("e0813n.nrf.xml", SourceType.BurmeseAnya, "2SPnZE1BbY8ZleBOrVCALD/1Yhg=");
+		addVersion("e0813n.nrf.xml", SourceType.BurmeseAnya, new[] { "rxRN4wHckH93esplANU/OzBwSRc=" }, 33, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/6. Byākaraṇa gantha-saṅgaho/4. Saddanītippakaraṇaṃ (dhātumālā).pdf
+		addSourceVersions("e0804n.nrf.xml", SourceType.BurmeseAnya, "zI/GF7EHnBfbh6SfcvqvJptCPX8=");
+		addVersion("e0804n.nrf.xml", SourceType.BurmeseAnya, new[] { "qjHIV9oFyJVgELu52AQWNaSdm50=" }, 8, missingPages: null, extraPagesAfter: new[] { 269 }, pageOverrides: null);
+		// Anya/7. Nīti-gantha-saṅgaho/3. Sūrassatinīti.pdf
+		addSourceVersions("e1007n.nrf.xml", SourceType.BurmeseAnya, "LyVwC68Wq3AeHnx2dIliFNh8NUc=");
+		addVersion("e1007n.nrf.xml", SourceType.BurmeseAnya, new[] { "1pX1kvcjKRVcGSk08QzK3u6I9x4=" }, 9, missingPages: null, extraPagesAfter: new[] { 11, 11, 11, 103, 103 }, pageOverrides: null);
 	}
 
 	private void addSource(string filename, SourceType sourceType, int pageStart, string path,
