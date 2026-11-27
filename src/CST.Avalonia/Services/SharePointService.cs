@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
@@ -46,12 +47,18 @@ namespace CST.Avalonia.Services
         private const string SourceRootFolder = "_Source";
 
         public SharePointService(ILogger<SharePointService> logger)
+            : this(logger, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                AppConstants.AppDataDirectoryName, "pdfs"))
+        {
+        }
+
+        /// <summary>A service whose PDF cache is <paramref name="localPdfDirectory"/>: for tests.</summary>
+        internal SharePointService(ILogger<SharePointService> logger, string localPdfDirectory)
         {
             _logger = logger;
 
             // Set up local PDF storage directory
-            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            _localPdfDirectory = Path.Combine(appDataPath, AppConstants.AppDataDirectoryName, "pdfs");
+            _localPdfDirectory = localPdfDirectory;
             Directory.CreateDirectory(_localPdfDirectory);
 
             _logger.LogInformation("SharePoint PDF cache directory: {Path}", _localPdfDirectory);
@@ -183,40 +190,46 @@ namespace CST.Avalonia.Services
             }
         }
 
-        public async Task<string?> DownloadPdfAsync(string sharePointPath)
+        public async Task<string?> DownloadPdfAsync(string sharePointPath) =>
+            (await GetPdfAsync(sharePointPath).ConfigureAwait(false))?.LocalPath;
+
+        // How long to wait for a PDF's metadata before opening the cached copy without it. Only the metadata
+        // call is bounded: the download itself can legitimately take minutes for a 300 MB scan.
+        private static readonly TimeSpan MetadataTimeout = TimeSpan.FromSeconds(15);
+
+        /// <summary>
+        /// The local copy of a source PDF, kept the same as SharePoint's: when online, the server's content
+        /// hash is compared with the cached copy's on every open, and a cached copy that differs is replaced
+        /// by the current file. [fsnow, 2026-11-26: on what happens to the replaced copy, "Replace it"]
+        /// Offline, or when SharePoint can't be reached, the cached copy is used as it is. (#1136)
+        /// </summary>
+        public async Task<PdfFile?> GetPdfAsync(string sharePointPath)
         {
+            var localPath = GetLocalPdfPath(sharePointPath);
+
+            // A cached copy that is not an intact PDF (a pre-NET-1 truncated download) is replaced by a fresh,
+            // verified download; until one succeeds it is still served, since tolerant viewers show its readable
+            // pages and an offline user should get it rather than nothing. (#194, #324 A9-2)
+            bool cached = File.Exists(localPath);
+            bool intact = cached && IsIntactPdf(localPath);
+            if (cached && !intact && WarnOnce(localPath))
+                _logger.LogWarning("Cached PDF failed integrity check (truncated/corrupt); re-downloading: {Path}", localPath);
+
+            PdfFile? Cached(string why)
+            {
+                if (!cached || !File.Exists(localPath)) return null;
+                string? hash = null;
+                try { hash = LocalPdfVersion.Get(localPath); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Could not hash cached PDF {Path}", localPath); }
+                _logger.LogInformation("Using cached PDF ({Why}): {Path}, version {Hash}", why, localPath, hash);
+                return new PdfFile(localPath, hash);
+            }
+
             if (_graphClient == null)
             {
                 _logger.LogWarning("Graph client not initialized");
-                return null;
+                return Cached("SharePoint not available");
             }
-
-            var localPath = GetLocalPdfPath(sharePointPath);
-
-            // Use the cached copy only if it's an intact PDF. A pre-NET-1 truncated download left at localPath
-            // would otherwise be trusted forever (these files are the permanent preservation store, never
-            // evicted, so it never heals). A corrupt cached file falls through to a fresh, size-verified
-            // re-download below, which atomically REPLACES the bad file - re-downloading a corrupt file does not
-            // conflict with the preservation rule. (#194, follow-up to NET-1)
-            // A corrupt cached PDF still on disk is a fallback if the re-download fails: it's the permanent
-            // preservation store and tolerant viewers show its readable pages, so an offline user should get it
-            // rather than nothing. (#324 A9-2)
-            bool haveUnvalidatedCache = false;
-            if (File.Exists(localPath))
-            {
-                if (IsIntactPdf(localPath))
-                {
-                    _logger.LogInformation("PDF already cached locally: {Path}", localPath);
-                    return localPath;
-                }
-                haveUnvalidatedCache = true;
-                if (WarnOnce(localPath))
-                    _logger.LogWarning("Cached PDF failed integrity check (truncated/corrupt); re-downloading: {Path}", localPath);
-            }
-
-            // On any re-download failure, fall back to the (corrupt-but-present) cached copy rather than null, so
-            // an offline user keeps the readable pages; never deletes it, and a later call retries. (#324 A9-2)
-            string? Fallback() => haveUnvalidatedCache && File.Exists(localPath) ? localPath : null;
 
             try
             {
@@ -224,52 +237,58 @@ namespace CST.Avalonia.Services
                 if (string.IsNullOrEmpty(driveId))
                 {
                     _logger.LogError("Could not get drive ID");
-                    return Fallback();
+                    return Cached("no drive ID");
                 }
 
                 var fullPath = $"{SourceRootFolder}/{sharePointPath}";
-                _logger.LogInformation("Downloading PDF from SharePoint: {Path}", fullPath);
-
-                // Use path-based access with the special colon syntax: root:/path:
+                // Path-based access with the special colon syntax: root:/path:
                 var itemPath = $"root:/{fullPath}:";
 
-                // Get the file info first
-                var driveItem = await _graphClient.Drives[driveId].Items[itemPath].GetAsync();
-
+                DriveItem? driveItem;
+                using (var cts = new CancellationTokenSource(MetadataTimeout))
+                    driveItem = await _graphClient.Drives[driveId].Items[itemPath].GetAsync(cancellationToken: cts.Token);
                 if (driveItem == null)
                 {
                     _logger.LogError("File not found in SharePoint: {Path}", fullPath);
-                    return Fallback();
+                    return Cached("not found on SharePoint");
                 }
 
-                // Download the file content
-                using var contentStream = await _graphClient.Drives[driveId].Items[itemPath].Content.GetAsync();
+                var serverHash = driveItem.File?.Hashes?.QuickXorHash;
+                if (intact)
+                {
+                    var localHash = LocalPdfVersion.Get(localPath);
+                    if (serverHash == null || serverHash == localHash)
+                    {
+                        _logger.LogInformation("PDF already cached locally: {Path}, version {Hash}", localPath, localHash);
+                        return new PdfFile(localPath, localHash);
+                    }
+                    _logger.LogInformation("SharePoint has a different version of {Path} (cached {Local}, server {Server}, modified {Modified}); replacing the cached copy",
+                        fullPath, localHash, serverHash, driveItem.LastModifiedDateTime);
+                }
 
+                _logger.LogInformation("Downloading PDF from SharePoint: {Path}", fullPath);
+                using var contentStream = await _graphClient.Drives[driveId].Items[itemPath].Content.GetAsync();
                 if (contentStream == null)
                 {
                     _logger.LogError("Failed to get content stream for: {Path}", fullPath);
-                    return Fallback();
+                    return Cached("download failed");
                 }
 
-                // Save atomically with size verification. A partial download must never land at localPath:
-                // the cache check above trusts any file already there, and these PDFs are the permanent
-                // preservation store (not an evictable cache). (NET-1)
-                if (!await SaveStreamVerifiedAsync(contentStream, localPath, driveItem.Size, _logger))
-                {
-                    if (haveUnvalidatedCache)
-                        _logger.LogWarning("Re-download failed verification; serving the unvalidated cached copy, will retry: {Path}", localPath);
-                    return Fallback();
-                }
+                // Atomic, size- and hash-verified: a partial or wrong download never lands at localPath, and a
+                // failed one leaves the cached copy as it was. (NET-1)
+                if (!await SaveStreamVerifiedAsync(contentStream, localPath, driveItem.Size, _logger, serverHash))
+                    return Cached("download failed verification");
 
-                _logger.LogInformation("Downloaded PDF to: {Path} ({Size:N0} bytes)", localPath, new FileInfo(localPath).Length);
-                return localPath;
+                var hash = serverHash ?? QuickXorHash.ComputeFile(localPath);
+                LocalPdfVersion.Remember(localPath, hash);
+                _logger.LogInformation("Downloaded PDF to: {Path} ({Size:N0} bytes), version {Hash}",
+                    localPath, new FileInfo(localPath).Length, hash);
+                return new PdfFile(localPath, hash);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to download PDF: {Path}", sharePointPath);
-                if (haveUnvalidatedCache)
-                    _logger.LogWarning("Re-download failed; serving the unvalidated cached copy, will retry: {Path}", localPath);
-                return Fallback();
+                _logger.LogError(ex, "Failed to check or download PDF: {Path}", sharePointPath);
+                return Cached("SharePoint error");
             }
         }
 
@@ -284,10 +303,12 @@ namespace CST.Avalonia.Services
         /// <summary>
         /// Write a download stream to <paramref name="finalPath"/> without ever leaving a partial file
         /// there: stream into a sibling ".part", verify the byte count against the server-reported size
-        /// (when known), then atomically move it into place. On a size mismatch or any exception the
+        /// (when known) and the content hash (when given), then atomically move it into place. On a size or
+        /// hash mismatch or any exception the
         /// ".part" is removed and <paramref name="finalPath"/> is left untouched. (NET-1)
         /// </summary>
-        internal static async Task<bool> SaveStreamVerifiedAsync(Stream content, string finalPath, long? expectedSize, ILogger logger)
+        internal static async Task<bool> SaveStreamVerifiedAsync(Stream content, string finalPath, long? expectedSize, ILogger logger,
+            string? expectedQuickXorHash = null)
         {
             var localDir = Path.GetDirectoryName(finalPath);
             if (!string.IsNullOrEmpty(localDir))
@@ -310,6 +331,20 @@ namespace CST.Avalonia.Services
                         finalPath, downloadedLength, expectedSize.Value);
                     TryDelete(tempPath);
                     return false;
+                }
+
+                // The server's content hash, when it gave one: a download of the right length can still be
+                // the wrong bytes, and this file then stands for that version of the PDF. (#1136)
+                if (expectedQuickXorHash != null)
+                {
+                    var actual = QuickXorHash.ComputeFile(tempPath);
+                    if (actual != expectedQuickXorHash)
+                    {
+                        logger.LogError("Downloaded hash mismatch for {Path}: got {Actual}, expected {Expected}; discarding the download",
+                            finalPath, actual, expectedQuickXorHash);
+                        TryDelete(tempPath);
+                        return false;
+                    }
                 }
 
                 // Same-volume rename -> atomic promote into place.

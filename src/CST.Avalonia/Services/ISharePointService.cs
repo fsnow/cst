@@ -5,6 +5,9 @@ namespace CST.Avalonia.Services
     /// <summary>
     /// Service for downloading PDF files from SharePoint using Microsoft Graph API.
     /// </summary>
+    /// <summary>A source PDF on disk, and its version (null if it could not be hashed).</summary>
+    public sealed record PdfFile(string LocalPath, string? QuickXorHash);
+
     public interface ISharePointService
     {
         /// <summary>
@@ -13,6 +16,13 @@ namespace CST.Avalonia.Services
         /// <param name="sharePointPath">The path to the file within SharePoint (e.g., "_Source/01 - Burmese-CST/1957 edition/file.pdf")</param>
         /// <returns>The local file path where the PDF was saved, or null if download failed</returns>
         Task<string?> DownloadPdfAsync(string sharePointPath);
+
+        /// <summary>
+        /// The local copy of a PDF, refreshed when SharePoint's copy differs from it, with the version it is:
+        /// its SharePoint <c>quickXorHash</c>, by which <c>Sources.Source.ForVersion</c> picks the page mapping
+        /// that fits it. Null if there is no local copy and none can be downloaded. (#1136)
+        /// </summary>
+        Task<PdfFile?> GetPdfAsync(string sharePointPath);
 
         /// <summary>
         /// Gets the local path where a PDF would be stored, without downloading.

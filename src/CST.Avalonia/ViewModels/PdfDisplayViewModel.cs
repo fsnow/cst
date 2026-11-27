@@ -21,6 +21,7 @@ namespace CST.Avalonia.ViewModels
 
         private string _bookFilename;
         private Sources.SourceType _sourceType;
+        private readonly int _printPage;
         private int _targetPage;
         private string _statusText = "Loading...";
         private bool _isLoading = true;
@@ -36,7 +37,7 @@ namespace CST.Avalonia.ViewModels
         public PdfDisplayViewModel(
             string bookFilename,
             Sources.SourceType sourceType,
-            int targetPage,
+            int printPage,
             ISharePointService? sharePointService = null,
             CstDockFactory? dockFactory = null,
             string? windowId = null)
@@ -44,7 +45,9 @@ namespace CST.Avalonia.ViewModels
             _logger = Log.ForContext<PdfDisplayViewModel>();
             _bookFilename = bookFilename;
             _sourceType = sourceType;
-            _targetPage = targetPage;
+            // The book's printed page. Which PDF page that is depends on the version of the PDF on disk, so it is
+            // worked out once the PDF has been fetched (LoadPdfAsync). (#1136)
+            _printPage = printPage;
             _sharePointService = sharePointService;
             _dockFactory = dockFactory;
 
@@ -57,7 +60,7 @@ namespace CST.Avalonia.ViewModels
             {
                 Id = $"Pdf_{bookFilename}_{sourceType}_{Guid.NewGuid():N}";
             }
-            Title = $"{GetSourceTypeName(sourceType)} - Page {targetPage}";
+            Title = $"{GetSourceTypeName(sourceType)} - Page {printPage}";
             CanClose = true;
             // A PDF tab floats into its own window like a book (#419). Everything the float depends on
             // already handles this type: SplitToWindow disposes the live browser before the move,
@@ -76,8 +79,8 @@ namespace CST.Avalonia.ViewModels
             // Initialize commands
             RefreshCommand = ReactiveCommand.CreateFromTask(LoadPdfAsync);
 
-            _logger.Information("PdfDisplayViewModel created for {Book}, {Source}, page {Page}",
-                bookFilename, sourceType, targetPage);
+            _logger.Information("PdfDisplayViewModel created for {Book}, {Source}, print page {Page}",
+                bookFilename, sourceType, printPage);
 
             // Start loading the PDF
             _ = LoadPdfAsync();
@@ -97,6 +100,7 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _sourceType, value);
         }
 
+        /// <summary>The PDF page shown: the print page through the mapping for the PDF version on disk.</summary>
         public int TargetPage
         {
             get => _targetPage;
@@ -172,7 +176,8 @@ namespace CST.Avalonia.ViewModels
 
                 // Download the PDF
                 _logger.Information("Downloading PDF: {Path}", source.Path);
-                var localPath = await _sharePointService.DownloadPdfAsync(source.Path);
+                var pdf = await _sharePointService.GetPdfAsync(source.Path);
+                var localPath = pdf?.LocalPath;
 
                 if (string.IsNullOrEmpty(localPath) || !File.Exists(localPath))
                 {
@@ -184,10 +189,15 @@ namespace CST.Avalonia.ViewModels
 
                 PdfLocalPath = localPath;
 
-                // _targetPage is already the calculated PDF page number
-                // (BookDisplayViewModel already did: source.PdfPageFor(printPage))
-                int pdfPage = _targetPage;
-                if (pdfPage < 1) pdfPage = 1;
+                // The page mapping recorded for this version of the PDF, or the latest mapping if this version is not
+                // listed. (#1136; the mapping itself: #540)
+                var mapping = source.ForVersion(pdf!.QuickXorHash);
+                int pdfPage = mapping.PdfPageFor(_printPage);
+                TargetPage = pdfPage;
+                bool listed = pdf.QuickXorHash != null && source.Versions.ContainsKey(pdf.QuickXorHash);
+                _logger.Information("PDF version {Hash} ({Mapping}): {Edition} page {PrintPage} -> PDF page {PdfPage}",
+                    pdf.QuickXorHash, listed ? "its own mapping" : "not listed, so the latest mapping",
+                    source.PageEdition, _printPage, pdfPage);
 
                 // CEF/PDFium honors a #page=N fragment. Build the file:// URL via Uri.AbsoluteUri so the
                 // path is escaped correctly (spaces, '#', Windows drive letters) — string concat was not. (NET-5)

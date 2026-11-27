@@ -140,13 +140,14 @@ addSource("s0101m.mul.xml", SourceType.Burmese1957, 19,
 public PdfDisplayViewModel(
     string bookFilename,
     Sources.SourceType sourceType,
-    int targetPage,
-    ISettingsService? settingsService = null,
+    int printPage,
+    ISharePointService? sharePointService = null,
     CstDockFactory? dockFactory = null)
 {
     // bookFilename: e.g., "s0101m.mul.xml"
     // sourceType: Burmese1957 or Burmese2010
-    // targetPage: Calculated page number in PDF
+    // printPage: the book's printed page. The PDF page is worked out after the PDF is fetched, with the
+    //   mapping for the version on disk: source.ForVersion(pdf.QuickXorHash).PdfPageFor(printPage) (#1136)
 }
 ```
 
@@ -291,11 +292,9 @@ private void ShowSource(Sources.SourceType sourceType)
         return;
     }
 
-    // Calculate target PDF page (CST4 formula)
-    int pdfPage = source.PageStart + (currentPage - 1);
-
-    // Request PDF window to be opened
-    OpenPdfRequested?.Invoke(_book.Filename, sourceType, pdfPage);
+    // Request PDF window to be opened, at the printed page: the PDF pane maps it to a PDF page once it
+    // knows which version of the PDF it has (#540, #1136)
+    OpenPdfRequested?.Invoke(_book.Filename, sourceType, currentPage);
 }
 
 // Event for requesting PDF window
@@ -313,12 +312,12 @@ public event Action<string, Sources.SourceType, int>? OpenPdfRequested;
 public PdfDisplayViewModel CreatePdfDisplay(
     string bookFilename,
     Sources.SourceType sourceType,
-    int targetPage)
+    int printPage)
 {
     var viewModel = new PdfDisplayViewModel(
         bookFilename,
         sourceType,
-        targetPage,
+        printPage,
         _settingsService,
         this);
 

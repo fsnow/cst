@@ -74,6 +74,7 @@ namespace CST.Avalonia.ViewModels
         public event Action? OpenGoToDialogRequested;
 
         // Event for requesting PDF source display (will be handled by SimpleTabbedWindow)
+        /// <summary>A source PDF to open: the book, the edition, and the printed page (not the PDF page).</summary>
         public event Action<string, Sources.SourceType, int>? OpenPdfRequested;
 
         // Protected methods to invoke events (allows external classes to trigger events)
@@ -1891,16 +1892,13 @@ namespace CST.Avalonia.ViewModels
                 return;  // Don't proceed with unparseable page
             }
 
-            // CST4's formula was PageStart + (page - 1), which assumes every printed page occupies a page
-            // of the PDF. Blank pages the scanner passed over break that, and the error accumulates down
-            // the volume, so the page count comes from the source itself now. (#540)
-            int pdfPage = source.PdfPageFor(currentPage);
-
-            _logger.Information("Showing source PDF: {SourceType} for {BookFilename}, {Edition} page {Page} -> PDF page {PdfPage}",
-                sourceType, _book.FileName, source.PageEdition, currentPage, pdfPage);
+            // The printed page goes to the PDF pane, which turns it into a PDF page once it knows which version
+            // of the PDF it has: the mapping (#540) can differ between versions of a scan. (#1136)
+            _logger.Information("Showing source PDF: {SourceType} for {BookFilename}, {Edition} page {Page}",
+                sourceType, _book.FileName, source.PageEdition, currentPage);
 
             // Request PDF window to be opened
-            OpenPdfRequested?.Invoke(_book.FileName, sourceType, pdfPage);
+            OpenPdfRequested?.Invoke(_book.FileName, sourceType, currentPage);
         }
 
         private void UpdateHitStatusText()

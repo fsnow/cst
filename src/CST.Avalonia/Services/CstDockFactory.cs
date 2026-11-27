@@ -648,10 +648,10 @@ namespace CST.Avalonia.Services
         /// Opens a PDF source document for viewing.
         /// Downloads the PDF from SharePoint and displays it in a dockable tab.
         /// </summary>
-        public void OpenPdf(string bookFilename, Sources.SourceType sourceType, int targetPage)
+        public void OpenPdf(string bookFilename, Sources.SourceType sourceType, int printPage)
         {
-            _logger.Information("Opening PDF for {BookFilename}, {SourceType}, page {Page}",
-                bookFilename, sourceType, targetPage);
+            _logger.Information("Opening PDF for {BookFilename}, {SourceType}, print page {Page}",
+                bookFilename, sourceType, printPage);
 
             // Get SharePointService from DI
             var sharePointService = App.ServiceProvider?.GetService<ISharePointService>();
@@ -660,7 +660,7 @@ namespace CST.Avalonia.Services
             var pdfViewModel = new PdfDisplayViewModel(
                 bookFilename,
                 sourceType,
-                targetPage,
+                printPage,
                 sharePointService,
                 this
             );
@@ -3682,11 +3682,11 @@ namespace CST.Avalonia.Services
                 };
 
                 // View Source PDF buttons (1957 / 2010) — same reasoning as OpenBookRequested above.
-                bookViewModel.OpenPdfRequested += (bookFilename, sourceType, targetPage) =>
+                bookViewModel.OpenPdfRequested += (bookFilename, sourceType, printPage) =>
                 {
-                    _logger.Information("OpenPdfRequested event fired for book: {BookFile}, source: {SourceType}, page: {Page}",
-                        bookFilename, sourceType, targetPage);
-                    OpenPdf(bookFilename, sourceType, targetPage);
+                    _logger.Information("OpenPdfRequested event fired for book: {BookFile}, source: {SourceType}, print page: {Page}",
+                        bookFilename, sourceType, printPage);
+                    OpenPdf(bookFilename, sourceType, printPage);
                 };
 
                 // Keep the tab title in sync when a script change regenerates DisplayTitle, preserving
