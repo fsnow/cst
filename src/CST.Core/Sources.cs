@@ -731,12 +731,16 @@ public class Sources
 		// 1957 edition/2 - Mula - Sutta/Jātakapāḷi-1.pdf
 		addSourceVersions("s0513m.mul.xml", SourceType.Burmese1957, "JHu2HztSutryWinBV/EVq75OmAo=");
 		addVersion("s0513m.mul.xml", SourceType.Burmese1957, new[] { "j3fyX2ya3OYAauGwibJ5eXHbhII=" }, 27, missingPages: null, extraPagesAfter: null, pageOverrides: null);
-		// 1957 edition/2 - Mula - Sutta/Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf
+		// 1957 edition/2 - Mula - Sutta/Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf: placeholders for
+		// the blank print 12 and 194 (between texts) and 276-278 make one page run, so all five books start at 25.
+		addSourceVersions("s0502m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
+		addVersion("s0502m.mul.xml", SourceType.Burmese1957, new[] { "JMSo6n9tdZMenFisSeoiGcFkuXU=" }, 25, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		addSourceVersions("s0503m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
+		addVersion("s0503m.mul.xml", SourceType.Burmese1957, new[] { "JMSo6n9tdZMenFisSeoiGcFkuXU=" }, 25, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		addSourceVersions("s0504m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
-		addVersion("s0504m.mul.xml", SourceType.Burmese1957, new[] { "AndJt2sAuEVZVYk1al+zCK80NZY=" }, 23, missingPages: null, extraPagesAfter: new[] { 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219 }, pageOverrides: null);
-		// 1957 edition/2 - Mula - Sutta/Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf
+		addVersion("s0504m.mul.xml", SourceType.Burmese1957, new[] { "JMSo6n9tdZMenFisSeoiGcFkuXU=" }, 25, missingPages: null, extraPagesAfter: KN_KhuddakaSuttanipata_1957_Extra, pageOverrides: null);
 		addSourceVersions("s0505m.mul.xml", SourceType.Burmese1957, "I8IsbBn+WIN6z+wMaSDL1q1wUTw=", "+a/0OYN6wnSnRFDAQuOQcAB56cE=");
-		addVersion("s0505m.mul.xml", SourceType.Burmese1957, new[] { "AndJt2sAuEVZVYk1al+zCK80NZY=" }, 23, missingPages: null, extraPagesAfter: new[] { 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219 }, pageOverrides: null);
+		addVersion("s0505m.mul.xml", SourceType.Burmese1957, new[] { "JMSo6n9tdZMenFisSeoiGcFkuXU=" }, 25, missingPages: null, extraPagesAfter: KN_KhuddakaSuttanipata_1957_Extra, pageOverrides: null);
 		// 1957 edition/2 - Mula - Sutta/Mahāniddesapāḷi.pdf
 		addSourceVersions("s0515m.mul.xml", SourceType.Burmese1957, "4pD0FRbn9EA1vSVlqjBx9PchV7o=");
 		addVersion("s0515m.mul.xml", SourceType.Burmese1957, new[] { "Hb3n6EXa8p04JCwpShEnPeCcyIY=" }, 5, missingPages: null, extraPagesAfter: null, pageOverrides: null);
