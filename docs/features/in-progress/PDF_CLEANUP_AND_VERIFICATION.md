@@ -78,6 +78,8 @@ A book's page mapping can differ between versions of its PDF. [fsnow, 2026-11-26
 - **Then the versions the `addSource` mapping fits must be listed** with `addSourceVersions`. Every hash that isn't listed gets the latest mapping, so an old copy left unlisted would get the new one. A test (`SourcePdfVersionTests`) fails for a book that has `addVersion` entries but no `addSourceVersions`.
 - **The hash** is SharePoint's `quickXorHash`: Graph's `driveItem.file.hashes.quickXorHash`. The app logs it each time it opens a PDF ("PDF version …"). Note it whenever a mapping is measured, so it is clear which version of the scan the mapping was measured against. For a file not yet uploaded, compute the hash locally; it is the same algorithm (`QuickXorHash.cs`).
 
+- **When a repaired PDF goes up.** Not before the release that carries its mapping. Older releases have only the original mapping, and they apply it to whatever file they download first. For the 50 PDFs repaired in November 2026: [fsnow, 2026-11-27] "After beta 10 ships". That's a step in RELEASE_PROCESS.md, under Bucket B.
+
 ### Phase 2: Page Marker Verification
 
 Systematically verify that each Myanmar page marker in the XML files points to the correct page in the corresponding PDF:
