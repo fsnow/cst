@@ -656,7 +656,7 @@ public class Sources
 
 		// Leḍī Sayāḍo. e0301 (Paramatthadīpanī) has no PDF.
 		addSource("e0201n.nrf.xml", SourceType.BurmeseAnya, 112, $"{BurmeseAnyaLedi}/1. Niruttidīpanī.pdf", extraPagesAfter: new[] { 109, 109 });
-		addSource("e0401n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaLedi}/3. Anudīpanīpāṭha.pdf", extraPagesAfter: new[] { 85, 85 });
+		addSource("e0401n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaLedi}/3. Anudīpanīpāṭha.pdf", new[] { 114, 115 }, extraPagesAfter: new[] { 85, 85 });
 		addSource("e0501n.nrf.xml", SourceType.BurmeseAnya, 176, $"{BurmeseAnyaLedi}/4. Paṭṭhānuddesa dīpanīpāṭha_printed.pdf");
 
 		// Buddha-vandanā. e0603–e0608 have no PDF.
@@ -887,7 +887,7 @@ public class Sources
 		addVersion("e0201n.nrf.xml", SourceType.BurmeseAnya, new[] { "p6/u4+7eChnup1mC91gGjmKCzwI=" }, 112, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/3. Leḍī sayāḍo gantha-saṅgaho/3. Anudīpanīpāṭha.pdf
 		addSourceVersions("e0401n.nrf.xml", SourceType.BurmeseAnya, "Hry8vsD4gboGIVKllmSqRgJ11RY=");
-		addVersion("e0401n.nrf.xml", SourceType.BurmeseAnya, new[] { "sPiIerU03mTb7zwgsxHfvhLO6ZA=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		addVersion("e0401n.nrf.xml", SourceType.BurmeseAnya, new[] { "2xYNGLOjue5Lm6/mbym0Jm1oYyk=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/4. Buddha-vandanā gantha-saṅgaho/2. Mahāpaṇāmapāṭha.pdf
 		addSourceVersions("e0602n.nrf.xml", SourceType.BurmeseAnya, "znxWIk825IzVvP9XXXp9mfPmbjs=");
 		addVersion("e0602n.nrf.xml", SourceType.BurmeseAnya, new[] { "zwtFrcpugplrWn1Ajn20MhJ7a+8=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
