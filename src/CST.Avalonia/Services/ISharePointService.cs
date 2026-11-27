@@ -2,12 +2,12 @@ using System.Threading.Tasks;
 
 namespace CST.Avalonia.Services
 {
-    /// <summary>
-    /// Service for downloading PDF files from SharePoint using Microsoft Graph API.
-    /// </summary>
     /// <summary>A source PDF on disk, and its version (null if it could not be hashed).</summary>
     public sealed record PdfFile(string LocalPath, string? QuickXorHash);
 
+    /// <summary>
+    /// Service for downloading PDF files from SharePoint using Microsoft Graph API.
+    /// </summary>
     public interface ISharePointService
     {
         /// <summary>

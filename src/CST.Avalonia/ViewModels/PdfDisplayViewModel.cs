@@ -60,7 +60,8 @@ namespace CST.Avalonia.ViewModels
             {
                 Id = $"Pdf_{bookFilename}_{sourceType}_{Guid.NewGuid():N}";
             }
-            Title = $"{GetSourceTypeName(sourceType)} - Page {printPage}";
+            // The PDF page is known only once the PDF is fetched (LoadPdfAsync sets the title then).
+            Title = GetSourceTypeName(sourceType);
             CanClose = true;
             // A PDF tab floats into its own window like a book (#419). Everything the float depends on
             // already handles this type: SplitToWindow disposes the live browser before the move,

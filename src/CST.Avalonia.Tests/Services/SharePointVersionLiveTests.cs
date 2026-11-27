@@ -20,8 +20,11 @@ public class SharePointVersionLiveTests
         var source = Environment.GetEnvironmentVariable("CST_SHAREPOINT_LIVE");
         if (string.IsNullOrEmpty(source) || !File.Exists(source))
             return;
-        var pdfsRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CSTReader", "pdfs");
+        var pdfsRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            CST.Avalonia.Constants.AppConstants.AppDataDirectoryName, "pdfs");
         var relative = Path.GetRelativePath(pdfsRoot, source).Replace(Path.DirectorySeparatorChar, '/');
+        // Only a PDF inside the cache: anything else would make the copy below land outside the temp directory.
+        Assert.False(relative.StartsWith("..") || Path.IsPathRooted(relative), $"{source} is not under {pdfsRoot}");
 
         var dir = Path.Combine(Path.GetTempPath(), "cst-1136-live-" + Guid.NewGuid().ToString("N"));
         try

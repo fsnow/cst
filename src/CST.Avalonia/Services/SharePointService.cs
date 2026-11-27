@@ -193,15 +193,27 @@ namespace CST.Avalonia.Services
         public async Task<string?> DownloadPdfAsync(string sharePointPath) =>
             (await GetPdfAsync(sharePointPath).ConfigureAwait(false))?.LocalPath;
 
-        // How long to wait for a PDF's metadata before opening the cached copy without it. Only the metadata
-        // call is bounded: the download itself can legitimately take minutes for a 300 MB scan.
-        private static readonly TimeSpan MetadataTimeout = TimeSpan.FromSeconds(15);
+        // The version check (token, drive ID and the PDF's metadata) runs before the PDF opens, so it is bounded as
+        // a whole. With an intact cached copy waiting, the check is brief: an offline or hung network must not
+        // hold up a scan the reader already has (measured before this bound: 11 s refused, 200 s black-holed, on
+        // every open). With nothing cached there is nothing to open without SharePoint, so it waits longer. The
+        // download itself is not bounded: a 300 MB scan can take minutes. (#1136)
+        private static readonly TimeSpan CachedCheckTimeout = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan UncachedCheckTimeout = TimeSpan.FromSeconds(60);
+
+        // After a failed check, cached copies open without one for a while, rather than each open waiting out the
+        // timeout again. A PDF with no cached copy still tries. (#1136)
+        private static readonly TimeSpan UnreachableBackoff = TimeSpan.FromMinutes(2);
+        private DateTime _unreachableUntilUtc = DateTime.MinValue;
 
         /// <summary>
         /// The local copy of a source PDF, kept the same as SharePoint's: when online, the server's content
         /// hash is compared with the cached copy's on every open, and a cached copy that differs is replaced
         /// by the current file. [fsnow, 2026-11-26: on what happens to the replaced copy, "Replace it"]
         /// Offline, or when SharePoint can't be reached, the cached copy is used as it is. (#1136)
+        ///
+        /// <para>File reads and hashing run on the thread pool: callers are on the UI thread, and hashing a
+        /// 200 MB scan takes most of a second.</para>
         /// </summary>
         public async Task<PdfFile?> GetPdfAsync(string sharePointPath)
         {
@@ -211,15 +223,15 @@ namespace CST.Avalonia.Services
             // verified download; until one succeeds it is still served, since tolerant viewers show its readable
             // pages and an offline user should get it rather than nothing. (#194, #324 A9-2)
             bool cached = File.Exists(localPath);
-            bool intact = cached && IsIntactPdf(localPath);
+            bool intact = cached && await Task.Run(() => IsIntactPdf(localPath)).ConfigureAwait(false);
             if (cached && !intact && WarnOnce(localPath))
                 _logger.LogWarning("Cached PDF failed integrity check (truncated/corrupt); re-downloading: {Path}", localPath);
 
-            PdfFile? Cached(string why)
+            async Task<PdfFile?> Cached(string why)
             {
                 if (!cached || !File.Exists(localPath)) return null;
                 string? hash = null;
-                try { hash = LocalPdfVersion.Get(localPath); }
+                try { hash = await Task.Run(() => LocalPdfVersion.Get(localPath)).ConfigureAwait(false); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Could not hash cached PDF {Path}", localPath); }
                 _logger.LogInformation("Using cached PDF ({Why}): {Path}, version {Hash}", why, localPath, hash);
                 return new PdfFile(localPath, hash);
@@ -228,35 +240,47 @@ namespace CST.Avalonia.Services
             if (_graphClient == null)
             {
                 _logger.LogWarning("Graph client not initialized");
-                return Cached("SharePoint not available");
+                return await Cached("SharePoint not available").ConfigureAwait(false);
+            }
+
+            if (intact && DateTime.UtcNow < _unreachableUntilUtc)
+                return await Cached("SharePoint was unreachable a moment ago").ConfigureAwait(false);
+
+            var fullPath = $"{SourceRootFolder}/{sharePointPath}";
+            // Path-based access with the special colon syntax: root:/path:
+            var itemPath = $"root:/{fullPath}:";
+            string? driveId;
+            DriveItem? driveItem;
+            try
+            {
+                (driveId, driveItem) = await LookUpAsync(itemPath)
+                    .WaitAsync(intact ? CachedCheckTimeout : UncachedCheckTimeout).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // A timeout, no network, or an error from Graph: remember it, and open the cached copy.
+                _unreachableUntilUtc = DateTime.UtcNow + UnreachableBackoff;
+                _logger.LogWarning("Could not check {Path} on SharePoint ({Error}); using the cached copy if there is one",
+                    fullPath, ex is TimeoutException ? "timed out" : ex.Message);
+                return await Cached("SharePoint unreachable").ConfigureAwait(false);
+            }
+            if (driveId == null)
+            {
+                _unreachableUntilUtc = DateTime.UtcNow + UnreachableBackoff;
+                return await Cached("no drive ID").ConfigureAwait(false);
+            }
+            if (driveItem == null)
+            {
+                _logger.LogError("File not found in SharePoint: {Path}", fullPath);
+                return await Cached("not found on SharePoint").ConfigureAwait(false);
             }
 
             try
             {
-                var driveId = await GetDriveIdAsync();
-                if (string.IsNullOrEmpty(driveId))
-                {
-                    _logger.LogError("Could not get drive ID");
-                    return Cached("no drive ID");
-                }
-
-                var fullPath = $"{SourceRootFolder}/{sharePointPath}";
-                // Path-based access with the special colon syntax: root:/path:
-                var itemPath = $"root:/{fullPath}:";
-
-                DriveItem? driveItem;
-                using (var cts = new CancellationTokenSource(MetadataTimeout))
-                    driveItem = await _graphClient.Drives[driveId].Items[itemPath].GetAsync(cancellationToken: cts.Token);
-                if (driveItem == null)
-                {
-                    _logger.LogError("File not found in SharePoint: {Path}", fullPath);
-                    return Cached("not found on SharePoint");
-                }
-
                 var serverHash = driveItem.File?.Hashes?.QuickXorHash;
                 if (intact)
                 {
-                    var localHash = LocalPdfVersion.Get(localPath);
+                    var localHash = await Task.Run(() => LocalPdfVersion.Get(localPath)).ConfigureAwait(false);
                     if (serverHash == null || serverHash == localHash)
                     {
                         _logger.LogInformation("PDF already cached locally: {Path}, version {Hash}", localPath, localHash);
@@ -267,19 +291,19 @@ namespace CST.Avalonia.Services
                 }
 
                 _logger.LogInformation("Downloading PDF from SharePoint: {Path}", fullPath);
-                using var contentStream = await _graphClient.Drives[driveId].Items[itemPath].Content.GetAsync();
+                using var contentStream = await _graphClient.Drives[driveId].Items[itemPath].Content.GetAsync().ConfigureAwait(false);
                 if (contentStream == null)
                 {
                     _logger.LogError("Failed to get content stream for: {Path}", fullPath);
-                    return Cached("download failed");
+                    return await Cached("download failed").ConfigureAwait(false);
                 }
 
                 // Atomic, size- and hash-verified: a partial or wrong download never lands at localPath, and a
                 // failed one leaves the cached copy as it was. (NET-1)
-                if (!await SaveStreamVerifiedAsync(contentStream, localPath, driveItem.Size, _logger, serverHash))
-                    return Cached("download failed verification");
+                if (!await SaveStreamVerifiedAsync(contentStream, localPath, driveItem.Size, _logger, serverHash).ConfigureAwait(false))
+                    return await Cached("download failed verification").ConfigureAwait(false);
 
-                var hash = serverHash ?? QuickXorHash.ComputeFile(localPath);
+                var hash = serverHash ?? await Task.Run(() => QuickXorHash.ComputeFile(localPath)).ConfigureAwait(false);
                 LocalPdfVersion.Remember(localPath, hash);
                 _logger.LogInformation("Downloaded PDF to: {Path} ({Size:N0} bytes), version {Hash}",
                     localPath, new FileInfo(localPath).Length, hash);
@@ -287,8 +311,26 @@ namespace CST.Avalonia.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to check or download PDF: {Path}", sharePointPath);
-                return Cached("SharePoint error");
+                _logger.LogError(ex, "Failed to download PDF: {Path}", sharePointPath);
+                return await Cached("SharePoint error").ConfigureAwait(false);
+            }
+        }
+
+        // The drive ID and the PDF's metadata, in one task so that GetPdfAsync can bound them together.
+        private async Task<(string? DriveId, DriveItem? Item)> LookUpAsync(string itemPath)
+        {
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            if (string.IsNullOrEmpty(driveId))
+                return (null, null);
+            try
+            {
+                var item = await _graphClient!.Drives[driveId].Items[itemPath].GetAsync().ConfigureAwait(false);
+                return (driveId, item);
+            }
+            catch (Microsoft.Graph.Models.ODataErrors.ODataError e) when (e.ResponseStatusCode == 404)
+            {
+                // The file is not there: SharePoint answered, so this is not "unreachable".
+                return (driveId, null);
             }
         }
 
@@ -321,7 +363,7 @@ namespace CST.Avalonia.Services
             {
                 using (var fileStream = File.Create(tempPath))
                 {
-                    await content.CopyToAsync(fileStream);
+                    await content.CopyToAsync(fileStream).ConfigureAwait(false);
                 }
 
                 var downloadedLength = new FileInfo(tempPath).Length;
@@ -337,7 +379,7 @@ namespace CST.Avalonia.Services
                 // the wrong bytes, and this file then stands for that version of the PDF. (#1136)
                 if (expectedQuickXorHash != null)
                 {
-                    var actual = QuickXorHash.ComputeFile(tempPath);
+                    var actual = await Task.Run(() => QuickXorHash.ComputeFile(tempPath)).ConfigureAwait(false);
                     if (actual != expectedQuickXorHash)
                     {
                         logger.LogError("Downloaded hash mismatch for {Path}: got {Actual}, expected {Expected}; discarding the download",
