@@ -81,6 +81,36 @@ namespace CST.Avalonia.Tests.Models
             }
         }
 
+        [Fact]
+        public void InSourcesCs_EveryHashIsAQuickXorHash()
+        {
+            // A typo in an addSourceVersions hash is the dangerous kind: the copy it was meant for would silently
+            // get the latest mapping. A well-formed hash can still be the wrong one, but a malformed one is caught.
+            foreach (var (book, type, source) in AllSources())
+                foreach (var hash in source.Versions.Keys)
+                {
+                    Assert.True(hash.Length == 28, $"{book} {type}: {hash} is not 28 characters");
+                    Assert.Equal(20, Convert.FromBase64String(hash).Length);
+                }
+        }
+
+        [Fact]
+        public void InSourcesCs_BooksSharingAPdf_ListTheSameVersions()
+        {
+            // Books that share one PDF file have the same versions of it. Among those with version entries, one
+            // listing a hash the other lacks would give that version the latest mapping for one book only.
+            var byPath = new Dictionary<string, List<(string Book, HashSet<string> Hashes)>>();
+            foreach (var (book, type, source) in AllSources())
+                if (source.Versions.Count > 0)
+                {
+                    if (!byPath.TryGetValue(source.Path, out var list)) byPath[source.Path] = list = new();
+                    list.Add(($"{book} {type}", new HashSet<string>(source.Versions.Keys)));
+                }
+            foreach (var (path, books) in byPath)
+                foreach (var (book, hashes) in books)
+                    Assert.True(hashes.SetEquals(books[0].Hashes), $"{book} and {books[0].Book} list different versions of {path}");
+        }
+
         private static IEnumerable<(string, Sources.SourceType, Sources.Source)> AllSources()
         {
             foreach (var book in Books.Inst)

@@ -710,6 +710,12 @@ public class Sources
 		// in print order, and drops pages scanned twice. Its mapping goes under its own hash and is the latest;
 		// addSourceVersions lists the original and every earlier SharePoint version with the same pages, which
 		// keep the addSource mapping above. Books on a repaired PDF whose mapping is unchanged have no entries.
+		// Not every repeat was dropped: the repaired 1957 KN file keeps its 99-page repeat (s0504m, s0505m), and
+		// vin05t (10 after 111), e0804n (one copy of 269) and e1007n (11 and 103) keep theirs, as ExtraPagesAfter
+		// in their latest mappings. A later version that drops them changes those books' pages, so it needs an
+		// addVersion of its own: without one it would get these mappings, and open pages late. Likewise the
+		// truncated SharePoint uploads (1957 Jātaka-aṭṭhakathā-6 v1-v2, 2010 Khuddaka v1-v2) are listed with the
+		// originals: offline, the app still serves a cached copy that is not intact. (#1136 review)
 		// 1957 edition/1 - Mula - Vinaya/Cūḷavaggapāḷi.pdf
 		addSourceVersions("vin02m3.mul.xml", SourceType.Burmese1957, "Wsa4s3SaRHbMo8LdD1OqQO3trbw=");
 		addVersion("vin02m3.mul.xml", SourceType.Burmese1957, new[] { "T0oYCRsot789+NYr+2B6nTmBqz8=" }, 11, missingPages: null, extraPagesAfter: null, pageOverrides: null);
@@ -774,7 +780,7 @@ public class Sources
 		addSourceVersions("s0513a4.att.xml", SourceType.Burmese1957, "iyC2HM/MBWsn0+jiLNbYJfuhIb8=");
 		addVersion("s0513a4.att.xml", SourceType.Burmese1957, new[] { "jyTk3xWgD+FKqIYp5qX9HdbQp3w=" }, 7, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// 1957 edition/4 - Atthakatha/Jātaka-aṭṭhakathā-6.pdf
-		addSourceVersions("s0514a2.att.xml", SourceType.Burmese1957, "SbkkegXimNanqOJeMQjmihMhRFU=");
+		addSourceVersions("s0514a2.att.xml", SourceType.Burmese1957, "SbkkegXimNanqOJeMQjmihMhRFU=", "xNS9kNzYH9UfrNd2wgqBQxHWuYY=", "LhLr8yyBr7umdTED2rbiH/Ra4l0=");
 		addVersion("s0514a2.att.xml", SourceType.Burmese1957, new[] { "PqM1eF24EmPY8cUqKr/5w4NRVQI=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// 1957 edition/4 - Atthakatha/Jātaka-aṭṭhakathā-7.pdf
 		addSourceVersions("s0514a3.att.xml", SourceType.Burmese1957, "Dzl5/VjvCZffTZUVZJ9+UsabHPw=");
@@ -837,10 +843,10 @@ public class Sources
 		addSourceVersions("s0203m.mul.xml", SourceType.Burmese2010, "vyARXtNNTaOQ1IuU10tho7UxsTU=");
 		addVersion("s0203m.mul.xml", SourceType.Burmese2010, new[] { "TXEHVD81puhAyecc5ncb56EH19c=" }, 11, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// 2010 edition/Mula/019-Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf
-		addSourceVersions("s0504m.mul.xml", SourceType.Burmese2010, "Tmvo85sbxXFyx58jEDFs37LIQOA=", "eQdF45DdbCF9pGZg3BW8lieHErE=", "n2SGHHE7VRYVs3h2sL+9uq5stbA=");
+		addSourceVersions("s0504m.mul.xml", SourceType.Burmese2010, "Tmvo85sbxXFyx58jEDFs37LIQOA=", "eQdF45DdbCF9pGZg3BW8lieHErE=", "n2SGHHE7VRYVs3h2sL+9uq5stbA=", "Nvtz/p0dz8g07VXosjAFml3OlrM=", "PgibTf5ftbHjtC0o3RC3tB3r75I=");
 		addVersion("s0504m.mul.xml", SourceType.Burmese2010, new[] { "MKbkJRWUv/3aXrbjxbMebGWlBME=" }, 29, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// 2010 edition/Mula/019-Khuddakapāṭha-Dhammapada-Udāna-Itivuttaka-Suttanipātapāḷi.pdf
-		addSourceVersions("s0505m.mul.xml", SourceType.Burmese2010, "Tmvo85sbxXFyx58jEDFs37LIQOA=", "eQdF45DdbCF9pGZg3BW8lieHErE=", "n2SGHHE7VRYVs3h2sL+9uq5stbA=");
+		addSourceVersions("s0505m.mul.xml", SourceType.Burmese2010, "Tmvo85sbxXFyx58jEDFs37LIQOA=", "eQdF45DdbCF9pGZg3BW8lieHErE=", "n2SGHHE7VRYVs3h2sL+9uq5stbA=", "Nvtz/p0dz8g07VXosjAFml3OlrM=", "PgibTf5ftbHjtC0o3RC3tB3r75I=");
 		addVersion("s0505m.mul.xml", SourceType.Burmese2010, new[] { "MKbkJRWUv/3aXrbjxbMebGWlBME=" }, 29, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// 2010 edition/Mula/020-Vimānavatthu-PetavatthuTheragāthā-Therīgāthāpāḷi.pdf
 		addSourceVersions("s0506m.mul.xml", SourceType.Burmese2010, "sRg7hQPopGDGTWUoJbtFte/8w1Q=", "V4T4V+I9Z9pMLbi5ZquS8cGcLYk=", "Ty8y64L5jpjZ3HCiMeXAiW/0J5A=", "56bDM0uInAlmOKNQWQLEKu1KFv8=", "0QWooHkZoT5KTJsjCLSnCo7FYLw=");

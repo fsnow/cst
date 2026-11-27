@@ -20,18 +20,28 @@ namespace CST.Avalonia.Services
         /// <summary>The PDF's hash, from its stamp if the stamp still describes it, otherwise computed and stamped.</summary>
         public static string Get(string pdfPath)
         {
-            var info = new FileInfo(pdfPath);
+            // Size and time are read BEFORE hashing, and checked again after it. If another pane replaces the file
+            // while this one is hashing it, the stamp would otherwise pair the new file's size and time with the old
+            // file's hash, and that wrong hash would then stand for the new file. (#1136 review, reproduced with a
+            // 300 MB file.)
+            var before = new FileInfo(pdfPath);
+            long size = before.Length, ticks = before.LastWriteTimeUtc.Ticks;
             var stamp = Read(pdfPath);
-            if (stamp != null && stamp.Size == info.Length && stamp.ModifiedUtcTicks == info.LastWriteTimeUtc.Ticks)
+            if (stamp != null && stamp.Size == size && stamp.ModifiedUtcTicks == ticks)
                 return stamp.QuickXorHash;
             var hash = QuickXorHash.ComputeFile(pdfPath);
-            Write(pdfPath, info, hash);
+            var after = new FileInfo(pdfPath);
+            if (after.Length == size && after.LastWriteTimeUtc.Ticks == ticks)
+                Write(pdfPath, size, ticks, hash);
             return hash;
         }
 
         /// <summary>Stamp a PDF whose hash is already known (just downloaded and checked against the server's).</summary>
-        public static void Remember(string pdfPath, string quickXorHash) =>
-            Write(pdfPath, new FileInfo(pdfPath), quickXorHash);
+        public static void Remember(string pdfPath, string quickXorHash)
+        {
+            var info = new FileInfo(pdfPath);
+            Write(pdfPath, info.Length, info.LastWriteTimeUtc.Ticks, quickXorHash);
+        }
 
         private static Stamp? Read(string pdfPath)
         {
@@ -46,13 +56,13 @@ namespace CST.Avalonia.Services
             }
         }
 
-        private static void Write(string pdfPath, FileInfo info, string hash)
+        private static void Write(string pdfPath, long size, long modifiedUtcTicks, string hash)
         {
             try
             {
                 var path = StampPath(pdfPath);
                 var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                File.WriteAllText(temp, JsonSerializer.Serialize(new Stamp(info.Length, info.LastWriteTimeUtc.Ticks, hash)));
+                File.WriteAllText(temp, JsonSerializer.Serialize(new Stamp(size, modifiedUtcTicks, hash)));
                 File.Move(temp, path, overwrite: true);
             }
             catch
