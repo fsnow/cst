@@ -20,8 +20,10 @@ namespace CST.Avalonia.Tests.Models
         // dropped repeat, and the pages around the reordered vin13t leaf.
         [InlineData("vin02m3.mul.xml", 284, 294)]
         [InlineData("s0510m2.mul.xml", 216, 231)]
-        [InlineData("s0505m.mul.xml", 279, 400)]   // Suttanipāta opening, after placeholders for 276-278
-        [InlineData("s0504m.mul.xml", 220, 341)]   // the 99-page repeat is kept
+        [InlineData("s0502m.mul.xml", 13, 37)]    // Dhammapada opening, after the placeholder for the blank 12
+        [InlineData("s0504m.mul.xml", 195, 219)]  // Itivuttaka opening, after the placeholder for the blank 194
+        [InlineData("s0505m.mul.xml", 279, 402)]   // Suttanipāta opening, after placeholders for 276-278
+        [InlineData("s0504m.mul.xml", 220, 343)]   // the 99-page repeat is kept
         [InlineData("s0515m.mul.xml", 216, 220)]
         [InlineData("s0519m.mul.xml", 158, 164)]
         [InlineData("s0301m.mul.xml", 156, 193)]
@@ -86,7 +88,7 @@ namespace CST.Avalonia.Tests.Models
                 Assert.Empty(s.Latest.MissingPages);
                 Assert.Empty(s.Latest.PageOverrides);
             }
-            Assert.Equal(62, repaired);
+            Assert.Equal(64, repaired);
         }
 
         [Fact]
@@ -110,6 +112,7 @@ namespace CST.Avalonia.Tests.Models
             // Books that continue one page run in one volume no longer absorb each other's gaps.
             foreach (var group in new[]
             {
+                new[] { "s0501m.mul.xml", "s0502m.mul.xml", "s0503m.mul.xml", "s0504m.mul.xml", "s0505m.mul.xml" },
                 new[] { "s0510m2.mul.xml", "s0511m.mul.xml", "s0512m.mul.xml" },
                 new[] { "s0519m.mul.xml", "s0520m.nrf.xml" },
                 new[] { "s0301m.mul.xml", "s0302m.mul.xml" },
