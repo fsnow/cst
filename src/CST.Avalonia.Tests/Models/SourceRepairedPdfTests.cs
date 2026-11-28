@@ -60,7 +60,7 @@ namespace CST.Avalonia.Tests.Models
 
         [Theory]
         // Read by eye in the repaired Añña copies (2026-11-26): the real page after each placeholder
-        // or dropped repeat. e1007n keeps its re-shots.
+        // or dropped repeat.
         [InlineData("e0906n.nrf.xml", 28, 35)]
         [InlineData("e0201n.nrf.xml", 110, 221)]
         [InlineData("e0401n.nrf.xml", 86, 93)]
@@ -76,7 +76,11 @@ namespace CST.Avalonia.Tests.Models
         [InlineData("e0804n.nrf.xml", 353, 360)]
         [InlineData("e0804n.nrf.xml", 375, 382)]
         [InlineData("e0813n.nrf.xml", 117, 149)]
-        [InlineData("e1007n.nrf.xml", 27, 38)]
+        [InlineData("e1007n.nrf.xml", 11, 19)]
+        [InlineData("e1007n.nrf.xml", 12, 20)]    // after the dropped re-shots of 11, 10, 11
+        [InlineData("e1007n.nrf.xml", 27, 35)]
+        [InlineData("e1007n.nrf.xml", 103, 111)]
+        [InlineData("e1007n.nrf.xml", 104, 112)]  // after the dropped second copy of 102-103
         public void RepairedAnyaPdf_OpensThePrintPage(string book, int print, int pdf) =>
             Assert.Equal(pdf, Repaired(book, Sources.SourceType.BurmeseAnya).PdfPageFor(print));
 
@@ -88,13 +92,14 @@ namespace CST.Avalonia.Tests.Models
         public void ARepairedPdfNeedsNoMissingPagesOrOverrides()
         {
             // A repaired copy has a placeholder for every page the scan lacks and its pages in print
-            // order, so a book on it maps by PageStart (plus any repeat deliberately kept).
+            // order, with every repeat dropped, so a book on it maps by PageStart alone.
             var repaired = 0;
             foreach (var s in AllMappedSources().Where(s => s.Latest != s))
             {
                 repaired++;
                 Assert.Empty(s.Latest.MissingPages);
                 Assert.Empty(s.Latest.PageOverrides);
+                Assert.Empty(s.Latest.ExtraPagesAfter);
             }
             Assert.Equal(64, repaired);
         }
