@@ -449,7 +449,7 @@ Path: `01 - Burmese-CST/Anya/7. Nīti-gantha-saṅgaho/`
 | e1003n.nrf.xml | 5. Dhammanīti.pdf | 3 |  |
 | e1004n.nrf.xml | 4. Mahārahanīti.pdf | 7 |  |
 | e1007n.nrf.xml | 3. Sūrassatinīti.pdf | 10 |  |
-| e1008n.nrf.xml | 10. Cāṇakyanīti.pdf | 5 |  |
+| e1008n.nrf.xml | 10. Cāṇakyanīti (better).pdf | 6 |  |
 | e1009n.nrf.xml | 8. Naradakkhadīpanī.pdf | 14 |  |
 | e1010n.nrf.xml | 9. Caturārakkhadīpanī and Kāyapaccavekkhana.pdf | 27 | Page numbers may drift from this scan further in (tester report, 2026-11) |
 

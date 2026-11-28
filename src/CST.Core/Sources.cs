@@ -690,7 +690,9 @@ public class Sources
 		addSource("e1003n.nrf.xml", SourceType.BurmeseAnya, 3, $"{BurmeseAnyaNiti}/5. Dhammanīti.pdf");
 		addSource("e1004n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaNiti}/4. Mahārahanīti.pdf");
 		addSource("e1007n.nrf.xml", SourceType.BurmeseAnya, 9, $"{BurmeseAnyaNiti}/3. Sūrassatinīti.pdf", new[] { 20, 21, 25, 26 }, extraPagesAfter: new[] { 11, 11, 11, 103, 103 });
-		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 5, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti.pdf", extraPagesAfter: new[] { 19, 19, 25, 25, 29, 29, 43, 43, 47, 47 });
+		// The 229 dpi "(better)" scan, not the 140 dpi 10. Cāṇakyanīti.pdf [fsnow, 2026-11-28]. It lacks print 58, and
+		// PDF 39 and 64 are second shots of print 36 and 48.
+		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 6, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti (better).pdf", new[] { 58 }, extraPagesAfter: new[] { 33, 57 });
 		addSource("e1009n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaNiti}/8. Naradakkhadīpanī.pdf");
 		addSource("e1010n.nrf.xml", SourceType.BurmeseAnya, 27, $"{BurmeseAnyaNiti}/9. Caturārakkhadīpanī and Kāyapaccavekkhana.pdf");
 
@@ -877,7 +879,7 @@ public class Sources
 		addVersion("abh03m11.mul.xml", SourceType.Burmese2010, new[] { "XtDswq3YrGaghc9RlIb+m3w7b/g=" }, 11, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/2. Saṅgāyana-puccha vissajjanā/1. Dīghanikāya (Pu-Vi).pdf
 		addSourceVersions("e0901n.nrf.xml", SourceType.BurmeseAnya, "wi9p98or4JYf47zyrrK+Awm/jx4=");
-		addVersion("e0901n.nrf.xml", SourceType.BurmeseAnya, new[] { "2NZqnblh5LZrSvMQ/do4A+0G5Cc=" }, 18, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		addVersion("e0901n.nrf.xml", SourceType.BurmeseAnya, new[] { "vQaiiHQNtglL2fUBMztrfScc2Y8=" }, 18, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/2. Saṅgāyana-puccha vissajjanā/6. Abhidhammapiṭaka (Pu-Vi).pdf
 		addSourceVersions("e0906n.nrf.xml", SourceType.BurmeseAnya, "rNJLm3V771H28FutWP/RPT5DG+k=");
 		addVersion("e0906n.nrf.xml", SourceType.BurmeseAnya, new[] { "EiQgmqyNruX07deNYJFaNP119GY=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
@@ -889,7 +891,7 @@ public class Sources
 		addVersion("e0401n.nrf.xml", SourceType.BurmeseAnya, new[] { "2xYNGLOjue5Lm6/mbym0Jm1oYyk=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/4. Buddha-vandanā gantha-saṅgaho/2. Mahāpaṇāmapāṭha.pdf
 		addSourceVersions("e0602n.nrf.xml", SourceType.BurmeseAnya, "znxWIk825IzVvP9XXXp9mfPmbjs=");
-		addVersion("e0602n.nrf.xml", SourceType.BurmeseAnya, new[] { "zwtFrcpugplrWn1Ajn20MhJ7a+8=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		addVersion("e0602n.nrf.xml", SourceType.BurmeseAnya, new[] { "APfsKdS3hOvm3XqrcFmdoiq66n4=" }, 4, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/5. Vaṃsa-gantha-saṅgaho/2. Mahāvaṃsa (Vol-1).pdf
 		addSourceVersions("e0703n.nrf.xml", SourceType.BurmeseAnya, "OB2u2HVIFLEvYPr3bJ/eZSjFZqU=");
 		addVersion("e0703n.nrf.xml", SourceType.BurmeseAnya, new[] { "uBf/vd4TenEO5I00YLCQfZMwxDo=" }, 7, missingPages: null, extraPagesAfter: null, pageOverrides: null);
@@ -902,6 +904,9 @@ public class Sources
 		// Anya/6. Byākaraṇa gantha-saṅgaho/4. Saddanītippakaraṇaṃ (dhātumālā).pdf
 		addSourceVersions("e0804n.nrf.xml", SourceType.BurmeseAnya, "zI/GF7EHnBfbh6SfcvqvJptCPX8=");
 		addVersion("e0804n.nrf.xml", SourceType.BurmeseAnya, new[] { "bXLU2EihugNPUJUiGrCsLY6Ggbs=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/7. Nīti-gantha-saṅgaho/10. Cāṇakyanīti (better).pdf
+		addSourceVersions("e1008n.nrf.xml", SourceType.BurmeseAnya, "p9tdXAcDAmTpngbVSgs75Z3Mh7U=");
+		addVersion("e1008n.nrf.xml", SourceType.BurmeseAnya, new[] { "CpTCwVVI0ipBE3Y6OVU+ufdo47E=" }, 6, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/7. Nīti-gantha-saṅgaho/3. Sūrassatinīti.pdf
 		addSourceVersions("e1007n.nrf.xml", SourceType.BurmeseAnya, "LyVwC68Wq3AeHnx2dIliFNh8NUc=");
 		addVersion("e1007n.nrf.xml", SourceType.BurmeseAnya, new[] { "1jgw5eeJxPGZlzLrY/lo5UjK0xo=" }, 9, missingPages: null, extraPagesAfter: null, pageOverrides: null);
