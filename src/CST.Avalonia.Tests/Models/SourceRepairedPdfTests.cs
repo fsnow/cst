@@ -152,16 +152,15 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
-        public void E1008n_TheBetterScanLacksPrint58()
+        public void E1008n_TheRepairedFileReplacesTheOldScan()
         {
-            // Read by eye (2026-11-27) in 10. Cāṇakyanīti (better).pdf: PDF 39 is a second shot of print 36 and
-            // PDF 64 one of print 48, in the slot where 58 belongs; PDF 65 is print 59 and PDF 87 print 81.
+            // The repaired file is built from a different, better scan but goes up at the same path. The old
+            // scan keeps its addSource mapping; the better scan's own hash was never at that path, so it gets the latest.
             var s = Sources.Inst.GetSource("e1008n.nrf.xml", Sources.SourceType.BurmeseAnya)!;
-            var original = s.ForVersion("p9tdXAcDAmTpngbVSgs75Z3Mh7U=");
-            Assert.Equal(38, original.PdfPageFor(33));
-            Assert.Equal(40, original.PdfPageFor(34));
-            Assert.Equal(65, original.PdfPageFor(59));
-            Assert.Equal(87, original.PdfPageFor(81));
+            Assert.Same(s, s.ForVersion("3aalkvanTXDnTKpCnfW8T+AZffo="));
+            Assert.Equal(5, s.PageStart);
+            Assert.Same(s.Latest, s.ForVersion("XKHEG/MaMiKyQ6M0OARe9i2K950="));
+            Assert.Equal(63, s.Latest.PdfPageFor(58));
         }
 
         [Fact]

@@ -690,9 +690,7 @@ public class Sources
 		addSource("e1003n.nrf.xml", SourceType.BurmeseAnya, 3, $"{BurmeseAnyaNiti}/5. Dhammanīti.pdf");
 		addSource("e1004n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaNiti}/4. Mahārahanīti.pdf");
 		addSource("e1007n.nrf.xml", SourceType.BurmeseAnya, 9, $"{BurmeseAnyaNiti}/3. Sūrassatinīti.pdf", new[] { 20, 21, 25, 26 }, extraPagesAfter: new[] { 11, 11, 11, 103, 103 });
-		// The 229 dpi "(better)" scan, not the 140 dpi 10. Cāṇakyanīti.pdf [fsnow, 2026-11-28]. It lacks print 58, and
-		// PDF 39 and 64 are second shots of print 36 and 48.
-		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 6, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti (better).pdf", new[] { 58 }, extraPagesAfter: new[] { 33, 57 });
+		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 5, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti.pdf", extraPagesAfter: new[] { 19, 19, 25, 25, 29, 29, 43, 43, 47, 47 });
 		addSource("e1009n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaNiti}/8. Naradakkhadīpanī.pdf");
 		addSource("e1010n.nrf.xml", SourceType.BurmeseAnya, 27, $"{BurmeseAnyaNiti}/9. Caturārakkhadīpanī and Kāyapaccavekkhana.pdf");
 
@@ -904,9 +902,10 @@ public class Sources
 		// Anya/6. Byākaraṇa gantha-saṅgaho/4. Saddanītippakaraṇaṃ (dhātumālā).pdf
 		addSourceVersions("e0804n.nrf.xml", SourceType.BurmeseAnya, "zI/GF7EHnBfbh6SfcvqvJptCPX8=");
 		addVersion("e0804n.nrf.xml", SourceType.BurmeseAnya, new[] { "bXLU2EihugNPUJUiGrCsLY6Ggbs=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
-		// Anya/7. Nīti-gantha-saṅgaho/10. Cāṇakyanīti (better).pdf
-		addSourceVersions("e1008n.nrf.xml", SourceType.BurmeseAnya, "p9tdXAcDAmTpngbVSgs75Z3Mh7U=");
-		addVersion("e1008n.nrf.xml", SourceType.BurmeseAnya, new[] { "CpTCwVVI0ipBE3Y6OVU+ufdo47E=" }, 6, missingPages: null, extraPagesAfter: null, pageOverrides: null);
+		// Anya/7. Nīti-gantha-saṅgaho/10. Cāṇakyanīti.pdf: the repaired file is built from a better scan (about 229 dpi,
+		// against 140), with a placeholder for print 58, which that scan lacks. It replaces the old scan at this path.
+		addSourceVersions("e1008n.nrf.xml", SourceType.BurmeseAnya, "3aalkvanTXDnTKpCnfW8T+AZffo=");
+		addVersion("e1008n.nrf.xml", SourceType.BurmeseAnya, new[] { "XKHEG/MaMiKyQ6M0OARe9i2K950=" }, 6, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/7. Nīti-gantha-saṅgaho/3. Sūrassatinīti.pdf
 		addSourceVersions("e1007n.nrf.xml", SourceType.BurmeseAnya, "LyVwC68Wq3AeHnx2dIliFNh8NUc=");
 		addVersion("e1007n.nrf.xml", SourceType.BurmeseAnya, new[] { "1jgw5eeJxPGZlzLrY/lo5UjK0xo=" }, 9, missingPages: null, extraPagesAfter: null, pageOverrides: null);
