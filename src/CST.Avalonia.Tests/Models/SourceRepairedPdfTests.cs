@@ -81,6 +81,12 @@ namespace CST.Avalonia.Tests.Models
         [InlineData("e1007n.nrf.xml", 27, 35)]
         [InlineData("e1007n.nrf.xml", 103, 111)]
         [InlineData("e1007n.nrf.xml", 104, 112)]  // after the dropped second copy of 102-103
+        [InlineData("e1008n.nrf.xml", 33, 38)]
+        [InlineData("e1008n.nrf.xml", 34, 39)]    // after the dropped second shot of 36
+        [InlineData("e1008n.nrf.xml", 57, 62)]
+        [InlineData("e1008n.nrf.xml", 58, 63)]    // placeholder: the scan lacks 58
+        [InlineData("e1008n.nrf.xml", 59, 64)]
+        [InlineData("e1008n.nrf.xml", 81, 86)]    // the last text page
         public void RepairedAnyaPdf_OpensThePrintPage(string book, int print, int pdf) =>
             Assert.Equal(pdf, Repaired(book, Sources.SourceType.BurmeseAnya).PdfPageFor(print));
 
@@ -101,7 +107,7 @@ namespace CST.Avalonia.Tests.Models
                 Assert.Empty(s.Latest.PageOverrides);
                 Assert.Empty(s.Latest.ExtraPagesAfter);
             }
-            Assert.Equal(64, repaired);
+            Assert.Equal(65, repaired);
         }
 
         [Fact]
@@ -143,6 +149,19 @@ namespace CST.Avalonia.Tests.Models
             Assert.Equal(219, original.PdfPageFor(205));
             Assert.Equal(208, s.Latest.PdfPageFor(203));
             Assert.Equal(210, s.Latest.PdfPageFor(205));
+        }
+
+        [Fact]
+        public void E1008n_TheBetterScanLacksPrint58()
+        {
+            // Read by eye (2026-11-27) in 10. Cāṇakyanīti (better).pdf: PDF 39 is a second shot of print 36 and
+            // PDF 64 one of print 48, in the slot where 58 belongs; PDF 65 is print 59 and PDF 87 print 81.
+            var s = Sources.Inst.GetSource("e1008n.nrf.xml", Sources.SourceType.BurmeseAnya)!;
+            var original = s.ForVersion("p9tdXAcDAmTpngbVSgs75Z3Mh7U=");
+            Assert.Equal(38, original.PdfPageFor(33));
+            Assert.Equal(40, original.PdfPageFor(34));
+            Assert.Equal(65, original.PdfPageFor(59));
+            Assert.Equal(87, original.PdfPageFor(81));
         }
 
         [Fact]
