@@ -713,11 +713,8 @@ public class Sources
 		// in print order, and drops pages scanned twice. Its mapping goes under its own hash and is the latest;
 		// addSourceVersions lists the original and every earlier SharePoint version with the same pages, which
 		// keep the addSource mapping above. Books on a repaired PDF whose mapping is unchanged have no entries.
-		// Not every repeat was dropped: e1007n keeps its re-shot pages (after 11 and 103), as ExtraPagesAfter in
-		// its latest mapping. A later version that drops them changes that book's pages, so it needs an
-		// addVersion of its own: without one it would get this mapping, and open pages late.
-		// Likewise the truncated SharePoint uploads (1957 Jātaka-aṭṭhakathā-6 v1-v2, 2010 Khuddaka v1-v2) are
-		// listed with the originals: offline, the app still serves a cached copy that is not intact. (#1136 review)
+		// The truncated SharePoint uploads (1957 Jātaka-aṭṭhakathā-6 v1-v2, 2010 Khuddaka v1-v2) are listed with
+		// the originals: offline, the app still serves a cached copy that is not intact. (#1136 review)
 		// 1957 edition/1 - Mula - Vinaya/Cūḷavaggapāḷi.pdf
 		addSourceVersions("vin02m3.mul.xml", SourceType.Burmese1957, "Wsa4s3SaRHbMo8LdD1OqQO3trbw=");
 		addVersion("vin02m3.mul.xml", SourceType.Burmese1957, new[] { "T0oYCRsot789+NYr+2B6nTmBqz8=" }, 11, missingPages: null, extraPagesAfter: null, pageOverrides: null);
@@ -907,7 +904,7 @@ public class Sources
 		addVersion("e0804n.nrf.xml", SourceType.BurmeseAnya, new[] { "bXLU2EihugNPUJUiGrCsLY6Ggbs=" }, 8, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 		// Anya/7. Nīti-gantha-saṅgaho/3. Sūrassatinīti.pdf
 		addSourceVersions("e1007n.nrf.xml", SourceType.BurmeseAnya, "LyVwC68Wq3AeHnx2dIliFNh8NUc=");
-		addVersion("e1007n.nrf.xml", SourceType.BurmeseAnya, new[] { "1pX1kvcjKRVcGSk08QzK3u6I9x4=" }, 9, missingPages: null, extraPagesAfter: new[] { 11, 11, 11, 103, 103 }, pageOverrides: null);
+		addVersion("e1007n.nrf.xml", SourceType.BurmeseAnya, new[] { "1jgw5eeJxPGZlzLrY/lo5UjK0xo=" }, 9, missingPages: null, extraPagesAfter: null, pageOverrides: null);
 	}
 
 	private void addSource(string filename, SourceType sourceType, int pageStart, string path,
